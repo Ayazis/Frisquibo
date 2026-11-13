@@ -2,8 +2,8 @@ config_version=5
 
 [application]
 
-config/name="Frisquibo Grass"
-run/main_scene="res://main.tscn"
+config/name="Frisquibo"
+run/main_scene="res://intro/intro.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
 [display]
