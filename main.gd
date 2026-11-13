@@ -260,21 +260,24 @@ func _apply_time() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		yaw -= event.relative.x * 0.004
-		pitch = clampf(pitch - event.relative.y * 0.004, -1.3, 0.15)
-	elif event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+	var motion := event as InputEventMouseMotion
+	var button := event as InputEventMouseButton
+	var key := event as InputEventKey
+	if motion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		yaw -= motion.relative.x * 0.004
+		pitch = clampf(pitch - motion.relative.y * 0.004, -1.3, 0.15)
+	elif button and button.pressed:
+		if button.button_index == MOUSE_BUTTON_WHEEL_UP:
 			cam_dist = maxf(cam_dist - 0.7, 2.5)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		elif button.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			cam_dist = minf(cam_dist + 0.7, 30.0)
-		elif event.button_index == MOUSE_BUTTON_LEFT:
+		elif button.button_index == MOUSE_BUTTON_LEFT:
 			if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			else:
 				_throw_ball()
-	elif event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
+	elif key and key.pressed and not key.echo:
+		match key.keycode:
 			KEY_ESCAPE:
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 			KEY_T:
@@ -299,7 +302,15 @@ func _throw_ball() -> void:
 	b.linear_velocity = fwd * 22.0
 	balls.append(b)
 	if balls.size() > MAX_BALLS - 1:
-		balls.pop_front().queue_free()
+		var oldest: RigidBody3D = balls.pop_front()
+		oldest.queue_free()
+
+
+## The player and every thrown ball; all of them are spheres.
+func _bodies() -> Array[RigidBody3D]:
+	var all: Array[RigidBody3D] = [player]
+	all.append_array(balls)
+	return all
 
 
 func _physics_process(_delta: float) -> void:
@@ -315,7 +326,7 @@ func _physics_process(_delta: float) -> void:
 	if f != Vector3.ZERO:
 		player.apply_central_force(f.normalized() * 30.0 * player.mass)
 	# keep things on the field
-	for b in [player] + balls:
+	for b in _bodies():
 		if b.global_position.y < -20.0:
 			b.global_position = Vector3(0, 8, 0)
 			b.linear_velocity = Vector3.ZERO
@@ -331,8 +342,9 @@ func _process(delta: float) -> void:
 	pollen.global_position = Vector3(target.x, target.y + 1.0, target.z)
 
 	var pushers: Array = []
-	for b in [player] + balls:
-		var r: float = (b.get_child(0) as CollisionShape3D).shape.radius
+	for b in _bodies():
+		var sphere := (b.get_child(0) as CollisionShape3D).shape as SphereShape3D
+		var r := sphere.radius
 		var p: Vector3 = b.global_position
 		pushers.append(Vector4(p.x, p.y, p.z, r))
 	grass_mat.set_shader_parameter("pushers", pushers)

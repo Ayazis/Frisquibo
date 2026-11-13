@@ -8,6 +8,8 @@ The full architecture and engineering strategy is in [docs/ARCHITECTURE.md](docs
   Web support is added afterwards through clearly marked feature checks (`OS.has_feature("web")`, renderer, quality tier)
   with a cheaper fallback or a no-op. Shared gameplay logic is never forked per platform.
 - **GDScript only, statically typed.** Every variable, parameter and return value has a type.
+  `project.godot` turns untyped and unsafe code into errors; fix the types, don't suppress the warnings.
+- **Every change must import cleanly and export for both Windows and Web** (CI checks this on each PR).
 - **No magic numbers.** Scalable values (density, distances, counts) go in quality-tier resources in `data/quality/`;
   other tunables become named constants or `@export` properties.
 
@@ -17,7 +19,8 @@ The full architecture and engineering strategy is in [docs/ARCHITECTURE.md](docs
 - Call down, signal up. No `get_parent()` chains and no `/root/...` paths outside `core/`.
 - Data in `Resource` files (`.tres`), logic in code.
 - Pure logic (missions, law, economy, save data) lives in `RefCounted` classes and gets GUT unit tests in `tests/unit/`.
-- Layers only depend downward: Core → World → Gameplay → Presentation. Gameplay never references UI.
+- Layers: Presentation → Gameplay → World → Core. Each layer may only depend on the layers to its right;
+  Gameplay never references UI.
 - Keep autoloads to what's listed in the architecture doc; use the `EventBus` only for game-wide events.
 
 ## Conventions

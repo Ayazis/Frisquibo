@@ -32,7 +32,8 @@ factions, mounts and carts instead of cars, and a strong focus on atmosphere.
 
 ## 2. Clean Code rules
 
-1. **Static typing everywhere.** Enable `untyped_declaration` and `unsafe_*` warnings as errors.
+1. **Static typing everywhere.** `project.godot` treats the `untyped_declaration` and `unsafe_*`
+   warnings as errors, so untyped code doesn't compile.
 2. **One responsibility per script/scene.** If a script needs a section-header comment
    to separate its concerns, split it.
 3. **Composition over inheritance.** Behaviour comes from small component nodes
@@ -123,13 +124,15 @@ A Mafia-like game is a **linear story inside an open world**, so missions are th
 - Chunks load and unload around the player with threaded loading. On the web, each region is its own
   `.pck` file that is downloaded when needed.
 - Foliage uses MultiMesh with visibility ranges (generalised from the grass prototype).
-  Buildings use HLOD (merged far-distance meshes) for the city skyline.
+- The city skyline uses merged low-detail meshes per block, swapped in for the detailed
+  buildings at a distance via Godot's visibility ranges (Godot has no built-in HLOD system).
 - Occlusion culling is used in dense city areas.
 
 ## 6. Folder layout (organised by feature)
 
 ```
 res://
+  addons/            third-party plugins (GUT, Terrain3D, ...)
   core/              autoloads, base classes, utilities
   systems/           missions/ combat/ law/ factions/ economy/ inventory/ dialogue/
   world/             streaming/ terrain/ foliage/ weather/ time_of_day/ crowds/
@@ -164,9 +167,13 @@ far the web build is scaled down.
 | Texture memory | 512 MB | 2 GB |
 
 ## 9. Testing & CI
-- **GUT** unit tests for pure logic (missions, law, economy, save data).
+**In place today:** on every push and PR, CI imports the project (failing on any script or
+resource error, including typing errors) and exports both the Windows and Web builds. The Windows
+build is uploaded as an artifact, and PRs get a web preview deployment.
+
+**Planned:**
+- **GUT** (installed in `addons/`) unit tests for pure logic (missions, law, economy, save data), run in CI.
 - Scene smoke tests: each region loads without errors.
-- CI (GitHub Actions) runs the tests and the web export on every PR. Preview deployments already exist.
 
 ## 10. Roadmap for the codebase
 1. Refactor the grass prototype into `world/foliage`, `world/time_of_day`, `actors/player`
@@ -175,3 +182,10 @@ far the web build is scaled down.
 3. Player controller + camera rig + one mount.
 4. Mission runner with 2–3 objective types + a vertical-slice mission.
 5. First city district with streaming.
+
+## 11. Open topics (decide before the related systems are built)
+- **Localisation:** all player-facing text goes through translation keys (`tr()`) from day one.
+- **Input:** only through Godot input actions (never raw keycodes in gameplay); controller support is a goal.
+- **Accessibility:** subtitles, remappable controls, colour-blind-safe UI, camera-shake toggle.
+- **Save versioning:** every save carries a format version, with a migration step per version bump.
+- **Audio architecture:** bus layout (music, ambience, SFX, dialogue), reverb zones for interiors.

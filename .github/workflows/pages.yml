@@ -31,25 +31,41 @@ jobs:
       GODOT_VERSION: "4.7-stable"
     steps:
       - uses: actions/checkout@v5
-      - name: Install Godot and web export templates
-        run: |
-          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}"
-          curl -fsSL -o godot.zip "$base/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
-          curl -fsSL -o templates.tpz "$base/Godot_v${GODOT_VERSION}_export_templates.tpz"
-          unzip -q godot.zip && mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
-          dir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION/-/.}"
-          mkdir -p "$dir" && unzip -q templates.tpz && mv templates/* "$dir/"
-          rm -rf godot.zip templates.tpz templates
+      - name: Install Godot and export templates
+        run: .github/scripts/install-godot.sh
+      - name: Import project
+        run: .github/scripts/import-project.sh
       - name: Export Web build
         run: |
           mkdir -p dist
-          godot --headless --import || true
           godot --headless --export-release "Web" dist/index.html
           test -f dist/index.wasm
       - uses: actions/upload-artifact@v5
         with:
           name: site
           path: dist
+
+  # Desktop is the leading platform: every push and PR must produce a working Windows build.
+  desktop-build:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    env:
+      GODOT_VERSION: "4.7-stable"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Godot and export templates
+        run: .github/scripts/install-godot.sh
+      - name: Import project
+        run: .github/scripts/import-project.sh
+      - name: Export Windows build
+        run: |
+          mkdir -p build/windows
+          godot --headless --export-release "Windows Desktop" build/windows/Frisquibo.exe
+          test -f build/windows/Frisquibo.exe && test -f build/windows/Frisquibo.pck
+      - uses: actions/upload-artifact@v5
+        with:
+          name: windows
+          path: build/windows
 
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

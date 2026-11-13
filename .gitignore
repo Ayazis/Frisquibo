@@ -27,3 +27,7 @@ mono_crash.*.json
 shot.png
 shot.png.import
 dist/
+
+# Local export outputs (CI builds its own)
+web/
+build/
