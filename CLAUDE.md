@@ -4,6 +4,9 @@ A medieval, story-driven open-world action game in the spirit of *Mafia*, built 
 The full architecture and engineering strategy is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Read it before making structural changes.
 
 ## Non-negotiables
+- **Visible beauty and realism are top priorities.** Choose the better-looking solution unless profiling
+  proves it's too expensive at the High tier. Never lower the High/Ultra look to fix performance; use
+  optimisation, LOD and lower tiers instead. See section 7 of the architecture doc.
 - **Desktop is leading.** Never drop, simplify or postpone a desktop feature because it won't work on the web.
   Web support is added afterwards through clearly marked feature checks (`OS.has_feature("web")`, renderer, quality tier)
   with a cheaper fallback or a no-op. Shared gameplay logic is never forked per platform.

@@ -4,6 +4,9 @@ Frisquibo is a story-driven, medieval open-world action game in the spirit of *M
 a living city and countryside, a linear narrative told through missions, crime and
 factions, mounts and carts instead of cars, and a strong focus on atmosphere.
 
+**Pillar: visible beauty and realism.** Graphical quality is one of the game's top priorities, and
+a feature isn't done until it looks right. Section 7 says what that means in practice.
+
 ## 1. Platform & technology decisions
 
 | Decision | Choice | Consequence |
@@ -149,22 +152,68 @@ res://
 Rule: everything a feature needs (script, scene, data) lives in that feature's folder.
 `assets/` holds only shared raw art.
 
-## 7. Art pipeline
+## 7. Visual quality & art pipeline
+
+### Principles
+- **Realism is the target, grounded in reference.** Every environment, material and lighting setup
+  starts from real-world reference (photos of medieval towns, castles, forests and weather; real
+  material samples). "Looks plausible" is not the bar; "matches the reference" is.
+- **Visual quality is a deciding factor, not a nice-to-have.** When a choice trades looks against
+  convenience, looks win unless profiling proves the cost is unacceptable at the High tier.
+- **Never lower the High/Ultra bar to hit performance.** Performance is solved through optimisation,
+  LOD, streaming and the lower quality tiers, not by making the best version look worse.
+- **Lighting is the biggest lever.** Physically based lighting with real-world units (lux, EV),
+  a physical camera with auto-exposure, and consistent colour management.
+
+### Rendering (desktop, Forward+)
+- **Global illumination:** dynamic GI for the open world with the time of day, plus baked
+  LightmapGI and reflection probes for interiors where quality matters most.
+- **Atmosphere:** physically based sky, volumetric fog, and god rays through windows and forest canopies.
+- **Screen-space effects:** SSAO/SSIL, screen-space reflections, contact shadows.
+- **Shadows:** high-resolution cascaded sun shadows, soft shadows, and per-light shadows for torches and candles.
+- **Anti-aliasing and upscaling:** temporal AA (TAA or FSR 2) as the default, so foliage and fine detail don't shimmer.
+- **Post-processing:** filmic tone mapping (AgX/ACES), colour grading through LUTs, and subtle
+  depth of field, motion blur, bloom and lens effects (each can be turned off in settings).
+- **Custom rendering where Godot falls short:** compositor effects and custom shaders are expected,
+  not exceptions. Wet surfaces, puddles, snow, mud, wind and interaction are shader-driven systems.
+
+### Content quality
+- **Materials:** fully PBR (albedo, normal, ORM, height where useful), calibrated against measured
+  albedo ranges. Detail maps and layered materials (moss, dirt, wetness, wear) instead of unique
+  textures everywhere.
+- **Texel density:** 1024 px/m for props and characters (hero assets 2048 px/m), 512 px/m for buildings and terrain.
+- **Geometry:** high-poly assets with automatic LODs (manual LODs for heroes and key buildings).
+  Silhouettes must hold up close: no visibly faceted rounded shapes.
+- **Characters:** realistic proportions, skin and hair shaders, facial animation for cutscenes.
+- **Sources:** photogrammetry/scanned assets where the licence allows Godot use, plus custom sculpting.
+  Every bought or scanned asset is checked for its licence before it goes into the repo.
+
+### Pipeline
 - Blender → glTF 2.0. Units are metres, +Y is up, and the scale is applied before export.
-- PBR materials (ORM-packed textures). Texel density target: 512 px/m for props and 256 px/m for buildings.
-- Every mesh gets LODs (generated automatically by Godot, with manual LODs for heroes and key buildings).
 - Asset naming: `<type>_<name>_<variant>` (`prop_barrel_01`, `bld_tavern_a`).
+- **Lookdev scene** (`levels/lookdev/`): a neutral, calibrated lighting setup (several times of day,
+  interior and exterior) where every new asset and material is checked before use.
+
+### Guarding the quality
+- **Golden screenshots:** a fixed set of camera shots per region, rendered at High. Visual changes
+  are compared against them in reviews, so quality can't erode unnoticed.
+- **Art direction document** (`docs/ART_DIRECTION.md`, to be written): palette, mood per region and time
+  of day, reference boards.
 
 ## 8. Performance budgets (set early, measured regularly)
 Desktop budgets are the ones that drive design decisions. Web budgets only decide how
 far the web build is scaled down.
 
+Desktop budgets assume a **recommended-spec GPU in the class of an RTX 4070 at 1440p**. This is a
+proposal; the hardware target is still to be confirmed. Ultra may exceed the frame budget and rely
+on upscaling.
+
 | | Web (best effort) | Desktop (High, leading) |
 |---|---|---|
-| Frame time | 16.6 ms (60 fps) | 16.6 ms |
-| Draw calls | < 1 000 | < 3 000 |
+| Frame time | 16.6 ms (60 fps) | 16.6 ms at 1440p (upscaling allowed) |
+| Draw calls | < 1 000 | < 5 000 |
 | Active full-AI NPCs | 20 | 60 |
-| Texture memory | 512 MB | 2 GB |
+| GPU memory | 512 MB | 8 GB |
 
 ## 9. Testing & CI
 **In place today:** on every push and PR, CI imports the project (failing on any script or
