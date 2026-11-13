@@ -26,3 +26,4 @@ mono_crash.*.json
 .godot/
 shot.png
 shot.png.import
+dist/

@@ -1,0 +1,125 @@
+name: Build and deploy
+
+# main → site root of the gh-pages branch: https://ayazis.github.io/Frisquibo/
+# PRs  → preview at /pr/pr-<number>/ on the same branch.
+#        Closed without merge: removed right away.
+#        Merged: kept until the main deploy containing it is live on Pages, then removed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  pages: read
+
+# Group PR runs by PR number, not github.ref: once a PR is merged, its "closed" run gets
+# github.ref = refs/heads/main and would cancel the main deploy triggered by the merge.
+# Never cancel a main deploy halfway; it may be mid-push or mid-cleanup.
+concurrency:
+  group: deploy-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    env:
+      GODOT_VERSION: "4.7-stable"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Godot and web export templates
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}"
+          curl -fsSL -o godot.zip "$base/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          curl -fsSL -o templates.tpz "$base/Godot_v${GODOT_VERSION}_export_templates.tpz"
+          unzip -q godot.zip && mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
+          dir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION/-/.}"
+          mkdir -p "$dir" && unzip -q templates.tpz && mv templates/* "$dir/"
+          rm -rf godot.zip templates.tpz templates
+      - name: Export Web build
+        run: |
+          mkdir -p dist
+          godot --headless --import || true
+          godot --headless --export-release "Web" dist/index.html
+          test -f dist/index.wasm
+      - uses: actions/upload-artifact@v5
+        with:
+          name: site
+          path: dist
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v6
+        with:
+          name: site
+          path: dist
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: dist
+          branch: gh-pages
+          clean-exclude: pr/
+      - name: Wait for GitHub Pages to publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/wait-for-pages.sh
+      # Only now is the merged work live at the root, so previews of closed PRs can go.
+      - uses: actions/checkout@v5
+        with:
+          ref: gh-pages
+          path: gh-pages
+      - name: Remove previews of closed PRs
+        working-directory: gh-pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ../.github/scripts/remove-closed-previews.sh
+
+  preview:
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v6
+        with:
+          name: site
+          path: dist
+      - uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: dist
+          umbrella-dir: pr
+          action: deploy
+          # The action comments as soon as gh-pages is pushed, before Pages has published it.
+          # The steps below wait for the Pages build and post the comment themselves.
+          comment: false
+      - name: Wait for GitHub Pages to publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/wait-for-pages.sh
+      - name: Comment preview link
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/pr/pr-${{ github.event.number }}/"
+          gh pr comment ${{ github.event.number }} --repo ${{ github.repository }} --edit-last --create-if-none \
+            --body "🚀 Preview is live: $url (commit ${{ github.event.pull_request.head.sha }})"
+
+  preview-cleanup:
+    # Merged PRs are cleaned up by the main deploy once it is live.
+    if: >-
+      github.event_name == 'pull_request' && github.event.action == 'closed' &&
+      !github.event.pull_request.merged
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: rossjrw/pr-preview-action@v1
+        with:
+          umbrella-dir: pr
+          action: remove
