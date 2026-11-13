@@ -37,7 +37,11 @@ Use it to set the time of day or weather and to hide the HUD.
   golden images with `update` and review them.
 
 ## Workflow for visual changes
-1. Make the change.
-2. Run `compare`, then look at the `*.compare.png` images.
+Viewing images is expensive for an AI agent (tokens), while the text output is cheap. So:
+1. Make the change, and keep iterating with text-based checks: import, logs, tests, and `compare`'s
+   PASS/FAIL lines and changed-pixel percentages. An unexpected FAIL on a shot you didn't mean to touch
+   is a signal, even without looking.
+2. Open `*.compare.png` images only to investigate a bug the text can't explain, or once at the end to
+   verify the final result. Open only the shots that matter.
 3. If the change is intended and looks right, run `update` and commit the new golden images with the change.
    The golden image diff in the commit shows reviewers exactly what changed visually.

@@ -260,7 +260,9 @@ everything on its own, and so a human can follow what it did.
   Code rule from section 2, with an extra reason.
 - **The AI must be able to see the result.** A visual check tool renders fixed camera shots (per scene
   and time of day) to PNG from the command line, so the AI can look at its own changes and compare them
-  with the golden screenshots from section 7. Building this tool is an early roadmap item.
+  with the golden screenshots from section 7 (`tools/visual_check/`). Looking at images is expensive in
+  tokens, so agents work from the tool's text output (PASS/FAIL, changed-pixel percentages) and open images
+  only to investigate unexplained bugs or once to verify the final result.
 - **The AI must be able to verify behaviour.** Headless import, headless runs and GUT tests all run from
   the command line, and CI runs them too. A change isn't done until the AI has run the checks itself.
 - **Document decisions as they're made.** Architecture decisions go in `docs/decisions/` (one numbered

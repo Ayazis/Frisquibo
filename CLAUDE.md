@@ -22,10 +22,16 @@ This game is built mostly by AI, without engine experts on the team (see `docs/d
 - Keep everything as text: `.tscn`, `.tres`, `.gdshader`, `.gd`. Never save authored content as binary `.scn` or `.res`.
 - Prefer describing setup in scripts or resources over steps a human must click through in the editor.
 - Verify your own work: run the headless import and tests. Don't report a change as done without having checked it.
-- **For any change that affects how the game looks**, run the visual check (`tools/visual_check/README.md`):
-  `tools/visual_check/run.sh <shot-list.tres>`, then open and judge the `*.compare.png` images yourself.
-  Only run `update` for an intended change that you've looked at, and commit the new golden images with it.
-  Give new scenes and visual features their own shot list in `tests/visual/`.
+- **Looking at images is expensive in tokens, so do it rarely.** Push the work as far as possible with cheap,
+  text-based checks first: headless import, game logs, tests, and the visual check's text output
+  (`tools/visual_check/run.sh <shot-list.tres>` prints PASS/FAIL and changed-pixel percentages without you
+  opening anything). Only open render images:
+  1. to investigate a bug or error that the text checks can't explain, or
+  2. once, at the very end of a visual task, to verify the final result.
+  Don't look at images after each step or iteration. When you do look, open only the `*.compare.png` of the
+  shots that matter (each one already shows golden | render | diff in a single image).
+- Only run the visual check's `update` mode for an intended change you've verified at the end, and commit the
+  new golden images with it. Give new scenes and visual features their own shot list in `tests/visual/`.
 - Record architecture decisions in `docs/decisions/` as numbered files.
 - `docs/FEATURE_MAP.md` lists what we build per track and which libraries to evaluate. Follow its
   third-party addon rules (permissive licence, tested in `prototypes/` first, pinned in `addons/`, wrapped behind our own interfaces).
