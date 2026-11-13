@@ -195,6 +195,10 @@ Rule: everything a feature needs (script, scene, data) lives in that feature's f
 - **Lookdev scene** (`levels/lookdev/`): a neutral, calibrated lighting setup (several times of day,
   interior and exterior) where every new asset and material is checked before use.
 
+### What we build to get there
+`docs/FEATURE_MAP.md` maps each Unreal capability to Godot's built-in features, libraries to evaluate,
+and what we build ourselves, grouped into tracks that one person can own.
+
 ### Guarding the quality
 - **Golden screenshots:** a fixed set of camera shots per region, rendered at High. Visual changes
   are compared against them in reviews, so quality can't erode unnoticed.

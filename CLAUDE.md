@@ -24,6 +24,8 @@ This game is built mostly by AI, without engine experts on the team (see `docs/d
 - Verify your own work: run the headless import and tests, and for visual changes, render screenshots and look at them.
   Don't report a change as done without having checked it.
 - Record architecture decisions in `docs/decisions/` as numbered files.
+- `docs/FEATURE_MAP.md` lists what we build per track and which libraries to evaluate. Follow its
+  third-party addon rules (permissive licence, tested in `prototypes/` first, pinned in `addons/`, wrapped behind our own interfaces).
 
 ## Clean Code rules
 - One responsibility per script or scene. If a script needs a section-header comment to separate its concerns, split it.
