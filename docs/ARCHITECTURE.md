@@ -10,21 +10,25 @@ factions, mounts and carts instead of cars, and a strong focus on atmosphere.
 |---|---|---|
 | Engine | Godot 4.x | — |
 | Language | **GDScript** (statically typed) | Keeps the web export. C# is not an option. |
-| Targets | **Web** and **desktop** | Every feature must degrade gracefully to the Compatibility renderer. |
-| Renderers | Forward+ (desktop), `gl_compatibility` (web) | No feature may *depend* on SDFGI, volumetric fog or compute shaders. These are optional "Ultra" enhancements. |
+| Targets | **Desktop is leading.** Web is a secondary, reduced build. | The web build never blocks a feature. |
+| Renderers | Forward+ (desktop), `gl_compatibility` (web) | Desktop uses everything Forward+ offers (SDFGI, volumetric fog, compute shaders, etc.). |
 
-### "High quality" on the web: the rules
-- **Quality comes from art direction first, features second.** Strong lighting design,
-  colour grading, fog, and good materials work on both renderers.
-- **Quality tiers** (`data/quality/*.tres`: Low / Medium / High / Ultra) hold every
+### Desktop first, web as a scaled-down build: the rules
+- **Desktop is never held back by the web.** "It wouldn't work on the web" is not a valid
+  reason to drop, simplify or postpone a desktop feature.
+- **The web build is allowed to be a lesser experience.** Web-only work means deciding
+  what to scale down, swap for something simpler or turn off. It never sets the bar for desktop.
+- **How web support is isolated:** desktop-only features sit behind feature checks
+  (`OS.has_feature("web")`, the renderer, the quality tier) at clearly marked spots, with a
+  cheaper fallback or no-op on the web. Gameplay logic itself is shared.
+- **If a feature is essential to gameplay and can't run on the web**, the web build may
+  leave out that content, or the web build may be dropped entirely. That decision is made
+  on the web side, not by limiting desktop.
+- **Quality tiers** (`data/quality/*.tres`: Low / Medium / High / Ultra / Web) hold every
   scalable number: foliage density, shadow size, draw distance, LOD bias, particle counts.
-  Code never hardcodes these values. Web defaults to Medium, and Ultra is desktop-only.
-- **Baked over dynamic** where possible: baked lightmaps/LightmapGI for interiors,
-  ReflectionProbes, pre-baked ambient occlusion in textures.
-- **Download size is a feature.** Web builds stream content in packs (`.pck` per region),
-  and textures use compressed formats (ETC2/S3TC/Basis). Budget: initial download < 50 MB.
-- Shaders are written once to run on both renderers. When needed, use renderer-specific variants behind a
-  `#if` / shader-feature switch, never separate gameplay code.
+  Code never hardcodes these values. Desktop defaults to High, and the web uses its own `Web` tier.
+- **Web download size:** web builds stream content in packs (`.pck` per region). Desktop
+  assets are never downscaled for this; the web export pipeline handles compression and reduction.
 
 ## 2. Clean Code rules
 
@@ -149,7 +153,10 @@ Rule: everything a feature needs (script, scene, data) lives in that feature's f
 - Asset naming: `<type>_<name>_<variant>` (`prop_barrel_01`, `bld_tavern_a`).
 
 ## 8. Performance budgets (set early, measured regularly)
-| | Web (Medium) | Desktop (High) |
+Desktop budgets are the ones that drive design decisions. Web budgets only decide how
+far the web build is scaled down.
+
+| | Web (best effort) | Desktop (High, leading) |
 |---|---|---|
 | Frame time | 16.6 ms (60 fps) | 16.6 ms |
 | Draw calls | < 1 000 | < 3 000 |
