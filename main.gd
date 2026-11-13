@@ -22,7 +22,6 @@ var pitch := -0.3
 var cam_dist := 9.0
 var wind := 0.35
 var time_preset := 0
-var shot_timer := -1.0
 
 
 func height(x: float, z: float) -> float:
@@ -45,10 +44,16 @@ func _ready() -> void:
 	add_child(cam)
 	_make_hud()
 	_apply_time()
-	if "--shot" in OS.get_cmdline_user_args():
-		shot_timer = 3.0
-	else:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## Called by the visual check tool (tools/visual_check) to put the scene in a fixed state for a shot.
+func apply_visual_check_state(state: Dictionary) -> void:
+	hud.visible = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	time_preset = state.get("time_preset", time_preset)
+	wind = state.get("wind", wind)
+	_apply_time()
 
 
 func _make_env() -> void:
@@ -260,21 +265,24 @@ func _apply_time() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		yaw -= event.relative.x * 0.004
-		pitch = clampf(pitch - event.relative.y * 0.004, -1.3, 0.15)
-	elif event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+	var motion := event as InputEventMouseMotion
+	var button := event as InputEventMouseButton
+	var key := event as InputEventKey
+	if motion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		yaw -= motion.relative.x * 0.004
+		pitch = clampf(pitch - motion.relative.y * 0.004, -1.3, 0.15)
+	elif button and button.pressed:
+		if button.button_index == MOUSE_BUTTON_WHEEL_UP:
 			cam_dist = maxf(cam_dist - 0.7, 2.5)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		elif button.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			cam_dist = minf(cam_dist + 0.7, 30.0)
-		elif event.button_index == MOUSE_BUTTON_LEFT:
+		elif button.button_index == MOUSE_BUTTON_LEFT:
 			if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			else:
 				_throw_ball()
-	elif event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
+	elif key and key.pressed and not key.echo:
+		match key.keycode:
 			KEY_ESCAPE:
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 			KEY_T:
@@ -299,7 +307,15 @@ func _throw_ball() -> void:
 	b.linear_velocity = fwd * 22.0
 	balls.append(b)
 	if balls.size() > MAX_BALLS - 1:
-		balls.pop_front().queue_free()
+		var oldest: RigidBody3D = balls.pop_front()
+		oldest.queue_free()
+
+
+## The player and every thrown ball; all of them are spheres.
+func _bodies() -> Array[RigidBody3D]:
+	var all: Array[RigidBody3D] = [player]
+	all.append_array(balls)
+	return all
 
 
 func _physics_process(_delta: float) -> void:
@@ -315,7 +331,7 @@ func _physics_process(_delta: float) -> void:
 	if f != Vector3.ZERO:
 		player.apply_central_force(f.normalized() * 30.0 * player.mass)
 	# keep things on the field
-	for b in [player] + balls:
+	for b in _bodies():
 		if b.global_position.y < -20.0:
 			b.global_position = Vector3(0, 8, 0)
 			b.linear_velocity = Vector3.ZERO
@@ -331,8 +347,9 @@ func _process(delta: float) -> void:
 	pollen.global_position = Vector3(target.x, target.y + 1.0, target.z)
 
 	var pushers: Array = []
-	for b in [player] + balls:
-		var r: float = (b.get_child(0) as CollisionShape3D).shape.radius
+	for b in _bodies():
+		var sphere := (b.get_child(0) as CollisionShape3D).shape as SphereShape3D
+		var r := sphere.radius
 		var p: Vector3 = b.global_position
 		pushers.append(Vector4(p.x, p.y, p.z, r))
 	grass_mat.set_shader_parameter("pushers", pushers)
@@ -340,9 +357,3 @@ func _process(delta: float) -> void:
 	grass_mat.set_shader_parameter("wind_strength", wind)
 
 	hud.text = "FPS %d   |   WASD roll   Space jump   Mouse look   Wheel zoom   Click throw ball\nQ/E wind (%.1f)   T time of day   R reset   Esc free mouse" % [Engine.get_frames_per_second(), wind]
-
-	if shot_timer > 0.0:
-		shot_timer -= delta
-		if shot_timer <= 0.0:
-			get_viewport().get_texture().get_image().save_png(ProjectSettings.globalize_path("res://shot.png"))
-			get_tree().quit()
