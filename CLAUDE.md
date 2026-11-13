@@ -29,9 +29,11 @@ This game is built mostly by AI, without engine experts on the team (see `docs/d
   1. to investigate a bug or error that the text checks can't explain, or
   2. once, at the very end of a visual task, to verify the final result.
   Don't look at images after each step or iteration. When you do look, open only the `*.compare.png` of the
-  shots that matter (each one already shows golden | render | diff in a single image).
-- Only run the visual check's `update` mode for an intended change you've verified at the end, and commit the
-  new golden images with it. Give new scenes and visual features their own shot list in `tests/visual/`.
+  shots that matter (each one already shows baseline | render | diff in a single image).
+- **Visual check baselines are local and per machine; never commit renders.** Before starting a change that
+  could affect how the game looks, run `tools/visual_check/run.sh <shot-list.tres> baseline` on the clean
+  working tree, then compare against it during and after the change. Give new scenes and visual features
+  their own shot list in `tests/visual/` (shot lists are committed).
 - Record architecture decisions in `docs/decisions/` as numbered files.
 - `docs/FEATURE_MAP.md` lists what we build per track and which libraries to evaluate. Follow its
   third-party addon rules (permissive licence, tested in `prototypes/` first, pinned in `addons/`, wrapped behind our own interfaces).

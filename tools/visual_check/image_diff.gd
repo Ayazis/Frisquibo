@@ -1,6 +1,6 @@
 class_name ImageDiff
 extends RefCounted
-## Compares a golden render with a new render of the same shot.
+## Compares a baseline render with a new render of the same shot.
 
 ## Renders are compared at this width: fast enough in GDScript, and it ignores sub-pixel noise.
 const COMPARE_WIDTH := 800
@@ -14,13 +14,13 @@ class Result extends RefCounted:
 	var changed_ratio: float = 0.0
 	## Largest per-channel difference found (0..1).
 	var max_difference: float = 0.0
-	## Golden | actual | diff, side by side.
+	## Baseline | actual | diff, side by side.
 	var composite: Image
 
 
-static func compare(golden: Image, actual: Image, pixel_threshold: float) -> Result:
-	var size := _compare_size(golden)
-	var expected := _prepared(golden, size)
+static func compare(baseline: Image, actual: Image, pixel_threshold: float) -> Result:
+	var size := _compare_size(baseline)
+	var expected := _prepared(baseline, size)
 	var rendered := _prepared(actual, size)
 	var diff := Image.create(size.x, size.y, false, Image.FORMAT_RGB8)
 	var result := Result.new()

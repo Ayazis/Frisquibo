@@ -93,7 +93,7 @@ That changes the weighing:
   slow for heavy rendering or simulation, C++ through GDExtension is the planned escape hatch (decided per
   case, not by default).
 - **The AI needs to see what it builds.** An automated visual feedback loop (rendered screenshots from fixed
-  camera shots, compared against golden images) is core tooling, not a nice-to-have. See the architecture
+  camera shots, compared against a baseline rendered before the change) is core tooling, not a nice-to-have. See the architecture
   doc, section 12.
 - **Watch for hardware ray tracing** in Godot 4.8–4.9, and adopt it for the Ultra tier when it ships.
 - **Revisit this decision** only if a concrete visual target proves impossible in Godot after real effort.

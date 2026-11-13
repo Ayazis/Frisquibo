@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Renders the shots of a shot list and compares them with the golden images.
+# Renders the shots of a shot list and compares them with the local baseline.
 #
-#   tools/visual_check/run.sh <shot-list.tres> [compare|capture|update]
+#   tools/visual_check/run.sh <shot-list.tres> [baseline|compare|capture]
 #
 # Set GODOT to the Godot executable if it isn't on PATH (use the console build on Windows).
-# Exit codes: 0 = all shots match, 1 = differences or missing golden images, 2 = error.
+# Exit codes: 0 = all shots match, 1 = differences or missing baseline, 2 = error.
 set -euo pipefail
 
-list="${1:?usage: run.sh <shot-list.tres> [compare|capture|update]}"
+list="${1:?usage: run.sh <shot-list.tres> [baseline|compare|capture]}"
 mode="${2:-compare}"
 godot="${GODOT:-godot}"
 

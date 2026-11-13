@@ -1,10 +1,11 @@
 extends Node
-## Renders the fixed camera shots of a VisualShotList to PNG and compares them with golden images.
+## Renders the fixed camera shots of a VisualShotList to PNG and compares them with a local baseline.
+## Baselines are per machine (renders differ between GPUs), so they live in build/ and are never committed.
 ## Start it through tools/visual_check/run.sh; see tools/visual_check/README.md.
 
-enum Mode { CAPTURE, COMPARE, UPDATE }
+enum Mode { CAPTURE, COMPARE, BASELINE }
 
-const MODES := {"capture": Mode.CAPTURE, "compare": Mode.COMPARE, "update": Mode.UPDATE}
+const MODES := {"capture": Mode.CAPTURE, "compare": Mode.COMPARE, "baseline": Mode.BASELINE}
 const EXIT_PASS := 0
 const EXIT_DIFFERENT := 1
 const EXIT_ERROR := 2
@@ -27,7 +28,7 @@ func _execute() -> int:
 	var list_path: String = args.get("shots", "")
 	var mode_name: String = args.get("mode", "compare")
 	if not MODES.has(mode_name):
-		printerr("Unknown --mode=%s (use capture, compare or update)." % mode_name)
+		printerr("Unknown --mode=%s (use baseline, compare or capture)." % mode_name)
 		return EXIT_ERROR
 	var mode: Mode = MODES[mode_name]
 
@@ -41,7 +42,7 @@ func _execute() -> int:
 
 	var list_name := list_path.get_file().get_basename()
 	var output_dir := _prepare_output_dir(list_name)
-	var golden_dir := ProjectSettings.globalize_path(list_path.get_base_dir().path_join("golden").path_join(list_name))
+	var baseline_dir := output_dir.path_join("baseline")
 	get_window().size = list.resolution
 
 	var failures := 0
@@ -52,16 +53,16 @@ func _execute() -> int:
 		match mode:
 			Mode.CAPTURE:
 				print("CAPTURED %s -> %s" % [shot.name, render_path])
-			Mode.UPDATE:
-				DirAccess.make_dir_recursive_absolute(golden_dir)
-				image.save_png(golden_dir.path_join(shot.name + ".png"))
-				print("UPDATED  %s golden image" % shot.name)
+			Mode.BASELINE:
+				DirAccess.make_dir_recursive_absolute(baseline_dir)
+				image.save_png(baseline_dir.path_join(shot.name + ".png"))
+				print("BASELINE %s" % shot.name)
 			Mode.COMPARE:
-				if not _compare_shot(list, shot, image, golden_dir, output_dir):
+				if not _compare_shot(list, shot, image, baseline_dir, output_dir):
 					failures += 1
 
 	if mode == Mode.COMPARE:
-		print("%d of %d shots match their golden images. Renders: %s" % [list.shots.size() - failures, list.shots.size(), output_dir])
+		print("%d of %d shots match the baseline. Renders: %s" % [list.shots.size() - failures, list.shots.size(), output_dir])
 	return EXIT_DIFFERENT if failures > 0 else EXIT_PASS
 
 
@@ -105,17 +106,17 @@ func _make_camera(scene_camera: Camera3D) -> Camera3D:
 	return camera
 
 
-func _compare_shot(list: VisualShotList, shot: VisualShot, image: Image, golden_dir: String, output_dir: String) -> bool:
-	var golden_path := golden_dir.path_join(shot.name + ".png")
-	var golden := Image.load_from_file(golden_path) if FileAccess.file_exists(golden_path) else null
-	if golden == null:
-		print("MISSING  %s: no golden image yet (run with --mode=update to create it)" % shot.name)
+func _compare_shot(list: VisualShotList, shot: VisualShot, image: Image, baseline_dir: String, output_dir: String) -> bool:
+	var baseline_path := baseline_dir.path_join(shot.name + ".png")
+	var baseline := Image.load_from_file(baseline_path) if FileAccess.file_exists(baseline_path) else null
+	if baseline == null:
+		print("MISSING  %s: no baseline on this machine (run with --mode=baseline before changing anything)" % shot.name)
 		return false
-	var result := ImageDiff.compare(golden, image, list.pixel_threshold)
+	var result := ImageDiff.compare(baseline, image, list.pixel_threshold)
 	var compare_path := output_dir.path_join(shot.name + ".compare.png")
 	result.composite.save_png(compare_path)
 	var passed := result.changed_ratio <= list.max_changed_ratio
-	print("%s %s: %.3f%% of pixels changed (limit %.3f%%), max difference %.3f. Golden | render | diff: %s" % [
+	print("%s %s: %.3f%% of pixels changed (limit %.3f%%), max difference %.3f. Baseline | render | diff: %s" % [
 		"PASS    " if passed else "FAIL    ", shot.name, result.changed_ratio * 100.0,
 		list.max_changed_ratio * 100.0, result.max_difference, compare_path])
 	return passed

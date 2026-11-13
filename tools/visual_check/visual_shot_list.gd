@@ -1,7 +1,7 @@
 class_name VisualShotList
 extends Resource
 ## A scene plus the fixed camera shots used to check how it looks.
-## Golden images live next to the list, in golden/<list file name>/<shot name>.png.
+## Baselines are rendered locally per machine into build/visual_check/<list file name>/baseline/.
 
 @export_file("*.tscn") var scene_path: String = ""
 @export var resolution: Vector2i = Vector2i(1600, 900)
