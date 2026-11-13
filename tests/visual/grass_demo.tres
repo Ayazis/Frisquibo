@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="VisualShotList" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot_list.gd" id="1"]
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot.gd" id="2"]
+
+[sub_resource type="Resource" id="midday_overview"]
+script = ExtResource("2")
+name = "midday_overview"
+camera_position = Vector3(16, 8, 16)
+look_at_target = Vector3(0, 0, 0)
+state = {"time_preset": 0}
+
+[sub_resource type="Resource" id="golden_hour_grass"]
+script = ExtResource("2")
+name = "golden_hour_grass"
+camera_position = Vector3(6, 5, 6)
+look_at_target = Vector3(-10, 1, -10)
+state = {"time_preset": 1}
+
+[sub_resource type="Resource" id="dusk_wide"]
+script = ExtResource("2")
+name = "dusk_wide"
+camera_position = Vector3(-22, 10, 20)
+look_at_target = Vector3(0, 0, 0)
+state = {"time_preset": 2}
+
+[resource]
+script = ExtResource("1")
+scene_path = "res://main.tscn"
+shots = Array[ExtResource("2")]([SubResource("midday_overview"), SubResource("golden_hour_grass"), SubResource("dusk_wide")])

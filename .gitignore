@@ -24,8 +24,6 @@ mono_crash.*.json
 # Uncomment if your project does not version PCK files as runtime dependencies.
 # *.pck
 .godot/
-shot.png
-shot.png.import
 dist/
 
 # Local export outputs (CI builds its own)

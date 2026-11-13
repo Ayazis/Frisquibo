@@ -80,7 +80,7 @@ build ourselves. Capabilities are grouped into **tracks**, so each person can ow
 
 | Need | We build | Size |
 |---|---|---|
-| **Visual check tool** | Render fixed camera shots (per scene, time of day and quality tier) to PNG from the command line, and compare them against golden images. This is how the AI sees its work. | M |
+| **Visual check tool** | **Done** (`tools/visual_check/`): renders fixed camera shots to PNG and compares them with golden images. Still to add: a quality-tier option once tiers exist. | M |
 | **Lookdev scene** | Calibrated neutral lighting setups for judging assets and materials. | S |
 | **Asset import checks** | Automatic validation on import: naming, scale, LODs, texel density, material slots. | M |
 | **Performance capture** | A fixed fly-through per region that logs frame time, draw calls and memory, so CI can catch performance regressions. | M |

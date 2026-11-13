@@ -21,8 +21,11 @@ The full architecture and engineering strategy is in [docs/ARCHITECTURE.md](docs
 This game is built mostly by AI, without engine experts on the team (see `docs/decisions/0001-engine-choice.md`).
 - Keep everything as text: `.tscn`, `.tres`, `.gdshader`, `.gd`. Never save authored content as binary `.scn` or `.res`.
 - Prefer describing setup in scripts or resources over steps a human must click through in the editor.
-- Verify your own work: run the headless import and tests, and for visual changes, render screenshots and look at them.
-  Don't report a change as done without having checked it.
+- Verify your own work: run the headless import and tests. Don't report a change as done without having checked it.
+- **For any change that affects how the game looks**, run the visual check (`tools/visual_check/README.md`):
+  `tools/visual_check/run.sh <shot-list.tres>`, then open and judge the `*.compare.png` images yourself.
+  Only run `update` for an intended change that you've looked at, and commit the new golden images with it.
+  Give new scenes and visual features their own shot list in `tests/visual/`.
 - Record architecture decisions in `docs/decisions/` as numbered files.
 - `docs/FEATURE_MAP.md` lists what we build per track and which libraries to evaluate. Follow its
   third-party addon rules (permissive licence, tested in `prototypes/` first, pinned in `addons/`, wrapped behind our own interfaces).

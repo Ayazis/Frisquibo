@@ -145,7 +145,8 @@ res://
   data/              quality/ items/ weapons/ factions/ missions/
   levels/            regions and test scenes
   assets/            models/ textures/ materials/ audio/ fonts/ (raw imports)
-  tests/             unit/ (GUT)
+  tests/             unit/ (GUT), visual/ (shot lists and golden images)
+  tools/             development tools (visual_check/)
   prototypes/        throwaway experiments; nothing here ships
   docs/
 ```
@@ -232,7 +233,7 @@ build is uploaded as an artifact, and PRs get a web preview deployment.
 ## 10. Roadmap for the codebase
 1. Refactor the grass prototype into `world/foliage`, `world/time_of_day`, `actors/player`
    and `core/settings` as the reference implementation of these rules.
-2. Visual check tool: render fixed camera shots to PNG from the command line (section 12).
+2. ~~Visual check tool~~ Done: `tools/visual_check/` (section 12).
 3. Core autoloads + quality tiers.
 4. Player controller + camera rig + one mount.
 5. Mission runner with 2–3 objective types + a vertical-slice mission.

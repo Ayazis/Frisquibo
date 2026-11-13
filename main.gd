@@ -22,7 +22,6 @@ var pitch := -0.3
 var cam_dist := 9.0
 var wind := 0.35
 var time_preset := 0
-var shot_timer := -1.0
 
 
 func height(x: float, z: float) -> float:
@@ -45,10 +44,16 @@ func _ready() -> void:
 	add_child(cam)
 	_make_hud()
 	_apply_time()
-	if "--shot" in OS.get_cmdline_user_args():
-		shot_timer = 3.0
-	else:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## Called by the visual check tool (tools/visual_check) to put the scene in a fixed state for a shot.
+func apply_visual_check_state(state: Dictionary) -> void:
+	hud.visible = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	time_preset = state.get("time_preset", time_preset)
+	wind = state.get("wind", wind)
+	_apply_time()
 
 
 func _make_env() -> void:
@@ -352,9 +357,3 @@ func _process(delta: float) -> void:
 	grass_mat.set_shader_parameter("wind_strength", wind)
 
 	hud.text = "FPS %d   |   WASD roll   Space jump   Mouse look   Wheel zoom   Click throw ball\nQ/E wind (%.1f)   T time of day   R reset   Esc free mouse" % [Engine.get_frames_per_second(), wind]
-
-	if shot_timer > 0.0:
-		shot_timer -= delta
-		if shot_timer <= 0.0:
-			get_viewport().get_texture().get_image().save_png(ProjectSettings.globalize_path("res://shot.png"))
-			get_tree().quit()
