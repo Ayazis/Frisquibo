@@ -10,11 +10,20 @@ The full architecture and engineering strategy is in [docs/ARCHITECTURE.md](docs
 - **Desktop is leading.** Never drop, simplify or postpone a desktop feature because it won't work on the web.
   Web support is added afterwards through clearly marked feature checks (`OS.has_feature("web")`, renderer, quality tier)
   with a cheaper fallback or a no-op. Shared gameplay logic is never forked per platform.
-- **GDScript only, statically typed.** Every variable, parameter and return value has a type.
+- **GDScript, statically typed.** Every variable, parameter and return value has a type. C++ through
+  GDExtension only where profiling proves GDScript too slow, decided case by case and recorded in `docs/decisions/`.
   `project.godot` turns untyped and unsafe code into errors; fix the types, don't suppress the warnings.
 - **Every change must import cleanly and export for both Windows and Web** (CI checks this on each PR).
 - **No magic numbers.** Scalable values (density, distances, counts) go in quality-tier resources in `data/quality/`;
   other tunables become named constants or `@export` properties.
+
+## AI-first workflow
+This game is built mostly by AI, without engine experts on the team (see `docs/decisions/0001-engine-choice.md`).
+- Keep everything as text: `.tscn`, `.tres`, `.gdshader`, `.gd`. Never save authored content as binary `.scn` or `.res`.
+- Prefer describing setup in scripts or resources over steps a human must click through in the editor.
+- Verify your own work: run the headless import and tests, and for visual changes, render screenshots and look at them.
+  Don't report a change as done without having checked it.
+- Record architecture decisions in `docs/decisions/` as numbered files.
 
 ## Clean Code rules
 - One responsibility per script or scene. If a script needs a section-header comment to separate its concerns, split it.

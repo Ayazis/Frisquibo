@@ -12,7 +12,8 @@ a feature isn't done until it looks right. Section 7 says what that means in pra
 | Decision | Choice | Consequence |
 |---|---|---|
 | Engine | Godot 4.x | — |
-| Language | **GDScript** (statically typed) | Keeps the web export. C# is not an option. |
+| Language | **GDScript** (statically typed) | Keeps the web export. C# is not an option. C++ via GDExtension only where profiling demands it. |
+| Workflow | **AI-first** (see section 12 and [ADR 0001](decisions/0001-engine-choice.md)) | Everything is text, scriptable and verifiable from the command line. |
 | Targets | **Desktop is leading.** Web is a secondary, reduced build. | The web build never blocks a feature. |
 | Renderers | Forward+ (desktop), `gl_compatibility` (web) | Desktop uses everything Forward+ offers (SDFGI, volumetric fog, compute shaders, etc.). |
 
@@ -227,10 +228,11 @@ build is uploaded as an artifact, and PRs get a web preview deployment.
 ## 10. Roadmap for the codebase
 1. Refactor the grass prototype into `world/foliage`, `world/time_of_day`, `actors/player`
    and `core/settings` as the reference implementation of these rules.
-2. Core autoloads + quality tiers.
-3. Player controller + camera rig + one mount.
-4. Mission runner with 2–3 objective types + a vertical-slice mission.
-5. First city district with streaming.
+2. Visual check tool: render fixed camera shots to PNG from the command line (section 12).
+3. Core autoloads + quality tiers.
+4. Player controller + camera rig + one mount.
+5. Mission runner with 2–3 objective types + a vertical-slice mission.
+6. First city district with streaming.
 
 ## 11. Open topics (decide before the related systems are built)
 - **Localisation:** all player-facing text goes through translation keys (`tr()`) from day one.
@@ -238,3 +240,23 @@ build is uploaded as an artifact, and PRs get a web preview deployment.
 - **Accessibility:** subtitles, remappable controls, colour-blind-safe UI, camera-shake toggle.
 - **Save versioning:** every save carries a format version, with a migration step per version bump.
 - **Audio architecture:** bus layout (music, ambience, SFX, dialogue), reverb zones for interiors.
+
+## 12. AI-first development
+The game is built mostly by AI, without engine experts on the team (see
+[ADR 0001](decisions/0001-engine-choice.md)). Every rule here exists so that an AI can build, change and check
+everything on its own, and so a human can follow what it did.
+
+- **Everything is text and in git.** Scenes (`.tscn`), resources (`.tres`), shaders, settings and scripts.
+  Never use binary scene or resource formats (`.scn`, `.res`) for anything we author.
+- **Prefer code and data over editor clicks.** When something can be set up by hand in the editor or
+  described in a script or resource, describe it, so it can be reviewed, diffed and regenerated.
+  Hand-placed level layout is fine, as long as it's saved as text.
+- **Small, single-purpose files.** An AI works best on files it can read in full. This is the Clean
+  Code rule from section 2, with an extra reason.
+- **The AI must be able to see the result.** A visual check tool renders fixed camera shots (per scene
+  and time of day) to PNG from the command line, so the AI can look at its own changes and compare them
+  with the golden screenshots from section 7. Building this tool is an early roadmap item.
+- **The AI must be able to verify behaviour.** Headless import, headless runs and GUT tests all run from
+  the command line, and CI runs them too. A change isn't done until the AI has run the checks itself.
+- **Document decisions as they're made.** Architecture decisions go in `docs/decisions/` (one numbered
+  file each), so future AI sessions know *why* things are the way they are and don't undo them.

@@ -1,6 +1,6 @@
 # ADR 0001: Engine choice
 
-- **Status:** Proposed (awaiting decision)
+- **Status:** Accepted: **Godot 4.7** (see "Decision" at the end)
 - **Date:** 2026-11-13
 
 ## Context
@@ -73,8 +73,27 @@ assets, heavier tooling) are acceptable given that desktop leads and the web bui
 **Choose Godot instead if** the team values open source, no royalties, a lightweight text-based workflow and
 the web build more than reaching AAA realism, and accepts building the missing rendering and world features.
 
-## Consequences if Unreal is chosen
-- Rewrite the architecture doc and `CLAUDE.md` for Unreal (C++ for systems, Blueprints only for content
-  scripting and designer glue; the Clean Code rules carry over to C++).
-- Retire the Godot prototype and web CI, and set up Git LFS and a self-hosted build machine.
-- Start with a vertical slice: one city block at dusk, to prove the look and the pipeline.
+## Decision
+**Godot 4.7.** The recommendation above weighted realism out of the box highest. It left out one deciding
+constraint: **development will be done very heavily by AI, without engine expertise on the team.**
+
+That changes the weighing:
+- **Unreal's realism is reached through the editor.** Lighting, materials, levels, Blueprints, MetaHumans
+  and World Partition are all set up in a GUI and stored in binary `.uasset`/`.umap` files. An AI can't
+  read, diff or reliably edit those. That work would need exactly the Unreal expertise the team doesn't have.
+- **In Godot, everything an AI needs to touch is text:** scripts, scenes (`.tscn`), resources (`.tres`),
+  shaders and project settings. The AI can build, change, review and verify the whole game, and git
+  shows every change.
+- **The engine is small enough to understand.** Its source and documentation fit an AI's working knowledge,
+  and problems can be solved by reading the engine itself.
+
+## Consequences
+- **Realism is our own engineering work.** We close the gap with Unreal through custom shaders, compositor
+  effects, procedural generation and strong lighting design, all written as code. If GDScript becomes too
+  slow for heavy rendering or simulation, C++ through GDExtension is the planned escape hatch (decided per
+  case, not by default).
+- **The AI needs to see what it builds.** An automated visual feedback loop (rendered screenshots from fixed
+  camera shots, compared against golden images) is core tooling, not a nice-to-have. See the architecture
+  doc, section 12.
+- **Watch for hardware ray tracing** in Godot 4.8–4.9, and adopt it for the Ultra tier when it ships.
+- **Revisit this decision** only if a concrete visual target proves impossible in Godot after real effort.
