@@ -22,18 +22,22 @@ This game is built mostly by AI, without engine experts on the team (see `docs/d
 - Keep everything as text: `.tscn`, `.tres`, `.gdshader`, `.gd`. Never save authored content as binary `.scn` or `.res`.
 - Prefer describing setup in scripts or resources over steps a human must click through in the editor.
 - Verify your own work: run the headless import and tests. Don't report a change as done without having checked it.
-- **Looking at images is expensive in tokens, so do it rarely.** Push the work as far as possible with cheap,
-  text-based checks first: headless import, game logs, tests, and the visual check's text output
-  (`tools/visual_check/run.sh <shot-list.tres>` prints PASS/FAIL and changed-pixel percentages without you
-  opening anything). Only open render images:
-  1. to investigate a bug or error that the text checks can't explain, or
-  2. once, at the very end of a visual task, to verify the final result.
-  Don't look at images after each step or iteration. When you do look, open only the `*.compare.png` of the
-  shots that matter (each one already shows baseline | render | diff in a single image).
-- **Visual check baselines are local and per machine; never commit renders.** Before starting a change that
-  could affect how the game looks, run `tools/visual_check/run.sh <shot-list.tres> baseline` on the clean
-  working tree, then compare against it during and after the change. Give new scenes and visual features
-  their own shot list in `tests/visual/` (shot lists are committed).
+
+### Visual checks: opt-in, ask first
+The visual check (`tools/visual_check/`) costs time and tokens, so it is **not part of the default workflow**.
+- **At the start of each feature request, assess whether it needs a visual check**: does it change how the game
+  looks (shaders, lighting, materials, post-processing, terrain, foliage, scene layout)? Pure logic, gameplay
+  systems, tooling and docs don't.
+- **If it might, ask the user before doing any visual check work**, including making a baseline. Say briefly why
+  you think it's useful. If the user says no, rely on text checks only.
+- When the user agrees:
+  - Make the baseline first, on the clean working tree, before changing anything:
+    `tools/visual_check/run.sh <shot-list.tres> baseline`. Baselines are local and per machine; never commit renders.
+  - During the work, use only the text output of `compare` (PASS/FAIL and changed-pixel percentages).
+  - Open render images only to investigate a bug the text can't explain, or once at the very end to verify the
+    result. Open only the `*.compare.png` of the shots that matter (each shows baseline | render | diff).
+- Shot lists in `tests/visual/` are committed. Propose a new shot list for a new scene or visual feature, but
+  only add it when the user wants visual checks for it.
 - Record architecture decisions in `docs/decisions/` as numbered files.
 - `docs/FEATURE_MAP.md` lists what we build per track and which libraries to evaluate. Follow its
   third-party addon rules (permissive licence, tested in `prototypes/` first, pinned in `addons/`, wrapped behind our own interfaces).

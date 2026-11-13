@@ -25,6 +25,9 @@ Everything goes to `build/visual_check/<list>/` (ignored by git):
 - `<shot>.compare.png`: baseline | render | diff, side by side. Changed pixels are red.
 
 ## Workflow for a feature change
+Visual checks are **opt-in**. AI agents assess per feature request whether one is useful and ask the user
+before running it (see `CLAUDE.md`). When a check is wanted:
+
 1. **Before you change anything**, on a clean working tree, run `baseline` for the shot lists your change
    could affect.
 2. Make the change. Keep iterating with cheap, text-based checks: import, logs, tests, and `compare`'s
