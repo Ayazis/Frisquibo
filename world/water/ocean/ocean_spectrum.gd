@@ -3,6 +3,7 @@ extends Resource
 ## Sea state for the FFT ocean: the wind that builds the waves and how the surface looks once they exist.
 ## Presets live in world/water/ocean/presets/. Changing one at runtime regenerates the spectrum.
 
+@export_group("Wind")
 ## Wind speed 10 m above the sea. Wave height grows roughly with its square.
 @export_range(0.5, 80.0, 0.1, "suffix:m/s") var wind_speed := 9.0
 @export_range(-180.0, 180.0, 1.0, "degrees") var wind_direction := 25.0
@@ -14,6 +15,7 @@ extends Resource
 @export_range(0.0, 2.0) var swell := 0.25
 ## Blends the directional spreading towards uniform: 0 = physical, 1 = waves from every direction.
 @export_range(0.0, 1.0) var spread := 0.15
+@export_group("Wave shape")
 ## Suppresses waves shorter than about this length; keeps the smallest cascade from looking noisy.
 @export_range(0.0, 3.0, 0.005, "suffix:m") var short_wave_cutoff := 0.02
 ## Horizontal pull towards the crests. Above about 1.2 the surface starts to fold through itself.

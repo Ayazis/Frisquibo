@@ -18,7 +18,7 @@ const BEACH_CELLS: Vector2i = Vector2i(320, 600)
 const SHORE_ROW_FRACTION := 0.75
 const SHORE_ROW_LINEAR := 0.15
 const SEABED_RESOLUTION := 1024
-const RULES_VIEW_SIZE := Vector2(560, 640)
+const CONTROLS_VIEW_SIZE := Vector2(560, 640)
 const DEAN_A := 0.1                 # fine sand: a gentle, wide surf zone
 const BAR_DISTANCE := 70.0
 const BAR_HEIGHT := 0.8
@@ -41,7 +41,7 @@ var _beach := BeachProfile.new()
 var _state: int = 1
 ## Editable copy of the active preset; the sliders write into it.
 var _live: OceanSpectrum
-var _panel: OceanControlPanel
+var _panel: OceanTunerPanel
 
 func _init() -> void:
 	title = "Custom FFT ocean"
@@ -79,18 +79,25 @@ func set_sea_state(index: int) -> void:
 	_live = STATES[_state].duplicate() as OceanSpectrum
 	ocean.set_spectrum(_live)
 	if _panel:
-		_panel.set_spectrum(_live)
+		_panel.mark_defaults()
 	_update_notes()
 
 func make_controls() -> Control:
 	var tabs := TabContainer.new()
 	tabs.focus_mode = Control.FOCUS_NONE
-	_panel = OceanControlPanel.new(ocean, _live)
-	_panel.name = "Sea"
-	tabs.add_child(_panel)
+	_panel = OceanTunerPanel.new(ocean)
+	_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Big seas are long seas: start with horizontal size following vertical size.
+	_panel.set_link(OceanTunerLinks.Link.STEEPNESS, true)
+	var sea := ScrollContainer.new()
+	sea.name = "Sea"
+	sea.custom_minimum_size = CONTROLS_VIEW_SIZE
+	sea.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sea.add_child(_panel)
+	tabs.add_child(sea)
 	var scroll := ScrollContainer.new()
 	scroll.name = "Rules"
-	scroll.custom_minimum_size = RULES_VIEW_SIZE
+	scroll.custom_minimum_size = CONTROLS_VIEW_SIZE
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var editor := OceanRuleEditor.new(RULES, ocean.rule_parameters(), ocean.rule_targets())
 	editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL

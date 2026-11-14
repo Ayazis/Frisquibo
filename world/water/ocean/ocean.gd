@@ -18,18 +18,27 @@ const AMPLITUDE_RESPONSE := 1.5
 const DEFAULT_AMPLITUDE := 1.0
 ## Matches the 1e4 that seabed_depth() in ocean.gdshader returns outside the baked seabed.
 const OPEN_SEA_DEPTH := 1.0e4
+## Group names for tunables declared outside an export group.
+const WAVES_GROUP := "Waves"
+const SEA_GROUP := "Sea"
+## The only values the Gerstner fallback (web / Compatibility) reacts to.
+const FALLBACK_PARAMETERS: Array[StringName] = [&"wind_speed", &"wind_direction", &"height_scale",
+		&"wavelength_scale", &"choppiness", &"level"]
 
 @export var spectrum: OceanSpectrum
 @export var quality: OceanQuality
-@export var level := 0.0
+@export_range(-20.0, 20.0, 0.05, "or_less", "or_greater", "suffix:m") var level := 0.0
 @export var planar_reflection := true
-@export var min_shore_wave: float = 0.12
+@export_group("Shore")
+## Share of the open-sea wave that still reaches the waterline, so the shore keeps a lapping wave.
+@export_range(0.0, 1.0, 0.01) var min_shore_wave: float = 0.12
 ## Depth-limited waves: crest height <= breaker_ratio * water depth. Real waves break at H = 0.78 d,
 ## a crest of 0.39 d.
 @export_range(0.05, 2.0) var breaker_ratio := 0.39
 ## Extra water level at the waterline from breaking waves, as a fraction of the crest height
 ## (real set-up is about 0.2 of the breaking wave height). Higher seas reach further up the beach.
 @export_range(0.0, 2.0) var wave_setup := 0.3
+@export_group("")
 @export var rules: OceanRuleSet
 
 var material: ShaderMaterial
@@ -118,14 +127,55 @@ func set_level(value: float) -> void:
 	_update_rules(true)
 
 
-func set_breaker_ratio(value: float) -> void:
-	breaker_ratio = value
-	_update_rules(true)
+## Every tunable number of the sea state and of this ocean, in display order.
+func parameters() -> Array[OceanParameter]:
+	var result := OceanParameterCatalog.of(_authored_spectrum(), WAVES_GROUP)
+	result.append_array(OceanParameterCatalog.of(self, SEA_GROUP))
+	return result
 
 
-func set_wave_setup(value: float) -> void:
-	wave_setup = value
+## Authored value of a tunable (before the rules); NAN for an unknown name.
+func parameter_value(parameter: StringName) -> float:
+	var owner_object := _owner_of(parameter)
+	if owner_object == null:
+		return NAN
+	var value: float = owner_object.get(parameter)
+	return value
+
+
+## Sets the authored value of a tunable, kept inside its allowed range, and applies it.
+## Returns false for an unknown name.
+func set_parameter(parameter: StringName, value: float) -> bool:
+	var owner_object := _owner_of(parameter)
+	if owner_object == null:
+		return false
+	owner_object.set(parameter, _described(owner_object, parameter).clamp_value(value))
 	_update_rules(true)
+	return true
+
+
+## False when the active renderer ignores this tunable (the Gerstner fallback has far fewer).
+func is_parameter_live(parameter: StringName) -> bool:
+	return _fallback == null or FALLBACK_PARAMETERS.has(parameter)
+
+
+func _authored_spectrum() -> OceanSpectrum:
+	return spectrum if spectrum != null else DEFAULT_SPECTRUM
+
+
+## The object holding a tunable: the spectrum, this ocean, or null.
+func _owner_of(parameter: StringName) -> Object:
+	for candidate: Object in [_authored_spectrum(), self]:
+		if _described(candidate, parameter) != null:
+			return candidate
+	return null
+
+
+static func _described(object: Object, parameter: StringName) -> OceanParameter:
+	for known: OceanParameter in OceanParameterCatalog.of(object, ""):
+		if known.name == parameter:
+			return known
+	return null
 
 
 func set_rules(value: OceanRuleSet) -> void:
@@ -158,7 +208,7 @@ func rule_targets() -> PackedStringArray:
 
 func _number_names() -> PackedStringArray:
 	var names := PackedStringArray()
-	for key: StringName in OceanRuleEngine.parameters(spectrum if spectrum != null else DEFAULT_SPECTRUM):
+	for key: StringName in OceanRuleEngine.parameters(_authored_spectrum()):
 		names.append(String(key))
 	for key: StringName in OceanRuleEngine.parameters(self):
 		names.append(String(key))

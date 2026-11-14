@@ -1,7 +1,7 @@
 # Plan — water tuner: tweak water behaviour with UI controls
 
 Date: 2026-11-14
-Status: In progress (step 1).
+Status: In progress. Step 1 done (catalogue, generated panel, readouts); step 2 next.
 
 Goal: tweak every aspect of the water live through UI controls, with everything steering towards
 water that is as realistic as possible.

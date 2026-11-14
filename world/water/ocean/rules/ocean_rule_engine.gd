@@ -18,29 +18,18 @@ class Result:
 ## Number parameters of `object` exported in the inspector, by name.
 static func parameters(object: Object) -> Dictionary[StringName, float]:
 	var result: Dictionary[StringName, float] = {}
-	for property: Dictionary in object.get_property_list():
-		if _is_exported_float(property):
-			var key: StringName = property.name
-			var value: float = object.get(key)
-			result[key] = value
+	for parameter: OceanParameter in OceanParameterCatalog.of(object, ""):
+		var value: float = object.get(parameter.name)
+		result[parameter.name] = value
 	return result
 
 
 ## Allowed (min, max) of each ranged number parameter of `object`, from its export hints.
 static func limits(object: Object) -> Dictionary[StringName, Vector2]:
 	var result: Dictionary[StringName, Vector2] = {}
-	for property: Dictionary in object.get_property_list():
-		var hint_type: int = property.hint
-		if not _is_exported_float(property) or hint_type != PROPERTY_HINT_RANGE:
-			continue
-		var hint: String = property.hint_string
-		var parts: PackedStringArray = hint.split(",")
-		if parts.size() < 2:
-			continue
-		var low: float = -INF if parts.has("or_less") else parts[0].to_float()
-		var high: float = INF if parts.has("or_greater") else parts[1].to_float()
-		var key: StringName = property.name
-		result[key] = Vector2(low, high)
+	for parameter: OceanParameter in OceanParameterCatalog.of(object, ""):
+		if parameter.has_range:
+			result[parameter.name] = parameter.limits()
 	return result
 
 
@@ -93,9 +82,3 @@ static func _apply(rule: OceanRule, result: Result, value_limits: Dictionary[Str
 				value = clampf(value, value_limits[target].x, value_limits[target].y)
 			result.values[target] = value
 
-
-static func _is_exported_float(property: Dictionary) -> bool:
-	var type: int = property.type
-	var usage: int = property.usage
-	return (type == TYPE_FLOAT and (usage & PROPERTY_USAGE_SCRIPT_VARIABLE) != 0
-			and (usage & PROPERTY_USAGE_EDITOR) != 0)
