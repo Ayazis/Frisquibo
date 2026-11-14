@@ -23,7 +23,11 @@ const SLIDERS: Array[Array] = [
 	[&"foam_lifetime", "Foam lifetime (s)", 0.5, 12.0, 0.25],
 	[&"wind_direction", "Wind direction", -180.0, 180.0, 5.0],
 	[&"swell", "Swell", 0.0, 1.0, 0.05],
+	[&"short_wave_cutoff", "Smoothness", 0.0, 2.5, 0.05],
+	[&"sea_level", "Sea level (m)", -3.0, 3.0, 0.1],
 ]
+## Not a spectrum property: moves the Ocean itself.
+const SEA_LEVEL_KEY := &"sea_level"
 const PANEL_WIDTH := 330.0
 const LABEL_WIDTH := 140.0
 var ocean: Ocean
@@ -96,13 +100,16 @@ func make_controls() -> Control:
 
 func _sync_sliders() -> void:
 	for key: StringName in _sliders:
-		var v: float = _live.get(key)
+		var v: float = ocean.level if key == SEA_LEVEL_KEY else _live.get(key)
 		_sliders[key].set_value_no_signal(v)
 		_values[key].text = "%.2f" % v
 
 func _on_slider_changed(value: float, key: StringName) -> void:
-	_live.set(key, value)
 	_values[key].text = "%.2f" % value
+	if key == SEA_LEVEL_KEY:
+		ocean.set_level(value)
+		return
+	_live.set(key, value)
 	ocean.set_spectrum(_live)
 	_update_notes()
 

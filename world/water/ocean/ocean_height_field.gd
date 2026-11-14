@@ -8,23 +8,28 @@ extends RefCounted
 const BYTES_PER_TEXEL := 8
 const BYTES_PER_CHANNEL := 2
 const INVERSE_ITERATIONS := 4
+## Texel stride for estimating each cascade's height variance (32 x 32 samples of a 256 map).
+const VARIANCE_STRIDE := 8
 
 var _map_size: int
 var _tile_lengths: PackedFloat32Array
 var _data: Array[PackedByteArray] = []
 var damping_at: Callable
+var _variances := PackedFloat32Array()
 
 
 func _init(map_size: int, tile_lengths: PackedFloat32Array) -> void:
 	_map_size = map_size
 	_tile_lengths = tile_lengths
 	_data.resize(tile_lengths.size())
+	_variances.resize(tile_lengths.size())
 
 
 func set_cascade(cascade: int, bytes: PackedByteArray) -> void:
 	if cascade < 0 or cascade >= _data.size() or bytes.size() < _map_size * _map_size * BYTES_PER_TEXEL:
 		return
 	_data[cascade] = bytes
+	_variances[cascade] = _height_variance(bytes)
 
 
 func is_ready() -> bool:
@@ -32,6 +37,15 @@ func is_ready() -> bool:
 		if bytes.size() < _map_size * _map_size * BYTES_PER_TEXEL:
 			return false
 	return true
+
+
+## Typical wave crest height above the rest level (half the significant wave height, 2 sigma),
+## measured from the simulation itself, before any shore damping.
+func crest_amplitude() -> float:
+	var total := 0.0
+	for v in _variances:
+		total += v
+	return 2.0 * sqrt(total)
 
 
 ## Summed displacement of all cascades for the water that started at rest position `rest`.
@@ -73,3 +87,17 @@ func _texel(cascade: int, x: int, y: int) -> Vector3:
 	var offset := (posmod(y, _map_size) * _map_size + posmod(x, _map_size)) * BYTES_PER_TEXEL
 	return Vector3(bytes.decode_half(offset), bytes.decode_half(offset + BYTES_PER_CHANNEL),
 			bytes.decode_half(offset + 2 * BYTES_PER_CHANNEL))
+
+
+func _height_variance(bytes: PackedByteArray) -> float:
+	var sum := 0.0
+	var sum_sq := 0.0
+	var count := 0
+	for y in range(0, _map_size, VARIANCE_STRIDE):
+		for x in range(0, _map_size, VARIANCE_STRIDE):
+			var h := bytes.decode_half((y * _map_size + x) * BYTES_PER_TEXEL + BYTES_PER_CHANNEL)
+			sum += h
+			sum_sq += h * h
+			count += 1
+	var mean := sum / count
+	return maxf(sum_sq / count - mean * mean, 0.0)

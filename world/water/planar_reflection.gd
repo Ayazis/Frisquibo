@@ -39,6 +39,12 @@ func _ready() -> void:
 	RenderingServer.global_shader_parameter_set(&"water_reflection_enabled", true)
 
 
+func set_plane_height(value: float) -> void:
+	plane_height = value
+	if _viewport != null:
+		RenderingServer.global_shader_parameter_set(CLIP_PARAM, value)
+
+
 func _exit_tree() -> void:
 	RenderingServer.global_shader_parameter_set(&"water_reflection_enabled", false)
 

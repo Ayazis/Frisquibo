@@ -1,8 +1,8 @@
 extends Node3D
 ## Water comparison prototype: one shared sky, sun and orbit camera; keys 1-4 swap the water station.
 
-const STATION_COUNT := 4
-const STATION_LABELS: Array[String] = ["1  Lake  (custom)", "2  River  (custom)", "3  FFT ocean  (library)", "4  FFT ocean  (custom)"]
+const STATION_COUNT := 5
+const STATION_LABELS: Array[String] = ["1  Lake  (custom)", "2  River  (custom)", "3  FFT ocean  (library)", "4  FFT ocean  (custom)", "5  Grass playground"]
 const HUD_Y := 70.0
 const BUTTON_BAR_Y := 130.0
 const BANNER_Y := 14.0
@@ -31,6 +31,7 @@ var _pitch := -0.35
 var _distance := 20.0
 var _golden_hour := false
 var _hud_layer: CanvasLayer
+var _world_environment: WorldEnvironment
 var _dropper: ObjectDropper
 var _controls: Control
 
@@ -65,6 +66,7 @@ func _make_env() -> void:
 	_env.fog_density = 0.002
 	_env.fog_aerial_perspective = 0.5
 	var we := WorldEnvironment.new()
+	_world_environment = we
 	we.environment = _env
 	add_child(we)
 	_sun = DirectionalLight3D.new()
@@ -127,7 +129,9 @@ func _show_station(index: int) -> void:
 		0: _station = LakeStation.new()
 		1: _station = RiverStation.new()
 		2: _station = OceanStation.new()
-		_: _station = CustomOceanStation.new()
+		3: _station = CustomOceanStation.new()
+		_: _station = GrassStation.new()
+	_set_own_view(not _station.takes_over_view)
 	add_child(_station)
 	_distance = _station.camera_distance
 	_dropper = ObjectDropper.new()
@@ -151,6 +155,17 @@ func _show_station(index: int) -> void:
 	var kind := "LIBRARY" if _station.is_library else "CUSTOM"
 	_banner.text = "%s   ·   %s" % [kind, _station.title]
 	_banner.add_theme_color_override("font_color", LIBRARY_COLOR if _station.is_library else CUSTOM_COLOR)
+
+
+## Hands the sky, sun and camera to a station that brings its own (or takes them back).
+func _set_own_view(active: bool) -> void:
+	_sun.visible = active
+	if active and not _world_environment.is_inside_tree():
+		add_child(_world_environment)
+	elif not active and _world_environment.is_inside_tree():
+		remove_child(_world_environment)
+	if active:
+		_cam.make_current()
 
 
 func _apply_time() -> void:
@@ -187,7 +202,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			(_station as CustomOceanStation).cycle_sea_state()
 		elif key.physical_keycode == KEY_T:
 			_toggle_time()
-		elif key.physical_keycode == KEY_D:
+		elif key.physical_keycode == KEY_D and _station.drop_key_enabled:
 			_drop_objects()
 
 
@@ -220,3 +235,9 @@ func apply_visual_check_state(state: Dictionary) -> void:
 	if custom != null:
 		var sea_state: int = state.get("sea_state", 1)
 		custom.set_sea_state(sea_state)
+
+
+func _exit_tree() -> void:
+	# Detached while a station showed its own sky; free it so it doesn't leak.
+	if not _world_environment.is_inside_tree():
+		_world_environment.free()

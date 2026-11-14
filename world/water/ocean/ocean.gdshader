@@ -57,7 +57,10 @@ group_uniforms shore;
 // Seabed height map baked by Ocean.set_seabed(); rect = (origin x, origin z, size x, size z), size 0 = none.
 uniform sampler2D seabed_height : filter_linear, repeat_disable, hint_default_black;
 uniform vec4 seabed_rect = vec4(0.0);
-uniform float shallow_depth = 4.0;                         // waves are fully grown below this depth
+// Depth-limited waves: crests can't exceed breaker_ratio * depth (waves break at H = 0.78 d, crest = H / 2).
+// wave_amplitude is the typical crest height of the open sea, measured by Ocean from the simulation.
+uniform float breaker_ratio = 0.39;
+uniform float wave_amplitude = 1.0;
 uniform float min_shore_wave = 0.12;
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
@@ -86,6 +89,12 @@ float seabed_depth(vec2 p) {
 	return sea_level - textureLod(seabed_height, uv, 0.0).r;
 }
 
+// Fraction of the open-sea wave that survives at this water depth. Ripples remain right up to the beach.
+float shore_damping(float depth) {
+	float limited = breaker_ratio * max(depth, 0.0) / max(wave_amplitude, 0.01);
+	return clamp(max(limited, min_shore_wave * smoothstep(0.0, 0.5, depth)), 0.0, 1.0);
+}
+
 vec3 view_from_depth(vec2 uv, float raw, mat4 inv_proj) {
 	vec4 v = inv_proj * vec4(uv * 2.0 - 1.0, raw, 1.0);
 	return v.xyz / v.w;
@@ -100,7 +109,7 @@ void vertex() {
 	float dist = length(p - CAMERA_POSITION_WORLD.xz);
 	float spacing = max(dist, 1.0) * mesh_angular_step;
 	v_seabed_depth = seabed_depth(p);
-	v_damping = mix(min_shore_wave, 1.0, smoothstep(0.0, shallow_depth, v_seabed_depth));
+	v_damping = shore_damping(v_seabed_depth);
 	vec3 d = vec3(0.0);
 	for (int i = 0; i < MAX_CASCADES; i++) {
 		if (i >= cascade_count) {

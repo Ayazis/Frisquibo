@@ -10,12 +10,17 @@ const DEFAULT_SPECTRUM := preload("res://world/water/ocean/presets/fresh_breeze.
 const SEABED_RESOLUTION := 256
 ## The mesh moves with the camera in steps of this size so vertices don't swim over the waves.
 const FOLLOW_SNAP := 0.5
+## Depth-limited waves: crest height <= BREAKER_RATIO * water depth (waves break at H = 0.78 d).
+const BREAKER_RATIO := 0.39
+## How fast the measured wave amplitude follows the simulation (1/s); avoids pumping at the shore.
+const AMPLITUDE_RESPONSE := 1.5
+## Used until the first GPU readback has measured the real waves.
+const DEFAULT_AMPLITUDE := 1.0
 
 @export var spectrum: OceanSpectrum
 @export var quality: OceanQuality
 @export var level := 0.0
 @export var planar_reflection := true
-@export var shallow_depth: float = 4.0
 @export var min_shore_wave: float = 0.12
 
 var material: ShaderMaterial
@@ -27,6 +32,8 @@ var _seabed: Image
 var _seabed_area: Rect2
 var _time := 0.0
 var _frames_since_readback := 0
+var _reflection: PlanarReflection
+var _amplitude := DEFAULT_AMPLITUDE
 
 
 func _ready() -> void:
@@ -46,7 +53,8 @@ func _ready() -> void:
 	_height_field = OceanHeightField.new(OceanSimulation.MAP_SIZE, _simulation.tile_lengths)
 	material = ShaderMaterial.new()
 	material.shader = SURFACE_SHADER
-	material.set_shader_parameter("shallow_depth", shallow_depth)
+	material.set_shader_parameter("breaker_ratio", BREAKER_RATIO)
+	material.set_shader_parameter("wave_amplitude", _amplitude)
 	material.set_shader_parameter("min_shore_wave", min_shore_wave)
 	material.set_shader_parameter("displacement_maps", _simulation.displacement)
 	material.set_shader_parameter("slope_maps", _simulation.slope)
@@ -64,10 +72,10 @@ func _ready() -> void:
 	_surface.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_surface)
 	if planar_reflection:
-		var reflection := PlanarReflection.new()
-		reflection.plane_height = level
-		reflection.resolution_scale = quality.reflection_resolution_scale
-		add_child(reflection)
+		_reflection = PlanarReflection.new()
+		_reflection.plane_height = level
+		_reflection.resolution_scale = quality.reflection_resolution_scale
+		add_child(_reflection)
 
 
 func _exit_tree() -> void:
@@ -91,6 +99,18 @@ func set_spectrum(value: OceanSpectrum) -> void:
 		_height_field = OceanHeightField.new(OceanSimulation.MAP_SIZE, _simulation.tile_lengths)
 		_height_field.damping_at = _damping_at
 		_apply_cascades()
+
+
+## Moves the rest level of the sea (tide, flooding). Shore damping follows the new depth.
+func set_level(value: float) -> void:
+	level = value
+	if _fallback != null:
+		_fallback.level = value
+		_fallback.position.y = value
+	if material != null:
+		material.set_shader_parameter("sea_level", value)
+	if _reflection != null:
+		_reflection.set_plane_height(value)
 
 
 ## Bakes the ground height under the sea so waves calm down and surf forms in shallow water.
@@ -127,6 +147,9 @@ func _process(delta: float) -> void:
 	if _simulation == null:
 		return
 	_simulation.update(_time, delta)
+	if _height_field.is_ready():
+		_amplitude = lerpf(_amplitude, _height_field.crest_amplitude(), 1.0 - exp(-AMPLITUDE_RESPONSE * delta))
+		material.set_shader_parameter("wave_amplitude", _amplitude)
 	var cam := get_viewport().get_camera_3d()
 	if cam != null:
 		var p := cam.global_position
@@ -161,7 +184,10 @@ func _damping_at(rest: Vector2) -> float:
 	var y1: int = clampi(y + 1, 0, SEABED_RESOLUTION - 1)
 	var a: float = lerpf(_seabed.get_pixel(x0, y0).r, _seabed.get_pixel(x1, y0).r, uv.x - x)
 	var b: float = lerpf(_seabed.get_pixel(x0, y1).r, _seabed.get_pixel(x1, y1).r, uv.x - x)
-	return lerpf(min_shore_wave, 1.0, smoothstep(0.0, shallow_depth, level - lerpf(a, b, uv.y - y)))
+	# Same rule as shore_damping() in ocean.gdshader.
+	var depth := maxf(level - lerpf(a, b, uv.y - y), 0.0)
+	var limited := BREAKER_RATIO * depth / maxf(_amplitude, 0.01)
+	return clampf(maxf(limited, min_shore_wave * smoothstep(0.0, 0.5, depth)), 0.0, 1.0)
 
 
 func _apply_fallback_spectrum() -> void:
