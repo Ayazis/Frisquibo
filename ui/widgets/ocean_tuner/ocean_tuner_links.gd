@@ -1,25 +1,18 @@
 class_name OceanTunerLinks
 extends VBoxContainer
-## Checkboxes that tie tunables together with a physical rule: foam and choppiness grow with the
-## wind, the water gets deeper when the sea rises, wave steepness stays fixed. A tunable driven by a
-## link follows its source and can't be moved by hand.
+## Checkboxes that tie tunables together: the water gets deeper when the sea rises, wave steepness
+## stays fixed. A tunable driven by a link follows its source and can't be moved by hand.
+## Values that follow from the wind are not links: see the Auto box on their rows.
 
 signal links_changed
 
-enum Link { STEEPNESS, FOAM_WIND, CHOP_WIND, DEPTH_LEVEL }
+enum Link { STEEPNESS, DEPTH_LEVEL }
 
 ## Links: id, label, the tunable it drives (none for the two-way steepness link).
 const LINKS: Array[Array] = [
 	[Link.STEEPNESS, "Keep steepness (horizontal follows vertical)", &""],
-	[Link.FOAM_WIND, "Foam follows wind", &"foam_threshold"],
-	[Link.CHOP_WIND, "Choppiness follows wind", &"choppiness"],
 	[Link.DEPTH_LEVEL, "Water depth follows sea level", &"depth"],
 ]
-## Fitted to the calm / breeze / storm presets (4, 9 and 19 m/s).
-const FOAM_BASE := 0.15
-const FOAM_PER_WIND := 0.035
-const CHOP_BASE := 0.45
-const CHOP_PER_WIND := 0.04
 const MIN_SIZE_FOR_RATIO := 0.01
 
 var _ocean: Ocean
@@ -65,10 +58,6 @@ func apply(changed: StringName) -> void:
 					_value(&"wavelength_scale") / maxf(_steepness_ratio, MIN_SIZE_FOR_RATIO))
 		else:
 			_ocean.set_parameter(&"wavelength_scale", _value(&"height_scale") * _steepness_ratio)
-	if _boxes[Link.FOAM_WIND].button_pressed:
-		_ocean.set_parameter(&"foam_threshold", FOAM_BASE + FOAM_PER_WIND * _value(&"wind_speed"))
-	if _boxes[Link.CHOP_WIND].button_pressed:
-		_ocean.set_parameter(&"choppiness", CHOP_BASE + CHOP_PER_WIND * _value(&"wind_speed"))
 	if _boxes[Link.DEPTH_LEVEL].button_pressed:
 		_ocean.set_parameter(&"depth", _value(&"level") + _depth_offset)
 

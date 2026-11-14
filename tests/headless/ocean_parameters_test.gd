@@ -118,6 +118,20 @@ func _initialize() -> void:
 	breeze.height_scale = 2.0
 	_check(OceanSeaStats.warnings(breeze, 1.0).size() == 2, "Folding and artistic size warn")
 
+	_check(OceanAutoValues.has(&"choppiness") and not OceanAutoValues.has(&"wind_speed"), "Only derived values are auto")
+	_check(is_nan(OceanAutoValues.value(&"wind_speed", breeze)), "A value without a rule has no auto value")
+	var calm := OceanSpectrum.new()
+	calm.wind_speed = 4.0
+	breeze.wind_speed = 19.0
+	_check(OceanAutoValues.value(&"foam_threshold", breeze) > OceanAutoValues.value(&"foam_threshold", calm),
+			"More wind, more whitecaps")
+	for auto: StringName in OceanAutoValues.PARAMETERS:
+		var described := _find(listed, auto)
+		_check(described != null, "Auto value '%s' is a tunable" % auto)
+		for state: OceanSpectrum in [calm, breeze]:
+			var derived := OceanAutoValues.value(auto, state)
+			_near(described.clamp_value(derived), derived, "Auto '%s' stays inside its range" % auto)
+
 	print("ocean_parameters_test: %s" % ("PASS" if _failures == 0 else "%d FAILED" % _failures))
 	quit(1 if _failures > 0 else 0)
 

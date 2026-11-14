@@ -17,6 +17,8 @@ const COLOR_GROUPS: Dictionary[StringName, String] = {
 
 var _ocean: Ocean
 var _rows: Dictionary[StringName, OceanTunerRow] = {}
+## Tunables currently set to follow from the rest of the sea state.
+var _auto: Array[StringName] = []
 var _colors: Dictionary[StringName, OceanTunerColorRow] = {}
 var _sections: Dictionary[String, VBoxContainer] = {}
 var _links: OceanTunerLinks
@@ -30,9 +32,10 @@ func _init(ocean: Ocean) -> void:
 	for parameter: OceanParameter in ocean.parameters():
 		if not parameter.has_range:
 			continue
-		var row := OceanTunerRow.new(parameter)
+		var row := OceanTunerRow.new(parameter, OceanAutoValues.has(parameter.name))
 		row.set_live(ocean.is_parameter_live(parameter.name))
 		row.value_changed.connect(_on_value_changed)
+		row.auto_toggled.connect(_on_auto_toggled)
 		_section(parameter.group).add_child(row)
 		_rows[parameter.name] = row
 	for color_name: StringName in OceanLookBinding.COLORS:
@@ -55,7 +58,7 @@ func _init(ocean: Ocean) -> void:
 func mark_defaults() -> void:
 	for key: StringName in _rows:
 		_rows[key].set_default(_ocean.parameter_value(key))
-	_links.apply(&"")
+	_apply_derived(&"")
 	_sync()
 
 
@@ -82,8 +85,24 @@ func _add_section(title: String) -> VBoxContainer:
 
 func _on_value_changed(parameter: StringName, value: float) -> void:
 	_ocean.set_parameter(parameter, value)
-	_links.apply(parameter)
+	_apply_derived(parameter)
 	_sync()
+
+
+func _on_auto_toggled(parameter: StringName, on: bool) -> void:
+	if on and not _auto.has(parameter):
+		_auto.append(parameter)
+	elif not on:
+		_auto.erase(parameter)
+	_apply_derived(&"")
+	_sync()
+
+
+## Applies the links, then every auto value. `changed` is the tunable the user just moved.
+func _apply_derived(changed: StringName) -> void:
+	_links.apply(changed)
+	for parameter: StringName in _auto:
+		_ocean.set_parameter(parameter, OceanAutoValues.value(parameter, _ocean.spectrum))
 
 
 func _on_color_changed(color_name: StringName, color: Color) -> void:
@@ -94,7 +113,7 @@ func _on_color_changed(color_name: StringName, color: Color) -> void:
 func _on_loaded(sea: OceanSpectrum, look: OceanLook) -> void:
 	_ocean.set_spectrum(sea)
 	_ocean.set_look(look)
-	_links.apply(&"")
+	_apply_derived(&"")
 	_sync()
 
 
@@ -103,6 +122,7 @@ func _sync() -> void:
 		var color: Color = _ocean.look.get(color_name)
 		_colors[color_name].show_color(color)
 	var driven := _links.driven()
+	driven.append_array(_auto)
 	for key: StringName in _rows:
 		_rows[key].show_value(_ocean.parameter_value(key))
 		_rows[key].set_driven(driven.has(key))

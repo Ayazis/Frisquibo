@@ -1,7 +1,7 @@
 # Plan — water tuner: tweak water behaviour with UI controls
 
 Date: 2026-11-14
-Status: In progress. Steps 1 and 2 done except water-type presets; save and load from step 4 done. Step 3: swell done (decision 0006); auto values and blended transitions next.
+Status: In progress. Steps 1 and 2 done except water-type presets; step 3 done except blended transitions (see below); save and load from step 4 done.
 
 Goal: tweak every aspect of the water live through UI controls, with everything steering towards
 water that is as realistic as possible.
@@ -49,11 +49,19 @@ A water tuner overlay, toggled by a key, usable in any scene with an `Ocean`:
 Each step gets a decision record where it changes structure, plus headless tests for the pure logic.
 On Web the panel works, with FFT-only controls disabled behind a feature check.
 
+## Open: blended transitions between sea states
+
+Not built. The longest cascade's tile grows with the longest wave (233 m for a breeze, about 940 m
+for the storm preset), and a tile change rearranges every long wave at once. Blending the numbers
+alone would turn one jump into several during the blend. Doing it properly means running the old and
+the new longest cascade side by side and cross-fading them, which needs to be judged by eye.
+
 ## Verification
 
 No visual checks: the work is done in a container without a desktop GPU. Each step is checked with
-the headless import and the headless tests only. Whether the water looks right has to be judged on a
-desktop machine.
+the headless import, the headless tests, and the smoke tests on Mesa's software Vulkan driver, which
+runs the real compute shaders (`tests/smoke/README.md`). Whether the water looks right has to be
+judged on a desktop machine.
 
 ## Assumptions
 
