@@ -4,9 +4,13 @@ extends RefCounted
 ## whether the settings still describe a sea that can exist. Pure logic for readouts and warnings.
 
 const GRAVITY := 9.81
-## Fetch-limited growth (JONSWAP): Hs = this * wind speed * sqrt(fetch / g).
-const FETCH_GROWTH := 0.0016
-## Fully developed sea (Pierson-Moskowitz): Hs = this * wind speed^2 / g. Waves never outgrow it.
+## Variance of a JONSWAP sea with peak enhancement 3.3: this * alpha * g^2 / peak frequency^4.
+const JONSWAP_VARIANCE := 0.305
+## Phillips constant of the JONSWAP spectrum: this * (wind^2 / (fetch * g))^JONSWAP_ALPHA_POWER.
+## Must match jonswap() in compute/ocean_spectrum.glsl.
+const JONSWAP_ALPHA := 0.076
+const JONSWAP_ALPHA_POWER := 0.22
+## Fully developed sea (Pierson-Moskowitz): Hs = this * wind speed^2 / g. Wind can't build higher waves.
 const FULL_SEA_HEIGHT := 0.24
 ## Waves steeper than height / length = 1/7 break (Stokes limit).
 const BREAKING_STEEPNESS := 1.0 / 7.0
@@ -26,16 +30,33 @@ static func peak_period(sea: OceanSpectrum) -> float:
 	return TAU / sea.peak_frequency()
 
 
-## Significant wave height (m) this wind and fetch build in nature, times the artistic height_scale.
+## Significant height (m) of the wind sea the spectrum describes, in deep water and before
+## height_scale. wavelength_scale leaves it unchanged by design.
+static func wind_wave_height(sea: OceanSpectrum) -> float:
+	var fetch_m := sea.fetch * 1000.0
+	var alpha := JONSWAP_ALPHA * pow(sea.wind_speed * sea.wind_speed / (fetch_m * GRAVITY), JONSWAP_ALPHA_POWER)
+	var peak := sea.peak_frequency() * sqrt(sea.wavelength_scale)
+	return 4.0 * sqrt(JONSWAP_VARIANCE * alpha * GRAVITY * GRAVITY / pow(peak, 4.0))
+
+
+## Highest significant wave height (m) this wind can keep up, however long the fetch.
+static func full_sea_height(sea: OceanSpectrum) -> float:
+	return FULL_SEA_HEIGHT * sea.wind_speed * sea.wind_speed / GRAVITY
+
+
+## Significant wave height (m) the sea state should show in deep water: wind sea and swell
+## together (their energies add), times the artistic height_scale.
 static func expected_wave_height(sea: OceanSpectrum) -> float:
-	var growing := FETCH_GROWTH * sea.wind_speed * sqrt(sea.fetch * 1000.0 / GRAVITY)
-	var full := FULL_SEA_HEIGHT * sea.wind_speed * sea.wind_speed / GRAVITY
-	return minf(growing, full) * sea.height_scale
+	var wind := wind_wave_height(sea)
+	return sqrt(wind * wind + sea.swell_height * sea.swell_height) * sea.height_scale
 
 
-## Wave height over length of the dominant waves.
+## Height over length of the dominant wind waves. `wave_height` is the measured height of the whole
+## sea; the swell's share is taken out first, because long swell is never steep.
 static func steepness(sea: OceanSpectrum, wave_height: float) -> float:
-	return wave_height / sea.peak_wavelength()
+	var swell := sea.swell_height * sea.height_scale
+	var wind := sqrt(maxf(wave_height * wave_height - swell * swell, 0.0))
+	return wind / sea.peak_wavelength()
 
 
 static func beaufort(wind_speed: float) -> int:
@@ -56,6 +77,8 @@ static func warnings(sea: OceanSpectrum, wave_height: float) -> PackedStringArra
 		result.append("Waves are steeper than 1/7: real waves this steep have already broken.")
 	if sea.choppiness > FOLDING_CHOPPINESS:
 		result.append("Choppiness above %.1f: crests fold through themselves." % FOLDING_CHOPPINESS)
+	if wind_wave_height(sea) > full_sea_height(sea):
+		result.append("Fetch is longer than this wind can use: the wind sea is higher than wind can build.")
 	if (absf(sea.height_scale - 1.0) > PHYSICAL_SCALE_TOLERANCE
 			or absf(sea.wavelength_scale - 1.0) > PHYSICAL_SCALE_TOLERANCE):
 		result.append("Vertical or horizontal size is not 1: wave size no longer follows from the wind.")

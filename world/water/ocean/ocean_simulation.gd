@@ -81,7 +81,7 @@ func set_spectrum(spectrum: OceanSpectrum) -> bool:
 ## World tile length per cascade: the authored tiles, with the longest grown to fit long dominant waves.
 static func tiles_for(spectrum: OceanSpectrum, cascades: int) -> PackedFloat32Array:
 	var tiles := spectrum.cascade_tile_lengths.slice(0, cascades)
-	tiles[0] = maxf(tiles[0], PEAK_WAVES_PER_TILE * spectrum.peak_wavelength())
+	tiles[0] = maxf(tiles[0], PEAK_WAVES_PER_TILE * spectrum.longest_wavelength())
 	return tiles
 
 
@@ -235,7 +235,9 @@ func _spectrum_push(cascade: int) -> PackedByteArray:
 			_spectrum.fetch * 1000.0, _spectrum.depth, _spectrum.swell, _spectrum.spread,
 			_spectrum.short_wave_cutoff, k_min, k_max]).to_byte_array()
 	bytes.append_array(PackedInt32Array([cascade, _spectrum.seed]).to_byte_array())
-	bytes.append_array(PackedFloat32Array([_spectrum.wavelength_scale, 0.0, 0.0, 0.0]).to_byte_array())
+	bytes.append_array(PackedFloat32Array([_spectrum.wavelength_scale, _spectrum.swell_height,
+			_spectrum.swell_wavenumber(), deg_to_rad(_spectrum.swell_direction),
+			deg_to_rad(_spectrum.swell_spread), 0.0, 0.0, 0.0]).to_byte_array())
 	return bytes
 
 

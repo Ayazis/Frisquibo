@@ -5,6 +5,11 @@ extends RefCounted
 
 ## Friendlier names than the property name, where that helps.
 const LABELS: Dictionary[StringName, String] = {
+	&"swell": "Crest alignment",
+	&"swell_height": "Swell height",
+	&"swell_period": "Swell period",
+	&"swell_direction": "Swell direction",
+	&"swell_spread": "Swell spread",
 	&"height_scale": "Vertical size",
 	&"wavelength_scale": "Horizontal size",
 	&"short_wave_cutoff": "Smoothness",
@@ -33,7 +38,11 @@ const DESCRIPTIONS: Dictionary[StringName, String] = {
 	&"wind_direction": "Direction the wind blows the waves towards.",
 	&"fetch": "Open water the wind has blown over. Short (a bay): short, choppy waves. Long: swell.",
 	&"depth": "Depth of the open sea. Shallow water slows long waves and takes their energy.",
-	&"swell": "0: young wind sea with waves in many directions. Higher: long, aligned crests.",
+	&"swell": "Wind sea only. 0: young sea with waves in many directions. Higher: long, aligned crests.",
+	&"swell_height": "Significant height of swell: long regular waves from a distant storm. 0: none.",
+	&"swell_period": "Seconds between swell crests. Longer swell comes from further away and runs faster.",
+	&"swell_direction": "Direction the swell travels in, independent of the local wind.",
+	&"swell_spread": "How far swell directions stray from the main one. Small: long, straight crests.",
 	&"spread": "0: physical spreading of wave directions. 1: waves from every direction.",
 	&"short_wave_cutoff": "Removes waves shorter than about this length.",
 	&"choppiness": "Sharpens crests by pulling water towards them. Above about 1.2 the surface folds.",

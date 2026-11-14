@@ -5,9 +5,10 @@ extends WaterStation
 const STATES: Array[OceanSpectrum] = [
 	preload("res://world/water/ocean/presets/calm_sea.tres"),
 	preload("res://world/water/ocean/presets/fresh_breeze.tres"),
-	preload("res://world/water/ocean/presets/storm.tres")]
+	preload("res://world/water/ocean/presets/storm.tres"),
+	preload("res://world/water/ocean/presets/breeze_over_swell.tres")]
 const RULES: OceanRuleSet = preload("res://world/water/ocean/rules/presets/coastal_rules.tres")
-const STATE_NAMES: Array[String] = ["Calm", "Fresh breeze", "Storm"]
+const STATE_NAMES: Array[String] = ["Calm", "Fresh breeze", "Storm", "Breeze over swell"]
 ## The coast: 150 m of land, then about 1.25 km of sea: a wide shallow sandy shelf, a steeper outer
 ## shelf that is already fairly deep, and a shelf break dropping into deep water.
 const BEACH_SIZE: Vector2 = Vector2(1600, 1400)

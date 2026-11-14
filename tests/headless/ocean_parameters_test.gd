@@ -84,9 +84,33 @@ func _initialize() -> void:
 	var breeze := OceanSpectrum.new()
 	breeze.wind_speed = 10.0
 	breeze.fetch = 100.0
-	_near(OceanSeaStats.expected_wave_height(breeze), 0.0016 * 10.0 * sqrt(100000.0 / 9.81), "Fetch-limited height")
+	breeze.wind_speed = 9.0
+	breeze.fetch = 80.0
+	_check(absf(OceanSeaStats.wind_wave_height(breeze) - 1.72) < 0.01, "Wind sea height follows the JONSWAP spectrum")
+	breeze.wavelength_scale = 2.0
+	_check(absf(OceanSeaStats.wind_wave_height(breeze) - 1.72) < 0.01, "Horizontal size leaves the height alone")
+	breeze.wavelength_scale = 1.0
+	breeze.swell_height = 2.0
+	_near(OceanSeaStats.expected_wave_height(breeze), sqrt(1.72 * 1.72 + 4.0), "Wind sea and swell energies add", 0.01)
+	_near(OceanSeaStats.steepness(breeze, OceanSeaStats.expected_wave_height(breeze)) * breeze.peak_wavelength(),
+			OceanSeaStats.wind_wave_height(breeze), "Steepness leaves the swell out", 0.01)
+	breeze.swell_height = 0.0
+	breeze.depth = 4000.0
+	breeze.swell_period = 10.0
+	_near(breeze.swell_wavelength(), 9.81 * 100.0 / TAU, "Deep-water swell length is g T^2 / 2 pi", 0.01)
+	_check(breeze.longest_wavelength() == breeze.peak_wavelength(), "No swell: the wind waves are the longest")
+	breeze.swell_height = 1.0
+	_near(breeze.longest_wavelength(), breeze.swell_wavelength(), "With swell, its length counts")
+	_check(OceanSimulation.tiles_for(breeze, 4)[0] >= OceanSimulation.PEAK_WAVES_PER_TILE * breeze.swell_wavelength() - TOLERANCE,
+			"The longest cascade grows to hold the swell")
+	breeze.depth = 5.0
+	_near(breeze.swell_wavelength(), 10.0 * sqrt(9.81 * 5.0), "Shallow-water swell slows to sqrt(g depth)", 3.0)
+	breeze.swell_height = 0.0
+	breeze.depth = 40.0
 	breeze.fetch = 2000.0
-	_near(OceanSeaStats.expected_wave_height(breeze), 0.24 * 100.0 / 9.81, "A long fetch stops at the full sea")
+	_check(OceanSeaStats.warnings(breeze, 1.0).size() == 1, "A fetch beyond the full sea warns")
+	breeze.wind_speed = 10.0
+	breeze.fetch = 100.0
 	_near(OceanSeaStats.peak_period(breeze) * breeze.peak_frequency(), TAU, "Period matches the peak frequency")
 	_check(OceanSeaStats.warnings(breeze, 1.0).is_empty(), "A plain wind sea has no warnings")
 	_check(OceanSeaStats.warnings(breeze, breeze.peak_wavelength() / 5.0).size() == 1, "Too steep waves warn")
@@ -123,5 +147,5 @@ func _check(ok: bool, what: String) -> void:
 		printerr("FAIL: " + what)
 
 
-func _near(value: float, expected: float, what: String) -> void:
-	_check(absf(value - expected) < TOLERANCE, "%s (got %f, expected %f)" % [what, value, expected])
+func _near(value: float, expected: float, what: String, tolerance: float = TOLERANCE) -> void:
+	_check(absf(value - expected) < tolerance, "%s (got %f, expected %f)" % [what, value, expected])

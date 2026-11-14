@@ -34,12 +34,16 @@ func refresh() -> void:
 		return
 	var measured := _ocean.wave_height()
 	var wind := sea.wind_speed
-	_summary.text = "\n".join(PackedStringArray([
+	var lines := PackedStringArray([
 		"Beaufort %d: %s" % [OceanSeaStats.beaufort(wind), OceanSeaStats.beaufort_name(wind)],
-		"Wave height %.2f m (this wind in nature: %.2f m)" % [measured, OceanSeaStats.expected_wave_height(sea)],
-		"Period %.1f s, length %.0f m, steepness 1/%.0f" % [OceanSeaStats.peak_period(sea),
+		"Wave height %.2f m (expected in deep water: %.2f m)" % [measured, OceanSeaStats.expected_wave_height(sea)],
+		"Wind sea: period %.1f s, length %.0f m, steepness 1/%.0f" % [OceanSeaStats.peak_period(sea),
 				sea.peak_wavelength(), 1.0 / maxf(OceanSeaStats.steepness(sea, measured), 1.0e-4)],
-	]))
+	])
+	if sea.swell_height > 0.0:
+		lines.append("Swell: length %.0f m, speed %.1f m/s" % [sea.swell_wavelength(),
+				sea.swell_wavelength() / sea.swell_period])
+	_summary.text = "\n".join(lines)
 	var warnings := OceanSeaStats.warnings(sea, measured)
 	_warnings.text = "\n".join(warnings)
 	_warnings.visible = not warnings.is_empty()

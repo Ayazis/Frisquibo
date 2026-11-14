@@ -1,7 +1,7 @@
 # Plan — water tuner: tweak water behaviour with UI controls
 
 Date: 2026-11-14
-Status: In progress. Steps 1 and 2 done except water-type presets (they need eyes on a desktop GPU); save and load from step 4 done. Step 3 next.
+Status: In progress. Steps 1 and 2 done except water-type presets; save and load from step 4 done. Step 3: swell done (decision 0006); auto values and blended transitions next.
 
 Goal: tweak every aspect of the water live through UI controls, with everything steering towards
 water that is as realistic as possible.

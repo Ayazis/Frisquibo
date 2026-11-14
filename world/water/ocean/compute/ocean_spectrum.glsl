@@ -1,13 +1,19 @@
 #[compute]
 #version 450
 // Initial wave spectrum h0(k) for one cascade: JONSWAP energy, TMA finite-depth correction,
-// Donelan-Banner directional spreading and Gaussian random amplitudes. Each cascade keeps only its own
+// Donelan-Banner directional spreading and random phases. Each cascade keeps only its own
 // band of wavenumbers, so the cascades add up to one continuous spectrum without double-counted waves.
+// A separate swell (waves from a distant storm, with their own height, period and direction) is added
+// to the longest cascade.
 // Runs only when the sea state changes.
 
 #define N 256u
 #define PI 3.14159265358979
 #define G 9.81
+// Swell is a narrow band of periods: this fraction of its wavenumber, as a standard deviation.
+#define SWELL_BANDWIDTH 0.07
+// The swell is never narrower than this many spectrum texels, so the grid samples its energy fully.
+#define MIN_SWELL_TEXELS 0.7
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
@@ -29,6 +35,10 @@ layout(push_constant, std430) uniform Params {
 	uint cascade;
 	uint seed;
 	float peak_scale; // OceanSpectrum.wavelength_scale: multiplies the peak wavelength
+	float swell_height;     // significant height in metres; 0 = no swell
+	float swell_wavenumber; // rad/m at the sea's depth
+	float swell_angle;
+	float swell_spread;     // directional standard deviation in radians
 	float pad0;
 	float pad1;
 	float pad2;
@@ -40,12 +50,13 @@ uint pcg(uint v) {
 	return (word >> 22u) ^ word;
 }
 
-vec2 gaussian_pair(uint seed) {
-	uint a = pcg(seed);
-	uint b = pcg(a ^ 0x9E3779B9u);
-	float u1 = (float(a) + 0.5) / 4294967296.0;
-	float u2 = (float(b) + 0.5) / 4294967296.0;
-	return sqrt(-2.0 * log(u1)) * vec2(cos(2.0 * PI * u2), sin(2.0 * PI * u2));
+// A wave with a random phase and a fixed share of the energy. Random amplitudes as well (a Gaussian
+// pair) are right for an endless sea, but a tile holds few long waves: with their heights left to
+// chance the sea came out up to 40% too high or too low for its wind, depending on the seed.
+// Many such waves still add up to a Gaussian sea surface.
+vec2 random_phase(uint seed) {
+	float u = (float(pcg(seed)) + 0.5) / 4294967296.0;
+	return sqrt(2.0) * vec2(cos(2.0 * PI * u), sin(2.0 * PI * u));
 }
 
 float dispersion(float k) {
@@ -95,10 +106,10 @@ float donelan_banner(float theta, float w, float wp) {
 	return mix(directional, 1.0 / (2.0 * PI), p.spread);
 }
 
-vec2 amplitude(vec2 k, uint seed) {
-	float kl = length(k);
-	if (kl < 1e-6 || kl < p.k_min || kl >= p.k_max) {
-		return vec2(0.0);
+// Energy density S(k) of the local wind sea.
+float wind_sea(vec2 k, float kl) {
+	if (kl < p.k_min || kl >= p.k_max) {
+		return 0.0;
 	}
 	// Peak frequency; a wave length scale s moves it to w / sqrt(s) (deep water: length ~ 1 / w^2).
 	float wp = 22.0 * pow(G * G / (p.wind_speed * p.fetch_m), 1.0 / 3.0) / sqrt(p.peak_scale);
@@ -111,9 +122,35 @@ vec2 amplitude(vec2 k, uint seed) {
 	// Divide that out: horizontal size changes only the length; height_scale owns the height.
 	s_omega /= p.peak_scale * p.peak_scale;
 	float s_k = s_omega * dispersion_derivative(kl) / kl;
-	s_k *= exp(-kl * kl * p.short_wave_cutoff * p.short_wave_cutoff);
+	return s_k * exp(-kl * kl * p.short_wave_cutoff * p.short_wave_cutoff);
+}
+
+// Energy density S(k) of the swell: a Gaussian around its wave vector holding the variance
+// (height / 4)^2, which is what a significant wave height means. Lives in the longest cascade only.
+float swell_sea(vec2 k) {
+	if (p.cascade != 0u || p.swell_height <= 0.0) {
+		return 0.0;
+	}
+	float min_width = MIN_SWELL_TEXELS * 2.0 * PI / p.tile_length;
+	float along_width = max(SWELL_BANDWIDTH * p.swell_wavenumber, min_width);
+	float across_width = max(p.swell_spread * p.swell_wavenumber, min_width);
+	vec2 dir = vec2(cos(p.swell_angle), sin(p.swell_angle));
+	float along = (dot(k, dir) - p.swell_wavenumber) / along_width;
+	float across = dot(k, vec2(-dir.y, dir.x)) / across_width;
+	float variance = p.swell_height * p.swell_height / 16.0;
+	return variance / (2.0 * PI * along_width * across_width) * exp(-0.5 * (along * along + across * across));
+}
+
+vec2 amplitude(vec2 k, uint seed) {
+	float kl = length(k);
+	if (kl < 1e-6) {
+		return vec2(0.0);
+	}
+	float s_k = wind_sea(k, kl) + swell_sea(k);
 	float dk = 2.0 * PI / p.tile_length;
-	return gaussian_pair(seed) * sqrt(s_k) * dk * 0.70710678;
+	// A wave of amplitude a carries variance a^2 / 2 = S(k) dk^2 and shows up as |h| = a / 2 at both
+	// k and -k, so |h0|^2 = S(k) dk^2 / 2. random_phase() has length sqrt(2): hence the 0.5.
+	return random_phase(seed) * sqrt(s_k) * dk * 0.5;
 }
 
 void main() {
