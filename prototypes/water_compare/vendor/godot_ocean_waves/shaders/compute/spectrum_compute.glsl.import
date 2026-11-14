@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://c6jqiwjg1f451"
+path="res://.godot/imported/spectrum_compute.glsl-dafc573a522df1da835193e8ab77a9b6.res"
+
+[deps]
+
+source_file="res://prototypes/water_compare/vendor/godot_ocean_waves/shaders/compute/spectrum_compute.glsl"
+dest_files=["res://.godot/imported/spectrum_compute.glsl-dafc573a522df1da835193e8ab77a9b6.res"]
+
+[params]
+

@@ -1,12 +1,13 @@
 extends Node3D
-## Grass playground: ~150k shader-animated blades, wind gusts, and physics balls that push the grass.
+## Grass playground on a small island: shader-animated blades, wind gusts, a sandy beach and sea,
+## and physics balls that push the grass.
 
 const SIZE := 80
 var IS_WEB := OS.has_feature("web")
 var BLADES := 100000 if IS_WEB else 320000
 const MAX_BALLS := 15
 
-var noise := FastNoiseLite.new()
+var island := IslandShape.new(SIZE, 7)
 var patch_noise := FastNoiseLite.new()
 var grass_mat: ShaderMaterial
 var player: RigidBody3D
@@ -25,18 +26,16 @@ var time_preset := 0
 
 
 func height(x: float, z: float) -> float:
-	return noise.get_noise_2d(x, z) * 4.0
+	return island.height(x, z)
 
 
 func _ready() -> void:
-	noise.seed = 7
-	noise.frequency = 0.02
-	noise.fractal_octaves = 3
 	patch_noise.seed = 3
 	patch_noise.frequency = 0.05
 	_make_env()
 	_make_ground()
 	_make_grass()
+	add_child(Sea.new())
 	_make_pollen()
 	player = _spawn_ball(Vector3(0, height(0, 0) + 2.0, 0), 0.6, Color(0.95, 0.35, 0.15))
 	cam = Camera3D.new()
@@ -109,9 +108,10 @@ func _make_ground() -> void:
 			st.add_index(i); st.add_index(i + 1); st.add_index(i + SIZE + 1)
 			st.add_index(i + 1); st.add_index(i + SIZE + 2); st.add_index(i + SIZE + 1)
 	st.generate_normals()
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.09, 0.14, 0.04)
-	mat.roughness = 1.0
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://world/terrain/terrain_ground.gdshader")
+	mat.set_shader_parameter("sea_level", IslandShape.SEA_LEVEL)
+	mat.set_shader_parameter("beach_top", IslandShape.BEACH_TOP)
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
 	mi.material_override = mat
@@ -156,20 +156,27 @@ func _make_grass() -> void:
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_custom_data = true
 	mm.mesh = _blade_mesh()
-	mm.instance_count = BLADES
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 42
 	var lim := SIZE / 2.0 - 1.0
+	var transforms: Array[Transform3D] = []
+	var customs: Array[Color] = []
 	for i in range(BLADES):
 		var x := rng.randf_range(-lim, lim)
 		var z := rng.randf_range(-lim, lim)
+		if island.is_beach(x, z):
+			continue
 		var patch := clampf(patch_noise.get_noise_2d(x, z) * 1.5 + 0.2, 0.0, 1.0)
 		var tall := rng.randf_range(0.45, 0.95) * (1.0 + patch * 0.5)
 		var b := Basis(Vector3.UP, rng.randf() * TAU)
 		b = Basis(Vector3(rng.randf() - 0.5, 0, rng.randf() - 0.5).normalized(), rng.randf() * 0.25) * b
 		b = b.scaled_local(Vector3(rng.randf_range(0.8, 1.5), tall, 1.0))
-		mm.set_instance_transform(i, Transform3D(b, Vector3(x, height(x, z) - 0.03, z)))
-		mm.set_instance_custom_data(i, Color(rng.randf(), patch * rng.randf_range(0.5, 1.0), 0, 0))
+		transforms.append(Transform3D(b, Vector3(x, height(x, z) - 0.03, z)))
+		customs.append(Color(rng.randf(), patch * rng.randf_range(0.5, 1.0), 0, 0))
+	mm.instance_count = transforms.size()
+	for i in range(transforms.size()):
+		mm.set_instance_transform(i, transforms[i])
+		mm.set_instance_custom_data(i, customs[i])
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	mmi.material_override = grass_mat

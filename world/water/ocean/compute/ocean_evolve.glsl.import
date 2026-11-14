@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dwmdcuwxt44l7"
+path="res://.godot/imported/ocean_evolve.glsl-ca309e56b81a62a695b0ee170482cf6c.res"
+
+[deps]
+
+source_file="res://world/water/ocean/compute/ocean_evolve.glsl"
+dest_files=["res://.godot/imported/ocean_evolve.glsl-ca309e56b81a62a695b0ee170482cf6c.res"]
+
+[params]
+

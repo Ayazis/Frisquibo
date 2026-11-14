@@ -13,6 +13,10 @@ gdscript/warnings/unsafe_property_access=2
 gdscript/warnings/unsafe_method_access=2
 gdscript/warnings/unsafe_cast=2
 gdscript/warnings/unsafe_call_argument=2
+gdscript/warnings/directory_rules={
+"res://addons": 0,
+"res://prototypes/water_compare/vendor": 0
+}
 
 [display]
 
@@ -26,3 +30,38 @@ lights_and_shadows/directional_shadow/size=8192
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
 
 renderer/rendering_method.web="gl_compatibility"
+
+[shader_globals]
+
+displacements={
+"type": "sampler2DArray",
+"value": ""
+}
+normals={
+"type": "sampler2DArray",
+"value": ""
+}
+water_color={
+"type": "color",
+"value": Color(0.0100228, 0.0196066, 0.0272118, 1)
+}
+foam_color={
+"type": "color",
+"value": Color(0, 0, 0, 1)
+}
+num_cascades={
+"type": "uint",
+"value": 0
+}
+water_reflection={
+"type": "sampler2D",
+"value": ""
+}
+water_reflection_enabled={
+"type": "bool",
+"value": false
+}
+water_reflection_clip_height={
+"type": "float",
+"value": -10000.0
+}
