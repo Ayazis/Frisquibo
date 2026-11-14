@@ -6,9 +6,28 @@ const STATES: Array[OceanSpectrum] = [
 	preload("res://world/water/ocean/presets/calm_sea.tres"),
 	preload("res://world/water/ocean/presets/fresh_breeze.tres"),
 	preload("res://world/water/ocean/presets/storm.tres")]
+const RULES: OceanRuleSet = preload("res://world/water/ocean/rules/presets/coastal_rules.tres")
 const STATE_NAMES: Array[String] = ["Calm", "Fresh breeze", "Storm"]
-const BEACH_SIZE: Vector2 = Vector2(600, 600)
-const BEACH_CELLS: Vector2i = Vector2i(300, 300)
+## The coast: 150 m of land, then about 1.25 km of sea: a wide shallow sandy shelf, a steeper outer
+## shelf that is already fairly deep, and a shelf break dropping into deep water.
+const BEACH_SIZE: Vector2 = Vector2(1600, 1400)
+const BEACH_CENTER: Vector2 = Vector2(0, -550)
+const BEACH_CELLS: Vector2i = Vector2i(320, 600)
+## Row spacing: this fraction of the rows lies on the sea side of the shoreline, and spacing grows
+## away from it (linear share SHORE_ROW_LINEAR, the rest quadratic), so the beach gets the detail.
+const SHORE_ROW_FRACTION := 0.75
+const SHORE_ROW_LINEAR := 0.15
+const SEABED_RESOLUTION := 1024
+const RULES_VIEW_SIZE := Vector2(560, 640)
+const DEAN_A := 0.1                 # fine sand: a gentle, wide surf zone
+const BAR_DISTANCE := 70.0
+const BAR_HEIGHT := 0.8
+const BAR_WIDTH := 18.0
+const SHELF_START := 250.0          # about 4 m deep
+const SHELF_SLOPE := 0.04           # about 20 m deep at the shelf break
+const DROP_START := 600.0
+const DROP_WIDTH := 300.0
+const DROP_DEPTH := 120.0           # about 150 m deep beyond 900 m offshore
 const BARREL_COUNT: int = 5
 const BARREL_SPACING: float = 2.0
 const BARREL_RADIUS: float = 0.45
@@ -30,14 +49,24 @@ func _init() -> void:
 	camera_distance = 32.0
 
 func _ready() -> void:
-	var beach: MeshInstance3D = BasinMesh.build(BEACH_SIZE, BEACH_CELLS, _height)
+	_beach.dean_a = DEAN_A
+	_beach.bar_distance = BAR_DISTANCE
+	_beach.bar_height = BAR_HEIGHT
+	_beach.bar_width = BAR_WIDTH
+	_beach.shelf_start = SHELF_START
+	_beach.shelf_slope = SHELF_SLOPE
+	_beach.drop_start = DROP_START
+	_beach.drop_width = DROP_WIDTH
+	_beach.drop_depth = DROP_DEPTH
+	var beach: MeshInstance3D = BasinMesh.build(BEACH_SIZE, BEACH_CELLS, _height, BEACH_CENTER, _row_spacing)
 	add_child(beach)
 	beach.create_trimesh_collision()
 	ocean = Ocean.new()
 	_live = STATES[_state].duplicate() as OceanSpectrum
 	ocean.spectrum = _live
+	ocean.rules = RULES
 	add_child(ocean)
-	ocean.set_seabed(_height, Rect2(-BEACH_SIZE / 2.0, BEACH_SIZE))
+	ocean.set_seabed(_height, Rect2(BEACH_CENTER - BEACH_SIZE / 2.0, BEACH_SIZE), SEABED_RESOLUTION)
 	for i: int in range(BARREL_COUNT):
 		_add_barrel(Vector3((i - (BARREL_COUNT - 1) / 2.0) * BARREL_SPACING, 0.6, -5.0))
 	_update_notes()
@@ -54,12 +83,42 @@ func set_sea_state(index: int) -> void:
 	_update_notes()
 
 func make_controls() -> Control:
+	var tabs := TabContainer.new()
+	tabs.focus_mode = Control.FOCUS_NONE
 	_panel = OceanControlPanel.new(ocean, _live)
-	return _panel
+	_panel.name = "Sea"
+	tabs.add_child(_panel)
+	var scroll := ScrollContainer.new()
+	scroll.name = "Rules"
+	scroll.custom_minimum_size = RULES_VIEW_SIZE
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var editor := OceanRuleEditor.new(RULES, ocean.rule_parameters(), ocean.rule_targets())
+	editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	editor.rules_changed.connect(func(rule_set: OceanRuleSet) -> void:
+		ocean.set_rules(rule_set)
+		editor.show_problems(ocean.rule_problems()))
+	editor.show_problems(ocean.rule_problems())
+	scroll.add_child(editor)
+	tabs.add_child(scroll)
+	return tabs
 
 func _update_notes() -> void:
 	var mode: String = "FFT" if OceanSimulation.is_supported() else "Gerstner fallback"
 	notes = "%s | %s (edited with sliders) | C: next preset | F: drop objects" % [mode, STATE_NAMES[_state]]
+
+## Row fraction (0 = far out at sea, 1 = inland edge) to z fraction: dense at the shoreline.
+func _row_spacing(row: float) -> float:
+	var shore := (SHORELINE_Z - (BEACH_CENTER.y - BEACH_SIZE.y / 2.0)) / BEACH_SIZE.y
+	if row < SHORE_ROW_FRACTION:
+		var t := (SHORE_ROW_FRACTION - row) / SHORE_ROW_FRACTION
+		return shore - shore * _grow(t)
+	var u := (row - SHORE_ROW_FRACTION) / (1.0 - SHORE_ROW_FRACTION)
+	return shore + (1.0 - shore) * _grow(u)
+
+
+static func _grow(t: float) -> float:
+	return SHORE_ROW_LINEAR * t + (1.0 - SHORE_ROW_LINEAR) * t * t
+
 
 ## Coastline runs along x; the sea lies towards -z. The shoreline wanders a little along the coast.
 func _height(x: float, z: float) -> float:

@@ -9,6 +9,7 @@ render_mode blend_mix, depth_draw_always, cull_disabled, world_vertex_coords;
 //  - seen from below: Snell's window and total internal reflection
 
 const int MAX_CASCADES = 4;
+const int MAX_LOCAL_RULES = 8; // must match OceanLocalRules.MAX_RULES
 const float WATER_F0 = 0.02;
 const float WATER_IOR = 1.333;
 
@@ -62,6 +63,24 @@ uniform vec4 seabed_rect = vec4(0.0);
 uniform float breaker_ratio = 0.39;
 uniform float wave_amplitude = 1.0;
 uniform float min_shore_wave = 0.12;
+// Wave set-up: breaking waves pile water up towards the beach. Extra level at the waterline, as a
+// fraction of wave_amplitude, fading out to zero where breaking starts (depth = amplitude / breaker_ratio).
+uniform float wave_setup = 0.3;
+
+group_uniforms folding;
+// Strong choppiness pulls crests sideways past their neighbours and the surface folds through itself.
+// Horizontal displacement is scaled down where the surface would compress below this jacobian.
+uniform float min_jacobian = 0.12;
+// Set by Ocean each frame: back faces are only "seen from below" when the camera is under water.
+uniform bool camera_underwater = false;
+
+group_uniforms rules;
+// Local OceanRules (see OceanLocalRules): per rule a depth range (min, max, softness min, softness max)
+// and an effect (output: 0 foam / 1 wave size / 2 water level, operation: 0 add / 1 multiply / 2 set,
+// amount, weight of its global conditions).
+uniform int local_rule_count = 0;
+uniform vec4 local_rule_depth[MAX_LOCAL_RULES];
+uniform vec4 local_rule_effect[MAX_LOCAL_RULES];
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
@@ -77,6 +96,8 @@ varying float v_seabed_depth;
 varying float v_front;
 varying float v_foam;
 varying float v_fresnel_scale;
+varying float v_rule_foam;
+varying float v_fold;
 
 float seabed_depth(vec2 p) {
 	if (seabed_rect.z <= 0.0) {
@@ -89,10 +110,66 @@ float seabed_depth(vec2 p) {
 	return sea_level - textureLod(seabed_height, uv, 0.0).r;
 }
 
+// Same as OceanLocalRules._soft_step().
+float soft_step(float edge, float softness, float x) {
+	if (softness <= 0.0) {
+		return x > edge ? 1.0 : 0.0;
+	}
+	return smoothstep(edge - softness * 0.5, edge + softness * 0.5, x);
+}
+
+// (foam, wave size, water level) from the local rules at water depth `depth`. Same as OceanLocalRules.evaluate().
+vec3 local_rules(float depth) {
+	vec3 result = vec3(0.0, 1.0, 0.0);
+	for (int i = 0; i < MAX_LOCAL_RULES; i++) {
+		if (i >= local_rule_count) {
+			break;
+		}
+		vec4 r = local_rule_depth[i];
+		vec4 e = local_rule_effect[i];
+		float w = e.w * soft_step(r.x, r.z, depth) * (1.0 - soft_step(r.y, r.w, depth));
+		int axis = int(e.x + 0.5);
+		float current = axis == 0 ? result.x : (axis == 1 ? result.y : result.z);
+		int op = int(e.y + 0.5);
+		current = op == 0 ? current + e.z * w : (op == 1 ? current * mix(1.0, e.z, w) : mix(current, e.z, w));
+		if (axis == 0) {
+			result.x = current;
+		} else if (axis == 1) {
+			result.y = current;
+		} else {
+			result.z = current;
+		}
+	}
+	result.y = max(result.y, 0.0);
+	return result;
+}
+
+// Same as Ocean._setup_lift(): extra water at the beach from breaking waves.
+float setup_lift(float depth) {
+	if (depth > 1e3) {
+		return 0.0;
+	}
+	float zone = wave_amplitude / max(breaker_ratio, 0.01);
+	return wave_setup * wave_amplitude * (1.0 - smoothstep(0.0, zone, depth));
+}
+
 // Fraction of the open-sea wave that survives at this water depth. Ripples remain right up to the beach.
 float shore_damping(float depth) {
 	float limited = breaker_ratio * max(depth, 0.0) / max(wave_amplitude, 0.01);
 	return clamp(max(limited, min_shore_wave * smoothstep(0.0, 0.5, depth)), 0.0, 1.0);
+}
+
+// Scale on horizontal displacement that keeps the jacobian (1 + dDx/dx)(1 + dDz/dz) from folding.
+float fold_limit(vec2 jac) {
+	float k = 1.0;
+	float limit = min_jacobian - 1.0;
+	if (jac.x < limit) {
+		k = min(k, limit / jac.x);
+	}
+	if (jac.y < limit) {
+		k = min(k, limit / jac.y);
+	}
+	return clamp(k, 0.0, 1.0);
 }
 
 vec3 view_from_depth(vec2 uv, float raw, mat4 inv_proj) {
@@ -108,9 +185,15 @@ void vertex() {
 	vec2 p = VERTEX.xz;
 	float dist = length(p - CAMERA_POSITION_WORLD.xz);
 	float spacing = max(dist, 1.0) * mesh_angular_step;
-	v_seabed_depth = seabed_depth(p);
-	v_damping = shore_damping(v_seabed_depth);
+	float depth = seabed_depth(p);
+	vec3 rules = local_rules(depth);
+	// Set-up and rule water rise the surface and deepen the water the waves see; low land floods.
+	float lift = setup_lift(depth) + rules.z;
+	v_seabed_depth = depth + lift;
+	v_damping = shore_damping(v_seabed_depth) * rules.y;
+	v_rule_foam = rules.x;
 	vec3 d = vec3(0.0);
+	vec2 jac = vec2(0.0);
 	for (int i = 0; i < MAX_CASCADES; i++) {
 		if (i >= cascade_count) {
 			break;
@@ -118,10 +201,15 @@ void vertex() {
 		float tile = tile_lengths[i];
 		// Pick the mip whose texels match the vertex spacing: waves the mesh can't carry average out.
 		float lod = log2(max(spacing * map_size / tile, 1.0));
-		d += textureLod(displacement_maps, vec3(p / tile, float(i)), lod).xyz;
+		vec3 uv = vec3(p / tile, float(i));
+		d += textureLod(displacement_maps, uv, lod).xyz;
+		jac += textureLod(slope_maps, uv, lod).zw;
 	}
-	d *= v_damping;
+	v_fold = fold_limit(jac * v_damping);
+	d.xz *= v_damping * v_fold;
+	d.y *= v_damping;
 	VERTEX += d;
+	VERTEX.y += lift;
 	v_rest = p;
 	v_world = VERTEX;
 	v_crest = d.y;
@@ -148,11 +236,13 @@ void fragment() {
 		foam_weight *= foam_cascade_falloff;
 	}
 	slope *= v_damping;
-	jac *= v_damping;
+	jac *= v_damping * v_fold;
 	variance *= v_damping * v_damping;
 	vec2 eff = slope / max(vec2(1.0) + jac, vec2(0.25));
 	vec3 n_world = normalize(vec3(-eff.x, 1.0, -eff.y));
-	if (!FRONT_FACING) {
+	// From above, a back face is the far side of a steep or folded crest: draw it as the top surface.
+	bool from_below = !FRONT_FACING && camera_underwater;
+	if (from_below) {
 		n_world = -n_world;
 	}
 	vec3 n_view = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
@@ -211,7 +301,7 @@ void fragment() {
 	float breaking = smoothstep(0.0, 0.6, 1.0 - v_damping) * (1.0 - smoothstep(0.0, surf_depth, v_seabed_depth) * 0.5);
 	float surf = breaking * smoothstep(0.02, 0.3, v_crest);
 	float shore_line = 1.0 - smoothstep(0.0, shore_foam_width, contact);
-	float cover = clamp(max(whitecap, max(surf * 0.85, shore_line * 0.9)), 0.0, 1.0);
+	float cover = clamp(max(whitecap, max(surf * 0.85, shore_line * 0.9)) + v_rule_foam, 0.0, 1.0);
 	float foam_near = smoothstep(1.0 - cover, 1.0 - cover + foam_softness, tex);
 	float foam = mix(foam_near, cover * 0.6, smoothstep(foam_far_distance * 0.3, foam_far_distance, dist));
 	// Fade foam and reflection where the water is only millimetres thick, so the shore has no seam.
@@ -220,14 +310,14 @@ void fragment() {
 
 	// --- Reflection ------------------------------------------------------------------------------------
 	vec3 reflection = vec3(0.0);
-	bool planar = water_reflection_enabled && FRONT_FACING;
+	bool planar = water_reflection_enabled && !from_below;
 	if (planar) {
 		vec2 puv = vec2(SCREEN_UV.x, 1.0 - SCREEN_UV.y) + n_view.xy * reflection_distortion;
 		reflection = texture(water_reflection, clamp(puv, vec2(0.001), vec2(0.999))).rgb;
 	}
 
 	float f = fresnel * edge;
-	if (FRONT_FACING) {
+	if (!from_below) {
 		EMISSION = (refracted * (1.0 - f) + reflection * f) * (1.0 - foam);
 		ALBEDO = mix(scatter_color * murk * (1.0 - f), foam_color, foam);
 		// Godot's F0 is 0.16 * specular^2; 0.354 gives water's 0.02. Only used for sky reflection.
@@ -245,7 +335,7 @@ void fragment() {
 	}
 	ROUGHNESS = mix(roughness, 0.7, foam);
 	NORMAL = n_view;
-	v_front = FRONT_FACING ? 1.0 : 0.0;
+	v_front = from_below ? 0.0 : 1.0;
 	v_foam = foam;
 	v_fresnel_scale = 1.0 - f;
 }

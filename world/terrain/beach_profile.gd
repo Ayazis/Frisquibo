@@ -7,6 +7,8 @@ extends RefCounted
 ##   the waterline, flattening offshore. A is set by the sand grain size (about 0.1 for medium sand).
 ## - A longshore sandbar where waves break, and beyond the surf zone the shelf keeps deepening at
 ##   `shelf_slope`, so the seabed never ends in a flat cap.
+## - Optionally a shelf break: from `drop_start` the seabed falls a further `drop_depth` over `drop_width`
+##   metres (a smooth S-curve, steepest in the middle), into deep water. 0 = no drop-off.
 ## Distances are in metres; positive offshore distance is out to sea. Heights are relative to `sea_level`.
 
 const SMOOTHING := 1.5          # metres over which slopes blend into the berm and the shelf
@@ -22,6 +24,9 @@ var bar_distance := 45.0
 var bar_height := 1.0
 var bar_width := 12.0
 var noise_amplitude := 0.25
+var drop_start := 0.0
+var drop_width := 200.0
+var drop_depth := 0.0
 
 var _noise := FastNoiseLite.new()
 
@@ -43,6 +48,8 @@ func height(offshore: float, x: float, z: float) -> float:
 	else:
 		var depth := dean_a * (pow(offshore + DEAN_START, 2.0 / 3.0) - pow(DEAN_START, 2.0 / 3.0))
 		depth += shelf_slope * _smooth_max(offshore - shelf_start, 0.0, SMOOTHING * 10.0)
+		if drop_depth > 0.0:
+			depth += drop_depth * smoothstep(drop_start, drop_start + drop_width, offshore)
 		var bar := bar_height * exp(-pow((offshore - bar_distance) / bar_width, 2.0))
 		h = -depth + bar
 	# Noise fades in away from the waterline, so the shoreline itself stays where it is designed.

@@ -20,6 +20,7 @@ const ROWS: Array[Array] = [
 	[&"depth", "Water depth (m)", 2.0, 400.0, 1.0, Target.SPECTRUM],
 	[&"level", "Sea level (m)", -6.0, 6.0, 0.1, Target.OCEAN],
 	[&"breaker_ratio", "Max wave per depth", 0.05, 1.5, 0.01, Target.OCEAN],
+	[&"wave_setup", "Shore set-up", 0.0, 2.0, 0.05, Target.OCEAN],
 ]
 
 enum Link { STEEPNESS, FOAM_WIND, CHOP_WIND, DEPTH_LEVEL }
@@ -75,6 +76,8 @@ func _init(ocean: Ocean, live: OceanSpectrum) -> void:
 		box.toggled.connect(_on_link_toggled.bind(id))
 		rows.add_child(box)
 		_links[id] = box
+	# Big seas are long seas: start with horizontal size following vertical size.
+	_links[Link.STEEPNESS].button_pressed = true
 	_sync()
 
 
@@ -121,6 +124,8 @@ func _set_value(key: StringName, value: float) -> void:
 		_ocean.set_level(value)
 	elif key == &"breaker_ratio":
 		_ocean.set_breaker_ratio(value)
+	elif key == &"wave_setup":
+		_ocean.set_wave_setup(value)
 
 
 func _on_slider_changed(value: float, key: StringName) -> void:

@@ -20,6 +20,16 @@ func _initialize() -> void:
 		if d > 200:
 			_check(h < previous, "Seabed keeps deepening at %d m (no flat cap)" % d)
 		previous = h
+	var shelf: BeachProfile = BeachProfile.new()
+	shelf.noise_amplitude = 0.0
+	shelf.drop_start = 400.0
+	shelf.drop_width = 200.0
+	shelf.drop_depth = 80.0
+	_near(shelf.height(300.0, 0, 0), beach.height(300.0, 0, 0), "No effect before the shelf break")
+	var before: float = shelf.height(400.0, 0, 0) - shelf.height(410.0, 0, 0)
+	var middle: float = shelf.height(495.0, 0, 0) - shelf.height(505.0, 0, 0)
+	_check(middle > 5.0 * before, "Drop-off is much steeper than the shelf")
+	_check(shelf.height(700.0, 0, 0) < beach.height(700.0, 0, 0) - 79.0, "Deep water past the drop-off")
 	print("Beach profile: ", "PASS" if _failures == 0 else "FAIL", " (", _failures, " failures)")
 	quit(_failures)
 
