@@ -13,8 +13,6 @@ var camera_distance := 20.0
 var water_velocity: Callable
 ## True when the station brings its own sky, sun and camera (the comparison scene then steps aside).
 var takes_over_view := false
-## False when the station uses the D key itself.
-var drop_key_enabled := true
 
 
 ## False when this renderer can't show the water type; the HUD then shows `notes` as the reason.

@@ -16,6 +16,12 @@ const MAX_DISTANCE := 120.0
 const MIN_PITCH := -1.4
 const MAX_PITCH := -0.05
 const CAMERA_FOV := 60.0
+## WASD pan speed as a fraction of the orbit distance per second, so it feels the same zoomed in or out.
+const MOVE_SPEED_PER_DISTANCE := 0.8
+const FAST_MULTIPLIER := 3.0
+## Q/E raise and lower the point the camera orbits, within these bounds (metres from the station's target).
+const MIN_TARGET_HEIGHT := -2.0
+const MAX_TARGET_HEIGHT := 30.0
 ## Gap between the station controls panel and the right edge of the screen.
 const CONTROLS_MARGIN := 16.0
 
@@ -29,6 +35,8 @@ var _station_buttons: Array[Button] = []
 var _yaw := 0.7
 var _pitch := -0.35
 var _distance := 20.0
+## Where WASD has moved the orbit point, relative to the station's own camera target.
+var _target_offset := Vector3.ZERO
 var _golden_hour := false
 var _hud_layer: CanvasLayer
 var _world_environment: WorldEnvironment
@@ -112,7 +120,7 @@ func _make_hud() -> void:
 	time_button.pressed.connect(_toggle_time)
 	buttons.add_child(time_button)
 	var drop_button := Button.new()
-	drop_button.text = "Drop objects (D)"
+	drop_button.text = "Drop objects (F)"
 	drop_button.focus_mode = Control.FOCUS_NONE
 	drop_button.pressed.connect(_drop_objects)
 	buttons.add_child(drop_button)
@@ -134,6 +142,7 @@ func _show_station(index: int) -> void:
 	_set_own_view(not _station.takes_over_view)
 	add_child(_station)
 	_distance = _station.camera_distance
+	_target_offset = Vector3.ZERO
 	_dropper = ObjectDropper.new()
 	_dropper.water_height = _station.water_height_at
 	_dropper.water_velocity = _station.water_velocity
@@ -198,15 +207,17 @@ func _unhandled_input(event: InputEvent) -> void:
 			number = key.keycode - KEY_KP_1
 		if number >= 0 and number < STATION_COUNT:
 			_show_station(number)
-		elif key.physical_keycode == KEY_S and _station is CustomOceanStation:
+		elif key.physical_keycode == KEY_C and _station is CustomOceanStation:
 			(_station as CustomOceanStation).cycle_sea_state()
 		elif key.physical_keycode == KEY_T:
 			_toggle_time()
-		elif key.physical_keycode == KEY_D and _station.drop_key_enabled:
+		elif key.physical_keycode == KEY_F:
 			_drop_objects()
 
 
 func _drop_objects() -> void:
+	# Drop where the camera is looking, also after moving with WASD.
+	_dropper.drop_centre = _station.camera_target + _target_offset
 	_dropper.drop_burst()
 
 
@@ -215,12 +226,37 @@ func _toggle_time() -> void:
 	_apply_time()
 
 
-func _process(_delta: float) -> void:
-	var target := _station.camera_target
+func _process(delta: float) -> void:
+	if not _station.takes_over_view:
+		_move_target(delta)
+	var target := _station.camera_target + _target_offset
 	_cam.global_position = target + Basis.from_euler(Vector3(_pitch, _yaw, 0)) * Vector3(0, 0, _distance)
 	_cam.look_at(target)
 	var status := _station.notes if _station.is_supported() else "NOT AVAILABLE on this renderer. " + _station.notes
-	_hud.text = "%s   (FPS %d)\nDrag to orbit, wheel to zoom" % [status, Engine.get_frames_per_second()]
+	_hud.text = "%s   (FPS %d)\nWASD move, Q/E down/up, Shift faster, drag to orbit, wheel to zoom, F drop objects" % [status, Engine.get_frames_per_second()]
+
+
+## WASD moves the orbit point over the ground in the direction the camera faces; Q/E lower and raise it.
+func _move_target(delta: float) -> void:
+	var input := Vector3.ZERO
+	if Input.is_physical_key_pressed(KEY_W): input.z -= 1.0
+	if Input.is_physical_key_pressed(KEY_S): input.z += 1.0
+	if Input.is_physical_key_pressed(KEY_A): input.x -= 1.0
+	if Input.is_physical_key_pressed(KEY_D): input.x += 1.0
+	if Input.is_physical_key_pressed(KEY_Q): input.y -= 1.0
+	if Input.is_physical_key_pressed(KEY_E): input.y += 1.0
+	if input == Vector3.ZERO:
+		return
+	var speed := _distance * MOVE_SPEED_PER_DISTANCE
+	if Input.is_physical_key_pressed(KEY_SHIFT):
+		speed *= FAST_MULTIPLIER
+	var flat := Basis(Vector3.UP, _yaw)
+	var move := flat * Vector3(input.x, 0.0, input.z)
+	if move != Vector3.ZERO:
+		move = move.normalized()
+	move.y = input.y
+	_target_offset += move * speed * delta
+	_target_offset.y = clampf(_target_offset.y, MIN_TARGET_HEIGHT, MAX_TARGET_HEIGHT)
 
 
 ## Called by tools/visual_check before each shot. Keys: station (0-3), golden_hour (bool),

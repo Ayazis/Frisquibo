@@ -71,7 +71,7 @@ func make_controls() -> Control:
 	var rows := VBoxContainer.new()
 	panel.add_child(rows)
 	var heading := Label.new()
-	heading.text = "Sea state (S cycles presets)"
+	heading.text = "Sea state (C cycles presets)"
 	rows.add_child(heading)
 	for row: Array in SLIDERS:
 		var key: StringName = row[0]
@@ -115,7 +115,7 @@ func _on_slider_changed(value: float, key: StringName) -> void:
 
 func _update_notes() -> void:
 	var mode: String = "FFT" if OceanSimulation.is_supported() else "Gerstner fallback"
-	notes = "%s | %s (edited with sliders) | S: next preset | D: drop objects" % [mode, STATE_NAMES[_state]]
+	notes = "%s | %s (edited with sliders) | C: next preset | F: drop objects" % [mode, STATE_NAMES[_state]]
 
 func _height(x: float, z: float) -> float:
 	return lerpf(-8.0, 3.0, smoothstep(-30.0, 25.0, z + sin(x * 0.045) * 3.0))

@@ -15,8 +15,6 @@ func _init() -> void:
 	notes = "main.tscn: WASD rolls the ball, click to capture the mouse and throw balls, Esc releases it."
 	camera_target = DROP_TARGET
 	takes_over_view = true
-	# The demo moves its ball with WASD, so D can't also drop objects here (the button still does).
-	drop_key_enabled = false
 
 
 func _ready() -> void:
