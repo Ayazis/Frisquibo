@@ -10,8 +10,6 @@ const DEFAULT_SPECTRUM := preload("res://world/water/ocean/presets/fresh_breeze.
 const SEABED_RESOLUTION := 256
 ## The mesh moves with the camera in steps of this size so vertices don't swim over the waves.
 const FOLLOW_SNAP := 0.5
-## Depth-limited waves: crest height <= BREAKER_RATIO * water depth (waves break at H = 0.78 d).
-const BREAKER_RATIO := 0.39
 ## How fast the measured wave amplitude follows the simulation (1/s); avoids pumping at the shore.
 const AMPLITUDE_RESPONSE := 1.5
 ## Used until the first GPU readback has measured the real waves.
@@ -22,6 +20,9 @@ const DEFAULT_AMPLITUDE := 1.0
 @export var level := 0.0
 @export var planar_reflection := true
 @export var min_shore_wave: float = 0.12
+## Depth-limited waves: crest height <= breaker_ratio * water depth. Real waves break at H = 0.78 d,
+## a crest of 0.39 d.
+@export_range(0.05, 2.0) var breaker_ratio := 0.39
 
 var material: ShaderMaterial
 var _simulation: OceanSimulation
@@ -53,7 +54,7 @@ func _ready() -> void:
 	_height_field = OceanHeightField.new(OceanSimulation.MAP_SIZE, _simulation.tile_lengths)
 	material = ShaderMaterial.new()
 	material.shader = SURFACE_SHADER
-	material.set_shader_parameter("breaker_ratio", BREAKER_RATIO)
+	material.set_shader_parameter("breaker_ratio", breaker_ratio)
 	material.set_shader_parameter("wave_amplitude", _amplitude)
 	material.set_shader_parameter("min_shore_wave", min_shore_wave)
 	material.set_shader_parameter("displacement_maps", _simulation.displacement)
@@ -111,6 +112,12 @@ func set_level(value: float) -> void:
 		material.set_shader_parameter("sea_level", value)
 	if _reflection != null:
 		_reflection.set_plane_height(value)
+
+
+func set_breaker_ratio(value: float) -> void:
+	breaker_ratio = value
+	if material != null:
+		material.set_shader_parameter("breaker_ratio", value)
 
 
 ## Bakes the ground height under the sea so waves calm down and surf forms in shallow water.
@@ -186,7 +193,7 @@ func _damping_at(rest: Vector2) -> float:
 	var b: float = lerpf(_seabed.get_pixel(x0, y1).r, _seabed.get_pixel(x1, y1).r, uv.x - x)
 	# Same rule as shore_damping() in ocean.gdshader.
 	var depth := maxf(level - lerpf(a, b, uv.y - y), 0.0)
-	var limited := BREAKER_RATIO * depth / maxf(_amplitude, 0.01)
+	var limited := breaker_ratio * depth / maxf(_amplitude, 0.01)
 	return clampf(maxf(limited, min_shore_wave * smoothstep(0.0, 0.5, depth)), 0.0, 1.0)
 
 

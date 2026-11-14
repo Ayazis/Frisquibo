@@ -207,7 +207,9 @@ void fragment() {
 	vec2 fuv = v_rest * foam_scale;
 	float tex = texture(foam_texture, fuv).r * 0.65 + texture(foam_texture, fuv * 2.71 + vec2(0.37, 0.11)).r * 0.35;
 	float whitecap = clamp(foam_cover * whitecap_strength, 0.0, 1.0);
-	float surf = (1.0 - smoothstep(0.0, surf_depth, v_seabed_depth)) * smoothstep(-0.05, 0.25, v_crest);
+	// Surf only where the depth limit is actually cutting a wave down (it is breaking), on its crest.
+	float breaking = smoothstep(0.0, 0.6, 1.0 - v_damping) * (1.0 - smoothstep(0.0, surf_depth, v_seabed_depth) * 0.5);
+	float surf = breaking * smoothstep(0.02, 0.3, v_crest);
 	float shore_line = 1.0 - smoothstep(0.0, shore_foam_width, contact);
 	float cover = clamp(max(whitecap, max(surf * 0.85, shore_line * 0.9)), 0.0, 1.0);
 	float foam_near = smoothstep(1.0 - cover, 1.0 - cover + foam_softness, tex);

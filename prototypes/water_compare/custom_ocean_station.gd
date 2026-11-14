@@ -14,28 +14,15 @@ const BARREL_SPACING: float = 2.0
 const BARREL_RADIUS: float = 0.45
 const BARREL_HEIGHT: float = 1.1
 const BARREL_MASS: float = 50.0
-## Slider rows: property on OceanSpectrum, label, min, max, step.
-const SLIDERS: Array[Array] = [
-	[&"wind_speed", "Wind (wave size)", 1.0, 30.0, 0.5],
-	[&"height_scale", "Wave height", 0.0, 2.5, 0.05],
-	[&"choppiness", "Choppiness", 0.0, 1.6, 0.05],
-	[&"foam_threshold", "Foam amount", 0.0, 1.2, 0.02],
-	[&"foam_lifetime", "Foam lifetime (s)", 0.5, 12.0, 0.25],
-	[&"wind_direction", "Wind direction", -180.0, 180.0, 5.0],
-	[&"swell", "Swell", 0.0, 1.0, 0.05],
-	[&"short_wave_cutoff", "Smoothness", 0.0, 2.5, 0.05],
-	[&"sea_level", "Sea level (m)", -3.0, 3.0, 0.1],
-]
-## Not a spectrum property: moves the Ocean itself.
-const SEA_LEVEL_KEY := &"sea_level"
-const PANEL_WIDTH := 330.0
-const LABEL_WIDTH := 140.0
+const SHORELINE_Z := 6.0
+const SHORE_WAVINESS := 0.045
+const SHORE_WANDER := 3.0
 var ocean: Ocean
+var _beach := BeachProfile.new()
 var _state: int = 1
 ## Editable copy of the active preset; the sliders write into it.
 var _live: OceanSpectrum
-var _sliders: Dictionary[StringName, HSlider] = {}
-var _values: Dictionary[StringName, Label] = {}
+var _panel: OceanControlPanel
 
 func _init() -> void:
 	title = "Custom FFT ocean"
@@ -62,63 +49,22 @@ func set_sea_state(index: int) -> void:
 	_state = posmod(index, STATES.size())
 	_live = STATES[_state].duplicate() as OceanSpectrum
 	ocean.set_spectrum(_live)
-	_sync_sliders()
+	if _panel:
+		_panel.set_spectrum(_live)
 	_update_notes()
 
 func make_controls() -> Control:
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size.x = PANEL_WIDTH
-	var rows := VBoxContainer.new()
-	panel.add_child(rows)
-	var heading := Label.new()
-	heading.text = "Sea state (C cycles presets)"
-	rows.add_child(heading)
-	for row: Array in SLIDERS:
-		var key: StringName = row[0]
-		var line := HBoxContainer.new()
-		var label := Label.new()
-		label.text = row[1]
-		label.custom_minimum_size.x = LABEL_WIDTH
-		line.add_child(label)
-		var slider := HSlider.new()
-		slider.min_value = row[2]
-		slider.max_value = row[3]
-		slider.step = row[4]
-		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		slider.focus_mode = Control.FOCUS_NONE
-		slider.value_changed.connect(_on_slider_changed.bind(key))
-		line.add_child(slider)
-		var value := Label.new()
-		value.custom_minimum_size.x = 44.0
-		line.add_child(value)
-		rows.add_child(line)
-		_sliders[key] = slider
-		_values[key] = value
-	_sync_sliders()
-	return panel
-
-func _sync_sliders() -> void:
-	for key: StringName in _sliders:
-		var v: float = ocean.level if key == SEA_LEVEL_KEY else _live.get(key)
-		_sliders[key].set_value_no_signal(v)
-		_values[key].text = "%.2f" % v
-
-func _on_slider_changed(value: float, key: StringName) -> void:
-	_values[key].text = "%.2f" % value
-	if key == SEA_LEVEL_KEY:
-		ocean.set_level(value)
-		return
-	_live.set(key, value)
-	ocean.set_spectrum(_live)
-	_update_notes()
+	_panel = OceanControlPanel.new(ocean, _live)
+	return _panel
 
 func _update_notes() -> void:
 	var mode: String = "FFT" if OceanSimulation.is_supported() else "Gerstner fallback"
 	notes = "%s | %s (edited with sliders) | C: next preset | F: drop objects" % [mode, STATE_NAMES[_state]]
 
+## Coastline runs along x; the sea lies towards -z. The shoreline wanders a little along the coast.
 func _height(x: float, z: float) -> float:
-	return lerpf(-8.0, 3.0, smoothstep(-30.0, 25.0, z + sin(x * 0.045) * 3.0))
+	var shoreline_z := SHORELINE_Z - sin(x * SHORE_WAVINESS) * SHORE_WANDER
+	return _beach.height(shoreline_z - z, x, z)
 
 func _add_barrel(pos: Vector3) -> void:
 	var body: RigidBody3D = RigidBody3D.new()

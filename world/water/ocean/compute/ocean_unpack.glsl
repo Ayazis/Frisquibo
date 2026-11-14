@@ -24,7 +24,7 @@ layout(push_constant, std430) uniform Params {
 	float foam_gain;
 	float foam_decay;
 	float cascade;
-	float pad1;
+	float horizontal_scale; // waves stretched this many times horizontally (see OceanSimulation._physical_tile)
 	float pad2;
 } p;
 
@@ -38,8 +38,11 @@ void main() {
 
 	float s = p.height_scale;
 	float chop = p.choppiness * s;
-	vec3 displacement = vec3(a.x * chop, a.z * s, a.y * chop);
-	vec2 slope = vec2(a.w, b.x) * s;
+	float w = p.horizontal_scale;
+	// Stretching x and z by w scales sideways motion by w and slopes by 1 / w; derivatives of the
+	// horizontal displacement (and so the jacobian and the foam) are unchanged.
+	vec3 displacement = vec3(a.x * chop * w, a.z * s, a.y * chop * w);
+	vec2 slope = vec2(a.w, b.x) * s / w;
 	float jxx = b.y * chop;
 	float jzz = b.z * chop;
 	float jxz = b.w * chop;
