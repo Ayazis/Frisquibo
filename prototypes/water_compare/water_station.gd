@@ -9,8 +9,20 @@ var notes := ""
 var is_library := false
 var camera_target := Vector3.ZERO
 var camera_distance := 20.0
+## Optional: takes (xz: Vector2) and returns the water velocity, for currents that carry objects.
+var water_velocity: Callable
 
 
 ## False when this renderer can't show the water type; the HUD then shows `notes` as the reason.
 func is_supported() -> bool:
 	return true
+
+
+## Water surface height at `xz`, for floating objects. Flat water at y = 0 unless overridden.
+func water_height_at(_xz: Vector2) -> float:
+	return 0.0
+
+
+## Optional extra controls for this station (sliders); shown in the HUD while the station is active.
+func make_controls() -> Control:
+	return null

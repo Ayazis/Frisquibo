@@ -19,6 +19,7 @@ const SEA_SIZE := 60.0
 const SEA_SUBDIVISIONS := 240
 
 var _noise := FastNoiseLite.new()
+var _sea: Sea
 
 
 func _init() -> void:
@@ -30,8 +31,11 @@ func _init() -> void:
 func _ready() -> void:
 	_noise.seed = 11
 	_noise.frequency = 0.08
-	add_child(BasinMesh.build(BASIN_SIZE, BASIN_CELLS, _height))
+	var basin := BasinMesh.build(BASIN_SIZE, BASIN_CELLS, _height)
+	add_child(basin)
+	basin.create_trimesh_collision()
 	var sea := Sea.new()
+	_sea = sea
 	sea.size = SEA_SIZE
 	sea.subdivisions = SEA_SUBDIVISIONS
 	add_child(sea)
@@ -97,3 +101,8 @@ func _add_mesh(mesh: Mesh, pos: Vector3) -> void:
 func _height(x: float, z: float) -> float:
 	var r := Vector2(x, z).length() + _noise.get_noise_2d(x, z) * SHORE_WOBBLE
 	return lerpf(LAKE_DEPTH, BANK_HEIGHT, smoothstep(LAKE_RADIUS, BANK_RADIUS, r))
+
+
+func water_height_at(xz: Vector2) -> float:
+	# Same clock as the shader's TIME, so floating objects ride the visible waves.
+	return _sea.height_at(xz, Time.get_ticks_msec() / 1000.0)

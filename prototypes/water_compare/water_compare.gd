@@ -16,6 +16,8 @@ const MAX_DISTANCE := 120.0
 const MIN_PITCH := -1.4
 const MAX_PITCH := -0.05
 const CAMERA_FOV := 60.0
+## Gap between the station controls panel and the right edge of the screen.
+const CONTROLS_MARGIN := 16.0
 
 var _station: WaterStation
 var _cam: Camera3D
@@ -29,6 +31,8 @@ var _pitch := -0.35
 var _distance := 20.0
 var _golden_hour := false
 var _hud_layer: CanvasLayer
+var _dropper: ObjectDropper
+var _controls: Control
 
 
 func _ready() -> void:
@@ -105,6 +109,11 @@ func _make_hud() -> void:
 	time_button.focus_mode = Control.FOCUS_NONE
 	time_button.pressed.connect(_toggle_time)
 	buttons.add_child(time_button)
+	var drop_button := Button.new()
+	drop_button.text = "Drop objects (D)"
+	drop_button.focus_mode = Control.FOCUS_NONE
+	drop_button.pressed.connect(_drop_objects)
+	buttons.add_child(drop_button)
 	layer.add_child(buttons)
 	add_child(layer)
 	_hud_layer = layer
@@ -121,6 +130,22 @@ func _show_station(index: int) -> void:
 		_: _station = CustomOceanStation.new()
 	add_child(_station)
 	_distance = _station.camera_distance
+	_dropper = ObjectDropper.new()
+	_dropper.water_height = _station.water_height_at
+	_dropper.water_velocity = _station.water_velocity
+	_dropper.drop_centre = _station.camera_target
+	_station.add_child(_dropper)
+	if _controls:
+		_controls.queue_free()
+	_controls = _station.make_controls()
+	if _controls:
+		# Anchored to the top-right corner and growing leftwards to its own minimum width.
+		_controls.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		_controls.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		_controls.offset_left = -CONTROLS_MARGIN
+		_controls.offset_right = -CONTROLS_MARGIN
+		_controls.offset_top = HUD_Y
+		_hud_layer.add_child(_controls)
 	for i in range(_station_buttons.size()):
 		_station_buttons[i].set_pressed_no_signal(i == index)
 	var kind := "LIBRARY" if _station.is_library else "CUSTOM"
@@ -162,6 +187,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			(_station as CustomOceanStation).cycle_sea_state()
 		elif key.physical_keycode == KEY_T:
 			_toggle_time()
+		elif key.physical_keycode == KEY_D:
+			_drop_objects()
+
+
+func _drop_objects() -> void:
+	_dropper.drop_burst()
 
 
 func _toggle_time() -> void:

@@ -14,6 +14,8 @@ const BANK_HEIGHT := 1.4
 const SURFACE_CELLS := Vector2i(180, 80)
 const ROCK_COUNT := 9
 const ROCK_COLOR := Color(0.32, 0.31, 0.29)
+## Same value as flow_speed in river.gdshader.
+const FLOW_SPEED := 1.6
 
 var _noise := FastNoiseLite.new()
 
@@ -27,7 +29,10 @@ func _init() -> void:
 func _ready() -> void:
 	_noise.seed = 5
 	_noise.frequency = 0.1
-	add_child(BasinMesh.build(AREA, CELLS, _height))
+	var bed := BasinMesh.build(AREA, CELLS, _height)
+	add_child(bed)
+	bed.create_trimesh_collision()
+	water_velocity = _flow_at
 	_make_surface()
 	_make_rocks()
 
@@ -83,3 +88,11 @@ func _make_rocks() -> void:
 		mi.position = Vector3(x, _height(x, z) + r * 0.9, z)
 		mi.rotation = Vector3(rng.randf(), rng.randf() * TAU, rng.randf()) * 0.4
 		add_child(mi)
+
+
+## Same current as flow_at() in river.gdshader, so floating objects drift with the visible flow.
+func _flow_at(xz: Vector2) -> Vector3:
+	var dir := Vector2(1.0, cos(xz.x * MEANDER_FREQUENCY) * MEANDER_AMPLITUDE * MEANDER_FREQUENCY).normalized()
+	var across := clampf(absf(xz.y - _centre(xz.x)) / BANK_DISTANCE, 0.0, 1.0)
+	var flow := dir * FLOW_SPEED * (1.0 - across * across)
+	return Vector3(flow.x, 0.0, flow.y)
