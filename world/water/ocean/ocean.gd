@@ -21,12 +21,15 @@ const OPEN_SEA_DEPTH := 1.0e4
 ## Group names for tunables declared outside an export group.
 const WAVES_GROUP := "Waves"
 const SEA_GROUP := "Sea"
+const LOOK_GROUP := "Look"
 ## The only values the Gerstner fallback (web / Compatibility) reacts to.
 const FALLBACK_PARAMETERS: Array[StringName] = [&"wind_speed", &"wind_direction", &"height_scale",
 		&"wavelength_scale", &"choppiness", &"level"]
 
 @export var spectrum: OceanSpectrum
 @export var quality: OceanQuality
+## Colour, clarity, foam and caustics. Null: the shader defaults.
+@export var look: OceanLook
 @export_range(-20.0, 20.0, 0.05, "or_less", "or_greater", "suffix:m") var level := 0.0
 @export var planar_reflection := true
 @export_group("Shore")
@@ -66,8 +69,8 @@ func _ready() -> void:
 		spectrum = DEFAULT_SPECTRUM
 	if quality == null:
 		quality = DEFAULT_QUALITY
-	_limits = OceanRuleEngine.limits(spectrum)
-	_limits.merge(OceanRuleEngine.limits(self))
+	for tunable: Object in _tunables():
+		_limits.merge(OceanRuleEngine.limits(tunable))
 	_effective = spectrum.duplicate() as OceanSpectrum
 	# Web / Compatibility: no RenderingDevice, so no compute shaders. Cheaper Gerstner fallback.
 	if not OceanSimulation.is_supported():
@@ -130,6 +133,7 @@ func set_level(value: float) -> void:
 ## Every tunable number of the sea state and of this ocean, in display order.
 func parameters() -> Array[OceanParameter]:
 	var result := OceanParameterCatalog.of(_authored_spectrum(), WAVES_GROUP)
+	result.append_array(OceanParameterCatalog.of(_authored_look(), LOOK_GROUP))
 	result.append_array(OceanParameterCatalog.of(self, SEA_GROUP))
 	return result
 
@@ -163,9 +167,20 @@ func _authored_spectrum() -> OceanSpectrum:
 	return spectrum if spectrum != null else DEFAULT_SPECTRUM
 
 
+func _authored_look() -> OceanLook:
+	if look == null:
+		look = OceanLook.new()
+	return look
+
+
+## Everything that holds tunable numbers: the sea state, the look and this ocean.
+func _tunables() -> Array[Object]:
+	return [_authored_spectrum(), _authored_look(), self]
+
+
 ## The object holding a tunable: the spectrum, this ocean, or null.
 func _owner_of(parameter: StringName) -> Object:
-	for candidate: Object in [_authored_spectrum(), self]:
+	for candidate: Object in _tunables():
 		if _described(candidate, parameter) != null:
 			return candidate
 	return null
@@ -176,6 +191,12 @@ static func _described(object: Object, parameter: StringName) -> OceanParameter:
 		if known.name == parameter:
 			return known
 	return null
+
+
+## Replaces the look, or re-applies it after its colours were changed in place.
+func set_look(value: OceanLook) -> void:
+	look = value
+	_update_rules(true)
 
 
 func set_rules(value: OceanRuleSet) -> void:
@@ -208,10 +229,9 @@ func rule_targets() -> PackedStringArray:
 
 func _number_names() -> PackedStringArray:
 	var names := PackedStringArray()
-	for key: StringName in OceanRuleEngine.parameters(_authored_spectrum()):
-		names.append(String(key))
-	for key: StringName in OceanRuleEngine.parameters(self):
-		names.append(String(key))
+	for tunable: Object in _tunables():
+		for key: StringName in OceanRuleEngine.parameters(tunable):
+			names.append(String(key))
 	return names
 
 
@@ -297,8 +317,9 @@ func _apply_cascades() -> void:
 func _update_rules(force: bool) -> void:
 	if _effective == null or (not force and rules == null):
 		return
-	var inputs := OceanRuleEngine.parameters(spectrum)
-	inputs.merge(OceanRuleEngine.parameters(self))
+	var inputs: Dictionary[StringName, float] = {}
+	for tunable: Object in _tunables():
+		inputs.merge(OceanRuleEngine.parameters(tunable))
 	inputs[OceanRuleEngine.WAVE_HEIGHT] = wave_height()
 	var result := OceanRuleEngine.evaluate(rules, inputs, _limits)
 	if result.problems != _problems:
@@ -341,6 +362,7 @@ func _apply_state(spectrum_changed: bool) -> void:
 	material.set_shader_parameter("breaker_ratio", _value(&"breaker_ratio"))
 	material.set_shader_parameter("min_shore_wave", _value(&"min_shore_wave"))
 	material.set_shader_parameter("wave_setup", _value(&"wave_setup"))
+	OceanLookBinding.apply(_authored_look(), material, _values)
 	material.set_shader_parameter("local_rule_count", _local.count())
 	if _local.count() > 0:
 		material.set_shader_parameter("local_rule_depth", _local.depth_ranges)

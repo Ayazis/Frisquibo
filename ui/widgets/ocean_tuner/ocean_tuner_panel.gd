@@ -1,13 +1,24 @@
 class_name OceanTunerPanel
 extends VBoxContainer
 ## Live controls for an Ocean, generated from its parameter catalogue: one foldable section per
-## group, a slider per tunable, physical readouts on top and the links below.
+## group, a slider per tunable and a picker per colour, physical readouts on top, links and
+## save / load below.
 
 const READOUTS_TITLE := "Sea state"
 const LINKS_TITLE := "Links"
+const STORAGE_TITLE := "Save and load"
+## The section each colour of the look belongs to (an export group of OceanLook).
+const COLOR_GROUPS: Dictionary[StringName, String] = {
+	&"scatter_color": "Water colour",
+	&"sss_color": "Water colour",
+	&"deep_color": "Water colour",
+	&"foam_color": "Foam look",
+}
 
 var _ocean: Ocean
 var _rows: Dictionary[StringName, OceanTunerRow] = {}
+var _colors: Dictionary[StringName, OceanTunerColorRow] = {}
+var _sections: Dictionary[String, VBoxContainer] = {}
 var _links: OceanTunerLinks
 var _readouts: OceanTunerReadouts
 
@@ -16,20 +27,26 @@ func _init(ocean: Ocean) -> void:
 	_ocean = ocean
 	_readouts = OceanTunerReadouts.new(ocean)
 	_add_section(READOUTS_TITLE).add_child(_readouts)
-	var sections: Dictionary[String, VBoxContainer] = {}
 	for parameter: OceanParameter in ocean.parameters():
 		if not parameter.has_range:
 			continue
-		if not sections.has(parameter.group):
-			sections[parameter.group] = _add_section(parameter.group)
 		var row := OceanTunerRow.new(parameter)
 		row.set_live(ocean.is_parameter_live(parameter.name))
 		row.value_changed.connect(_on_value_changed)
-		sections[parameter.group].add_child(row)
+		_section(parameter.group).add_child(row)
 		_rows[parameter.name] = row
+	for color_name: StringName in OceanLookBinding.COLORS:
+		var picker := OceanTunerColorRow.new(color_name, OceanLookBinding.COLOR_LABELS[color_name])
+		picker.set_live(ocean.is_parameter_live(color_name))
+		picker.color_changed.connect(_on_color_changed)
+		_section(COLOR_GROUPS[color_name]).add_child(picker)
+		_colors[color_name] = picker
 	_links = OceanTunerLinks.new(ocean)
 	_links.links_changed.connect(_sync)
 	_add_section(LINKS_TITLE).add_child(_links)
+	var storage := OceanTunerStorage.new(ocean)
+	storage.loaded.connect(_on_loaded)
+	_add_section(STORAGE_TITLE).add_child(storage)
 	mark_defaults()
 
 
@@ -44,6 +61,13 @@ func mark_defaults() -> void:
 
 func set_link(link: OceanTunerLinks.Link, on: bool) -> void:
 	_links.set_link(link, on)
+
+
+## The section of a group, made on first use.
+func _section(group: String) -> VBoxContainer:
+	if not _sections.has(group):
+		_sections[group] = _add_section(group)
+	return _sections[group]
 
 
 func _add_section(title: String) -> VBoxContainer:
@@ -62,7 +86,22 @@ func _on_value_changed(parameter: StringName, value: float) -> void:
 	_sync()
 
 
+func _on_color_changed(color_name: StringName, color: Color) -> void:
+	_ocean.look.set(color_name, color)
+	_ocean.set_look(_ocean.look)
+
+
+func _on_loaded(sea: OceanSpectrum, look: OceanLook) -> void:
+	_ocean.set_spectrum(sea)
+	_ocean.set_look(look)
+	_links.apply(&"")
+	_sync()
+
+
 func _sync() -> void:
+	for color_name: StringName in _colors:
+		var color: Color = _ocean.look.get(color_name)
+		_colors[color_name].show_color(color)
 	var driven := _links.driven()
 	for key: StringName in _rows:
 		_rows[key].show_value(_ocean.parameter_value(key))

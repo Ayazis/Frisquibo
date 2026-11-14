@@ -45,7 +45,38 @@ func _initialize() -> void:
 	_check(not ocean.set_parameter(&"nonsense", 1.0), "Unknown names are refused")
 	_check(is_nan(ocean.parameter_value(&"nonsense")), "Unknown names read as NAN")
 	_check(OceanRuleEngine.limits(sea)[&"wind_speed"] == Vector2(0.5, 80.0), "Rules see the same limits")
+	var look := _find(all, &"caustic_strength")
+	_check(look != null and look.group == "Caustics", "The ocean lists its look too")
+	_check(ocean.set_parameter(&"caustic_strength", 4.0), "A look value can be set by name")
+	_near(ocean.look.caustic_strength, 4.0, "It lands in the look")
+	_check(ocean.rule_targets().has("whitecap_strength"), "Rules can change the look")
 	ocean.free()
+
+	# The headless renderer can't report uniform defaults, so they are read from the shader source.
+	var defaults := OceanLook.new()
+	var shader: Shader = load("res://world/water/ocean/ocean.gdshader")
+	for parameter: OceanParameter in OceanParameterCatalog.of(defaults, ""):
+		if OceanLookBinding.ABSORPTION_CHANNELS.has(parameter.name):
+			continue
+		var found := _uniform_default(shader.code, "float", parameter.name)
+		_check(found.size() == 1, "Look value '%s' has a float shader uniform" % parameter.name)
+		var look_default: float = defaults.get(parameter.name)
+		if found.size() == 1:
+			_near(look_default, found[0], "Look default of '%s' equals the shader's" % parameter.name)
+	for color_name: StringName in OceanLookBinding.COLORS:
+		var found := _uniform_default(shader.code, "vec3", color_name)
+		var color: Color = defaults.get(color_name)
+		_check(found.size() == 3 and Vector3(color.r, color.g, color.b).is_equal_approx(
+				Vector3(found[0], found[1], found[2])), "Look colour '%s' equals the shader's" % color_name)
+	var absorbed := _uniform_default(shader.code, "vec3", OceanLookBinding.ABSORPTION_UNIFORM)
+	_check(absorbed.size() == 3 and OceanLookBinding.absorption(defaults, {}).is_equal_approx(
+			Vector3(absorbed[0], absorbed[1], absorbed[2])), "Default absorption equals the shader's")
+	_near(OceanLookBinding.absorption(defaults, {&"absorption_red": 1.5}).x, 1.5, "Rule results win over the authored look")
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	OceanLookBinding.apply(defaults, material, {&"caustic_strength": 7.0})
+	var pushed: float = material.get_shader_parameter(&"caustic_strength")
+	_near(pushed, 7.0, "The binding pushes numbers to the material")
 
 	_check(OceanSeaStats.beaufort(0.2) == 0, "Beaufort 0 is calm")
 	_check(OceanSeaStats.beaufort(9.0) == 5, "9 m/s is a fresh breeze")
@@ -65,6 +96,18 @@ func _initialize() -> void:
 
 	print("ocean_parameters_test: %s" % ("PASS" if _failures == 0 else "%d FAILED" % _failures))
 	quit(1 if _failures > 0 else 0)
+
+
+## Default of `uniform <type> <name> ... = <value>;` in shader source: one number, or the three of a vec3.
+func _uniform_default(code: String, type: String, uniform_name: StringName) -> PackedFloat64Array:
+	var pattern := RegEx.create_from_string("uniform\\s+%s\\s+%s\\b[^=;]*=\\s*([^;]+);" % [type, uniform_name])
+	var found := pattern.search(code)
+	var numbers := PackedFloat64Array()
+	if found == null:
+		return numbers
+	for part: String in found.get_string(1).trim_prefix("vec3(").trim_suffix(")").split(","):
+		numbers.append(part.to_float())
+	return numbers
 
 
 func _find(listed: Array[OceanParameter], key: StringName) -> OceanParameter:
