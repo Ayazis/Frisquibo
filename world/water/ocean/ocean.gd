@@ -9,7 +9,7 @@ extends Node3D
 const SURFACE_SHADER := preload("res://world/water/ocean/ocean.gdshader")
 const DEFAULT_QUALITY := preload("res://data/quality/ocean_high.tres")
 const DEFAULT_SPECTRUM := preload("res://world/water/ocean/presets/fresh_breeze.tres")
-const SEABED_RESOLUTION := 256
+const DEFAULT_SEABED_RESOLUTION := 256
 ## The mesh moves with the camera in steps of this size so vertices don't swim over the waves.
 const FOLLOW_SNAP := 0.5
 ## How fast the measured wave amplitude follows the simulation (1/s); avoids pumping at the shore.
@@ -39,6 +39,7 @@ var _height_field: OceanHeightField
 var _fallback: Sea
 var _seabed: Image
 var _seabed_area: Rect2
+var _seabed_resolution := DEFAULT_SEABED_RESOLUTION
 var _time := 0.0
 var _frames_since_readback := 0
 var _reflection: PlanarReflection
@@ -138,6 +139,37 @@ func effective_value(parameter: StringName) -> float:
 	return value
 
 
+## Names rule conditions can read: every number of the ocean and its spectrum, plus the measured
+## wave height and the per-point water depth.
+func rule_parameters() -> PackedStringArray:
+	var names := _number_names()
+	names.append(String(OceanRuleEngine.WAVE_HEIGHT))
+	names.append(String(OceanLocalRules.DEPTH))
+	return names
+
+
+## Names rule effects can change: every number of the ocean and its spectrum, plus the local outputs.
+func rule_targets() -> PackedStringArray:
+	var names := PackedStringArray([String(OceanLocalRules.FOAM), String(OceanLocalRules.WAVE_SIZE),
+			String(OceanLocalRules.WATER_LEVEL)])
+	names.append_array(_number_names())
+	return names
+
+
+func _number_names() -> PackedStringArray:
+	var names := PackedStringArray()
+	for key: StringName in OceanRuleEngine.parameters(spectrum if spectrum != null else DEFAULT_SPECTRUM):
+		names.append(String(key))
+	for key: StringName in OceanRuleEngine.parameters(self):
+		names.append(String(key))
+	return names
+
+
+## Problems found in the rules at their last evaluation (unknown parameters, too many local rules, ...).
+func rule_problems() -> PackedStringArray:
+	return _problems
+
+
 ## Measured significant wave height of the open sea (twice the typical crest height), in metres.
 func wave_height() -> float:
 	return 2.0 * _amplitude
@@ -145,13 +177,15 @@ func wave_height() -> float:
 
 ## Bakes the ground height under the sea so waves calm down and surf forms in shallow water.
 ## `height` takes (x: float, z: float) and returns the ground height.
-func set_seabed(height: Callable, area: Rect2) -> void:
+## `resolution` texels per side; raise it for large areas so the shoreline stays sharp.
+func set_seabed(height: Callable, area: Rect2, resolution: int = DEFAULT_SEABED_RESOLUTION) -> void:
 	if material == null:
 		return
-	var img := Image.create(SEABED_RESOLUTION, SEABED_RESOLUTION, false, Image.FORMAT_RF)
-	for y in range(SEABED_RESOLUTION):
-		for x in range(SEABED_RESOLUTION):
-			var p := area.position + area.size * Vector2(x + 0.5, y + 0.5) / SEABED_RESOLUTION
+	_seabed_resolution = resolution
+	var img := Image.create(resolution, resolution, false, Image.FORMAT_RF)
+	for y in range(resolution):
+		for x in range(resolution):
+			var p := area.position + area.size * Vector2(x + 0.5, y + 0.5) / resolution
 			var ground: float = height.call(p.x, p.y)
 			img.set_pixel(x, y, Color(ground, 0.0, 0.0))
 	_seabed = img
@@ -187,6 +221,9 @@ func _process(delta: float) -> void:
 	if cam != null:
 		var p := cam.global_position
 		_surface.global_position = Vector3(snappedf(p.x, FOLLOW_SNAP), _level(), snappedf(p.z, FOLLOW_SNAP))
+		# Back faces of the surface mean "seen from below" only when the camera really is under water;
+		# otherwise they are the far side of a steep crest and get drawn like the top.
+		material.set_shader_parameter("camera_underwater", p.y < height_at(Vector2(p.x, p.z)))
 	if quality.readback_interval > 0:
 		_frames_since_readback += 1
 		if _frames_since_readback >= quality.readback_interval:
@@ -277,13 +314,14 @@ func _level() -> float:
 func _depth_at(p: Vector2) -> float:
 	if _seabed == null or not _seabed_area.has_point(p):
 		return OPEN_SEA_DEPTH
-	var uv: Vector2 = (p - _seabed_area.position) / _seabed_area.size * SEABED_RESOLUTION - Vector2(0.5, 0.5)
+	var last := _seabed_resolution - 1
+	var uv: Vector2 = (p - _seabed_area.position) / _seabed_area.size * _seabed_resolution - Vector2(0.5, 0.5)
 	var x: int = floori(uv.x)
 	var y: int = floori(uv.y)
-	var x0: int = clampi(x, 0, SEABED_RESOLUTION - 1)
-	var x1: int = clampi(x + 1, 0, SEABED_RESOLUTION - 1)
-	var y0: int = clampi(y, 0, SEABED_RESOLUTION - 1)
-	var y1: int = clampi(y + 1, 0, SEABED_RESOLUTION - 1)
+	var x0: int = clampi(x, 0, last)
+	var x1: int = clampi(x + 1, 0, last)
+	var y0: int = clampi(y, 0, last)
+	var y1: int = clampi(y + 1, 0, last)
 	var a: float = lerpf(_seabed.get_pixel(x0, y0).r, _seabed.get_pixel(x1, y0).r, uv.x - x)
 	var b: float = lerpf(_seabed.get_pixel(x0, y1).r, _seabed.get_pixel(x1, y1).r, uv.x - x)
 	return _level() - lerpf(a, b, uv.y - y)
