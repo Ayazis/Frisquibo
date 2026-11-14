@@ -30,7 +30,7 @@ var drop_centre := Vector3.ZERO
 
 var _rng := RandomNumberGenerator.new()
 var _bodies: Array[RigidBody3D] = []
-var _materials: Dictionary[Kind, StandardMaterial3D] = {}
+var _materials: Dictionary[Kind, ShaderMaterial] = {}
 var _droplet_mesh: SphereMesh
 
 
@@ -186,8 +186,5 @@ func _splash(point: Vector3, speed: float) -> void:
 	p.finished.connect(p.queue_free)
 
 
-func _material(color: Color, roughness: float) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = color
-	m.roughness = roughness
-	return m
+func _material(color: Color, roughness: float) -> ShaderMaterial:
+	return WaterProp.material(color, roughness)

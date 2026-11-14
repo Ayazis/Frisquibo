@@ -57,9 +57,7 @@ func _scatter_props() -> void:
 	var leaves := StandardMaterial3D.new()
 	leaves.albedo_color = Color(0.1, 0.26, 0.08)
 	leaves.roughness = 0.85
-	var stone := StandardMaterial3D.new()
-	stone.albedo_color = Color(0.4, 0.39, 0.36)
-	stone.roughness = 0.9
+	var stone := WaterProp.material(Color(0.4, 0.39, 0.36), 0.9)
 	for i in range(TREE_COUNT):
 		var angle := rng.randf() * TAU
 		var r := rng.randf_range(BANK_RADIUS + 0.5, BANK_RADIUS + 9.0)

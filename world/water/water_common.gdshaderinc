@@ -9,6 +9,7 @@ uniform vec3 scatter_color : source_color = vec3(0.02, 0.16, 0.18);
 uniform vec3 foam_color : source_color = vec3(0.92, 0.94, 0.94);
 uniform vec3 sss_color : source_color = vec3(0.1, 0.55, 0.45);
 uniform float refraction_strength = 0.04;
+uniform float refraction_full_distance = 8.0;           // metres; the screen offset shrinks beyond this
 uniform float reflection_distortion = 0.03;
 uniform float caustic_strength = 2.2;
 uniform float caustic_scale = 0.35;
@@ -16,6 +17,8 @@ uniform float caustic_fade = 0.6;                       // per metre of depth
 uniform float shore_foam_width = 0.6;
 uniform float shore_foam_strength = 0.9;
 uniform float crest_foam_strength = 0.8;
+// 1 = break foam up with the built-in drifting noise; 0 = the caller supplies foam that is already textured.
+uniform float foam_breakup = 1.0;
 uniform float glint_power = 900.0;
 uniform float glint_strength = 6.0;
 uniform float sss_strength = 1.4;
@@ -66,7 +69,13 @@ WaterResult water_shade(vec3 n_world, vec3 n_view, vec3 surf_world, vec3 vertex_
 	// Ground straight behind this pixel (for shore foam) and behind the refracted ray (for colour).
 	vec3 g_view = water_view_from_depth(screen_uv, texture(depth_tex, screen_uv).r, inv_proj);
 	float thickness = max(vertex_view.z - g_view.z, 0.0);
-	vec2 ruv = screen_uv + n_view.xy * refraction_strength * clamp(thickness, 0.0, 1.0);
+	// A refracted ray bends by an angle, so its screen offset shrinks with distance; a constant offset lands
+	// on nearby objects at range and the fallback below then draws their silhouette into the water.
+	// The offset also fades out at the screen edges so it never samples outside the screen.
+	float distance_scale = min(1.0, refraction_full_distance / max(-vertex_view.z, 0.001));
+	vec2 to_edge = min(screen_uv, vec2(1.0) - screen_uv);
+	float edge_fade = smoothstep(0.0, 2.0 * refraction_strength, min(to_edge.x, to_edge.y));
+	vec2 ruv = screen_uv + n_view.xy * refraction_strength * clamp(thickness, 0.0, 1.0) * distance_scale * edge_fade;
 	vec3 rg_view = water_view_from_depth(ruv, texture(depth_tex, ruv).r, inv_proj);
 	if (rg_view.z > vertex_view.z) { // refracted sample lands on something in front of the water
 		ruv = screen_uv;
@@ -91,7 +100,7 @@ WaterResult water_shade(vec3 n_world, vec3 n_view, vec3 surf_world, vec3 vertex_
 	float shore = 1.0 - smoothstep(0.0, shore_foam_width, shore_depth);
 	float foam = shore * mix(0.6, 1.0, band) * shore_foam_strength;
 	foam += crest_foam * crest_foam_strength;
-	foam = clamp(foam * smoothstep(0.25, 0.75, foam_tex + foam * 0.35), 0.0, 1.0);
+	foam = clamp(foam * mix(1.0, smoothstep(0.25, 0.75, foam_tex + foam * 0.35), foam_breakup), 0.0, 1.0);
 
 	// Thin water at the very edge fades its reflection so the shore has no hard seam.
 	float edge = smoothstep(0.0, 0.12, path);

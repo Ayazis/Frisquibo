@@ -12,8 +12,7 @@ uniform float wet_band = 0.35;
 
 varying vec3 v_world;
 
-// Set by PlanarReflection. The mirror camera sits below the water, so there we drop underwater ground.
-global uniform float water_reflection_clip_height;
+#include "res://world/water/reflection_clip.gdshaderinc"
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vnoise(vec2 p) {
@@ -29,9 +28,7 @@ void vertex() {
 }
 
 void fragment() {
-	if (CAMERA_POSITION_WORLD.y < water_reflection_clip_height && v_world.y < water_reflection_clip_height) {
-		discard;
-	}
+	water_reflection_clip(v_world);
 	float h = v_world.y - sea_level;
 	float edge_jitter = (vnoise(v_world.xz * 0.6) - 0.5) * blend_width;
 	float sand = 1.0 - smoothstep(beach_top - blend_width, beach_top, h + edge_jitter);

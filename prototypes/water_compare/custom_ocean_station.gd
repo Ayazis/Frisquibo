@@ -121,10 +121,7 @@ func _add_barrel(pos: Vector3) -> void:
 	cylinder.top_radius = BARREL_RADIUS
 	cylinder.bottom_radius = BARREL_RADIUS
 	cylinder.height = BARREL_HEIGHT
-	var wood: StandardMaterial3D = StandardMaterial3D.new()
-	wood.albedo_color = Color(0.28, 0.13, 0.055)
-	wood.roughness = 0.8
-	cylinder.material = wood
+	cylinder.material = WaterProp.material(Color(0.28, 0.13, 0.055), 0.8)
 	var mesh: MeshInstance3D = MeshInstance3D.new()
 	mesh.mesh = cylinder
 	body.add_child(mesh)
