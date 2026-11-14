@@ -19,7 +19,9 @@ extends Resource
 ## Horizontal pull towards the crests. Above about 1.2 the surface starts to fold through itself.
 @export_range(0.0, 4.0) var choppiness := 0.9
 @export_range(0.0, 6.0) var height_scale := 1.0
-## Horizontal wave size: stretches the whole sea sideways (longer waves, same height, slower).
+## Horizontal wave size: multiplies the length of the dominant waves (the spectral peak), as a longer
+## fetch or an older swell would. Their height stays the same, ripples keep their real size, and longer
+## waves travel faster, as in nature. Pair with height_scale (or the steepness link) for bigger seas.
 @export_range(0.1, 8.0) var wavelength_scale := 1.0
 ## Wave lengths of the cascades, longest first. Ratios are deliberately irrational so tiles never line up.
 @export var cascade_tile_lengths := PackedFloat32Array([233.0, 61.7, 17.3, 4.9])
@@ -30,3 +32,18 @@ extends Resource
 ## Time for whitecap foam to fade to about a third.
 @export_range(0.1, 40.0, 0.1, "suffix:s") var foam_lifetime := 3.5
 @export var seed := 1
+
+const GRAVITY := 9.81
+
+
+## Angular frequency of the dominant waves (rad/s): JONSWAP peak, shifted by wavelength_scale.
+## Must match the peak in compute/ocean_spectrum.glsl.
+func peak_frequency() -> float:
+	var natural := 22.0 * pow(GRAVITY * GRAVITY / (wind_speed * fetch * 1000.0), 1.0 / 3.0)
+	return natural / sqrt(wavelength_scale)
+
+
+## Length of the dominant waves in metres (deep-water dispersion).
+func peak_wavelength() -> float:
+	var w := peak_frequency()
+	return TAU * GRAVITY / (w * w)

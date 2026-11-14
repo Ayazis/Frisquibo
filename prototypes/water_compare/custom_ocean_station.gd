@@ -6,6 +6,7 @@ const STATES: Array[OceanSpectrum] = [
 	preload("res://world/water/ocean/presets/calm_sea.tres"),
 	preload("res://world/water/ocean/presets/fresh_breeze.tres"),
 	preload("res://world/water/ocean/presets/storm.tres")]
+const RULES: OceanRuleSet = preload("res://world/water/ocean/rules/presets/coastal_rules.tres")
 const STATE_NAMES: Array[String] = ["Calm", "Fresh breeze", "Storm"]
 const BEACH_SIZE: Vector2 = Vector2(600, 600)
 const BEACH_CELLS: Vector2i = Vector2i(300, 300)
@@ -36,6 +37,7 @@ func _ready() -> void:
 	ocean = Ocean.new()
 	_live = STATES[_state].duplicate() as OceanSpectrum
 	ocean.spectrum = _live
+	ocean.rules = RULES
 	add_child(ocean)
 	ocean.set_seabed(_height, Rect2(-BEACH_SIZE / 2.0, BEACH_SIZE))
 	for i: int in range(BARREL_COUNT):

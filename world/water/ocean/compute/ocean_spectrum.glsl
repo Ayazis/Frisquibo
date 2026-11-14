@@ -28,6 +28,10 @@ layout(push_constant, std430) uniform Params {
 	float k_max;
 	uint cascade;
 	uint seed;
+	float peak_scale; // OceanSpectrum.wavelength_scale: multiplies the peak wavelength
+	float pad0;
+	float pad1;
+	float pad2;
 } p;
 
 uint pcg(uint v) {
@@ -96,12 +100,16 @@ vec2 amplitude(vec2 k, uint seed) {
 	if (kl < 1e-6 || kl < p.k_min || kl >= p.k_max) {
 		return vec2(0.0);
 	}
-	float wp = 22.0 * pow(G * G / (p.wind_speed * p.fetch_m), 1.0 / 3.0);
+	// Peak frequency; a wave length scale s moves it to w / sqrt(s) (deep water: length ~ 1 / w^2).
+	float wp = 22.0 * pow(G * G / (p.wind_speed * p.fetch_m), 1.0 / 3.0) / sqrt(p.peak_scale);
 	float w = dispersion(kl);
 	float theta = atan(k.y, k.x) - p.wind_angle;
 	theta = mod(theta + PI, 2.0 * PI) - PI;
 	float s_omega = jonswap(w, wp) * tma(w) * donelan_banner(theta, w, wp);
 	// S(omega, theta) to a wavenumber spectrum S(k): times d(omega)/dk, divided by k.
+	// JONSWAP energy grows with wp^-4, so a longer peak would also make the waves taller (by s).
+	// Divide that out: horizontal size changes only the length; height_scale owns the height.
+	s_omega /= p.peak_scale * p.peak_scale;
 	float s_k = s_omega * dispersion_derivative(kl) / kl;
 	s_k *= exp(-kl * kl * p.short_wave_cutoff * p.short_wave_cutoff);
 	float dk = 2.0 * PI / p.tile_length;

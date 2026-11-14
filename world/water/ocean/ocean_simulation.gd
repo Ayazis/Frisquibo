@@ -12,6 +12,8 @@ const MIP_LEVELS := 9
 const REPEAT_PERIOD := 600.0
 ## Cascade bands meet at this many wavelengths of the next cascade's tile.
 const BAND_SPLIT := 6.0
+## The longest cascade's tile holds at least this many dominant waves, so long swell isn't cut off.
+const PEAK_WAVES_PER_TILE := 4.0
 const GROUP_2D := 16
 const GROUP_MIP := 8
 const BYTES_PER_TEXEL := 8
@@ -65,16 +67,27 @@ func _initialize_gpu() -> void:
 	_create_resources()
 
 
-func set_spectrum(spectrum: OceanSpectrum) -> void:
+## Returns true when the tile lengths changed (height fields built for the old tiles are stale).
+func set_spectrum(spectrum: OceanSpectrum) -> bool:
 	assert(spectrum.cascade_tile_lengths.size() >= cascade_count, "Spectrum needs one tile per active cascade")
-	tile_lengths = spectrum.cascade_tile_lengths.slice(0, cascade_count)
+	var tiles := tiles_for(spectrum, cascade_count)
+	var changed := tiles != tile_lengths
+	tile_lengths = tiles
 	var snapshot: OceanSpectrum = spectrum.duplicate() as OceanSpectrum
-	RenderingServer.call_on_render_thread(_set_spectrum_gpu.bind(snapshot))
+	RenderingServer.call_on_render_thread(_set_spectrum_gpu.bind(snapshot, tiles))
+	return changed
 
 
-func _set_spectrum_gpu(spectrum: OceanSpectrum) -> void:
+## World tile length per cascade: the authored tiles, with the longest grown to fit long dominant waves.
+static func tiles_for(spectrum: OceanSpectrum, cascades: int) -> PackedFloat32Array:
+	var tiles := spectrum.cascade_tile_lengths.slice(0, cascades)
+	tiles[0] = maxf(tiles[0], PEAK_WAVES_PER_TILE * spectrum.peak_wavelength())
+	return tiles
+
+
+func _set_spectrum_gpu(spectrum: OceanSpectrum, tiles: PackedFloat32Array) -> void:
 	_spectrum = spectrum
-	_gpu_tile_lengths = spectrum.cascade_tile_lengths.slice(0, cascade_count)
+	_gpu_tile_lengths = tiles
 	_spectrum_dirty = true
 
 
@@ -93,11 +106,9 @@ func _update_gpu(time: float, delta: float) -> void:
 		_rd.compute_list_add_barrier(list)
 	var tiles := PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
 	for c in range(cascade_count):
-		tiles[c] = _physical_tile(c)
-	# Stretched waves are longer, so they travel slower than the stretch alone would show: c ~ sqrt(length).
-	var wave_time := time / sqrt(_spectrum.wavelength_scale)
+		tiles[c] = _gpu_tile_lengths[c]
 	var evolve := tiles.to_byte_array()
-	evolve.append_array(PackedFloat32Array([fmod(wave_time, REPEAT_PERIOD), _spectrum.depth, REPEAT_PERIOD, 0.0]).to_byte_array())
+	evolve.append_array(PackedFloat32Array([fmod(time, REPEAT_PERIOD), _spectrum.depth, REPEAT_PERIOD, 0.0]).to_byte_array())
 	_dispatch(list, &"evolve", _sets[&"evolve"], evolve, Vector3i(groups, groups, cascade_count))
 	_rd.compute_list_add_barrier(list)
 	for vertical: int in [0, 1]:
@@ -106,7 +117,7 @@ func _update_gpu(time: float, delta: float) -> void:
 		_rd.compute_list_add_barrier(list)
 	var decay := exp(-delta / _spectrum.foam_lifetime)
 	var unpack := PackedFloat32Array([_spectrum.height_scale, _spectrum.choppiness, _spectrum.foam_threshold,
-			_spectrum.foam_gain, decay, 0.0, _spectrum.wavelength_scale, 0.0]).to_byte_array()
+			_spectrum.foam_gain, decay, 0.0, 0.0, 0.0]).to_byte_array()
 	for c in range(cascade_count):
 		unpack.encode_float(20, float(c))
 		_dispatch(list, &"unpack", _unpack_sets[c], unpack, Vector3i(groups, groups, 1))
@@ -215,22 +226,17 @@ func _dispatch(list: int, pipeline: StringName, uniform_set: RID, push: PackedBy
 
 
 func _spectrum_push(cascade: int) -> PackedByteArray:
-	var tile := _physical_tile(cascade)
+	var tile := _gpu_tile_lengths[cascade]
 	var k_min := 0.0 if cascade == 0 else TAU / tile * BAND_SPLIT
 	var k_max := PI * MAP_SIZE / tile
 	if cascade < cascade_count - 1:
-		k_max = TAU / _physical_tile(cascade + 1) * BAND_SPLIT
+		k_max = TAU / _gpu_tile_lengths[cascade + 1] * BAND_SPLIT
 	var bytes := PackedFloat32Array([tile, _spectrum.wind_speed, deg_to_rad(_spectrum.wind_direction),
 			_spectrum.fetch * 1000.0, _spectrum.depth, _spectrum.swell, _spectrum.spread,
 			_spectrum.short_wave_cutoff, k_min, k_max]).to_byte_array()
 	bytes.append_array(PackedInt32Array([cascade, _spectrum.seed]).to_byte_array())
+	bytes.append_array(PackedFloat32Array([_spectrum.wavelength_scale, 0.0, 0.0, 0.0]).to_byte_array())
 	return bytes
-
-
-## The tile the spectrum is computed for. With a horizontal stretch w, a world tile of length L shows
-## the waves of a physical tile L / w, stretched out w times (same heights, longer waves).
-func _physical_tile(cascade: int) -> float:
-	return _gpu_tile_lengths[cascade] / _spectrum.wavelength_scale
 
 
 func _keep(rid: RID) -> RID:
