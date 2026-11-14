@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://cgg53kw84r0q4"
+path="res://.godot/imported/spectrum_modulate.glsl-2acb7333b0751993705c9e12c61b78bb.res"
+
+[deps]
+
+source_file="res://prototypes/water_compare/vendor/godot_ocean_waves/shaders/compute/spectrum_modulate.glsl"
+dest_files=["res://.godot/imported/spectrum_modulate.glsl-2acb7333b0751993705c9e12c61b78bb.res"]
+
+[params]
+

@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="VisualShotList" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot_list.gd" id="1"]
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot.gd" id="2"]
+
+[sub_resource type="Resource" id="overview"]
+script = ExtResource("2")
+name = "overview"
+camera_position = Vector3(14, 14, 18)
+look_at_target = Vector3(0, 0, 0)
+state = {"station": 1}
+
+[sub_resource type="Resource" id="low_upstream"]
+script = ExtResource("2")
+name = "low_upstream"
+camera_position = Vector3(-18, 2.5, 6)
+look_at_target = Vector3(0, 0, 0)
+state = {"station": 1}
+
+[sub_resource type="Resource" id="top_down"]
+script = ExtResource("2")
+name = "top_down"
+camera_position = Vector3(0.1, 22, 0)
+look_at_target = Vector3(0, 0, 0)
+state = {"station": 1}
+
+[sub_resource type="Resource" id="golden_bank"]
+script = ExtResource("2")
+name = "golden_bank"
+camera_position = Vector3(6, 3, 12)
+look_at_target = Vector3(-6, 0, 0)
+state = {"station": 1, "golden_hour": true}
+
+[resource]
+script = ExtResource("1")
+scene_path = "res://prototypes/water_compare/water_compare.tscn"
+settle_frames = 120
+shots = Array[ExtResource("2")]([SubResource("overview"), SubResource("low_upstream"), SubResource("top_down"), SubResource("golden_bank")])
