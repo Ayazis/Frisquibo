@@ -5,6 +5,8 @@ const STATION_COUNT := 5
 const STATION_LABELS: Array[String] = ["1  Lake  (custom)", "2  River  (custom)", "3  FFT ocean  (library)", "4  FFT ocean  (custom)", "5  Grass playground"]
 const HUD_Y := 70.0
 const BUTTON_BAR_Y := 130.0
+## The station controls start this far below the top of the button bar, clear of the buttons.
+const CONTROLS_BELOW_BUTTONS := 44.0
 const BANNER_Y := 14.0
 const BANNER_FONT_SIZE := 34
 const CUSTOM_COLOR := Color(0.55, 0.95, 0.6)
@@ -157,7 +159,7 @@ func _show_station(index: int) -> void:
 		_controls.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 		_controls.offset_left = -CONTROLS_MARGIN
 		_controls.offset_right = -CONTROLS_MARGIN
-		_controls.offset_top = HUD_Y
+		_controls.offset_top = BUTTON_BAR_Y + CONTROLS_BELOW_BUTTONS
 		_hud_layer.add_child(_controls)
 	for i in range(_station_buttons.size()):
 		_station_buttons[i].set_pressed_no_signal(i == index)

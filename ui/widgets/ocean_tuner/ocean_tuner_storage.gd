@@ -1,15 +1,23 @@
 class_name OceanTunerStorage
 extends VBoxContainer
-## Save and load buttons for the tuned sea state and look. They are written as text resources, so a
-## sea worth keeping can be copied into the project and committed.
+## Save / load and A/B for the tuned ocean (sea state, look, sea level and shore values).
+## Save writes a text resource, so a sea worth keeping can be copied into the project and committed.
+## Snapshot keeps the current values in memory; A/B swaps them with the live ones, back and forth.
 
-signal loaded(sea: OceanSpectrum, look: OceanLook)
+## Emitted after the ocean got loaded or swapped values, so the controls can follow.
+signal applied
 
-const SEA_PATH := "user://ocean_sea.tres"
-const LOOK_PATH := "user://ocean_look.tres"
+const TUNING_PATH := "user://ocean_tuning.tres"
+const SNAPSHOT_TEXT := "Snapshot"
+const SWAP_TEXT := "A/B"
+const SWAP_NOTE := "Swap the live values with the snapshot. Press again to swap back."
 
 var _ocean: Ocean
 var _status := Label.new()
+var _swap: Button
+## The other side of the A/B: the snapshot, or the live values while the snapshot is shown.
+var _other: OceanTuning
+var _showing_snapshot := false
 
 
 func _init(ocean: Ocean) -> void:
@@ -17,6 +25,11 @@ func _init(ocean: Ocean) -> void:
 	var buttons := HBoxContainer.new()
 	buttons.add_child(_button("Save", _save))
 	buttons.add_child(_button("Load", _load))
+	buttons.add_child(_button(SNAPSHOT_TEXT, _take_snapshot))
+	_swap = _button(SWAP_TEXT, _swap_with_snapshot)
+	_swap.tooltip_text = SWAP_NOTE
+	_swap.disabled = true
+	buttons.add_child(_swap)
 	add_child(buttons)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.modulate = Color(1, 1, 1, 0.7)
@@ -24,30 +37,40 @@ func _init(ocean: Ocean) -> void:
 
 
 func _save() -> void:
-	var error := ResourceSaver.save(_ocean.spectrum, SEA_PATH)
+	var error := ResourceSaver.save(OceanTuning.capture(_ocean), TUNING_PATH)
 	if error == OK:
-		error = ResourceSaver.save(_ocean.look, LOOK_PATH)
-	if error == OK:
-		_status.text = "Saved to " + ProjectSettings.globalize_path(SEA_PATH).get_base_dir()
+		_status.text = "Saved to " + ProjectSettings.globalize_path(TUNING_PATH)
 	else:
 		_status.text = "Save failed (%s)" % error_string(error)
 
 
 func _load() -> void:
-	var sea := _read(SEA_PATH) as OceanSpectrum
-	var look := _read(LOOK_PATH) as OceanLook
-	if sea == null or look == null:
+	if not ResourceLoader.exists(TUNING_PATH):
 		_status.text = "Nothing saved yet"
 		return
+	var tuning := ResourceLoader.load(TUNING_PATH, "", ResourceLoader.CACHE_MODE_IGNORE) as OceanTuning
+	if tuning == null:
+		_status.text = "Could not read " + ProjectSettings.globalize_path(TUNING_PATH)
+		return
+	tuning.apply_to(_ocean)
 	_status.text = "Loaded"
-	loaded.emit(sea, look)
+	applied.emit()
 
 
-## A private copy of a saved resource, or null when there is none.
-static func _read(path: String) -> Resource:
-	if not ResourceLoader.exists(path):
-		return null
-	return ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
+func _take_snapshot() -> void:
+	_other = OceanTuning.capture(_ocean)
+	_showing_snapshot = false
+	_swap.disabled = false
+	_status.text = "Snapshot taken. Change things, then press A/B to compare."
+
+
+func _swap_with_snapshot() -> void:
+	var live := OceanTuning.capture(_ocean)
+	_other.apply_to(_ocean)
+	_other = live
+	_showing_snapshot = not _showing_snapshot
+	_status.text = "Showing B: the snapshot" if _showing_snapshot else "Showing A: your edits"
+	applied.emit()
 
 
 static func _button(text: String, on_press: Callable) -> Button:

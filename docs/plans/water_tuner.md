@@ -1,31 +1,31 @@
 # Plan — water tuner: tweak water behaviour with UI controls
 
-Started: 2026-11-14. Last updated: 2026-11-14.
+Started: 2026-11-14. Last updated: 2026-11-15.
 Branch: `ccr-2a9bff4d-nh0kdm` (contains `claude/fft-ocean-wave-behavior-dvqs3n`). No PR yet.
-Status: steps 1 to 3 built and pushed; steps 4 and 5 and the open items below remain.
+Status: steps 1 to 3 and the A/B part of step 4 built and pushed; the debug views, step 5 and the open
+items below remain.
 
 Goal: tweak every aspect of the water live through UI controls, with everything steering towards
 water that is as realistic as possible. The tuner is a developer tool, not a player settings menu.
 
-**Continuing in a new session: read "Waiting on the user" first, then pick from "Next up".**
+**Continuing in a new session: read "Desktop check" first, then pick from "Next up".**
 
-## Waiting on the user
+## Desktop check (2026-11-15, RTX 4070)
 
-Nobody has looked at any of this on a desktop GPU yet. The user said they would check later. Ask for
-their findings before building further on the look; these are the things most likely to need a change:
+All tests, the GPU wave-height test (measured within 0.01 m of expected) and the smoke test pass.
+The scene was rendered and the panel was screenshotted and driven from a script:
 
-- Every preset is now about 0.7 of its former wave height, with sparser whitecaps (decision 0006).
-  It is the height the wind really gives. `height_scale` 1.41 restores the old look.
-- `OceanAutoValues` (foam amount and choppiness from wind) was fitted to the old, taller presets and
-  probably wants retuning against the new heights.
-- Switching swell on makes the long waves jump once (the longest tile grows from 233 m to about
-  900 m for a 12 s swell).
-- The panel layout itself (`ui/widgets/ocean_tuner/`) has never been seen: widths, the foldable
-  sections, the Auto and Reset buttons, the colour pickers.
-- The `OceanLook` defaults equal the shader's, so the water should look unchanged until a look
-  control is moved. Worth confirming.
+- The panel is legible and works. Fixed: it covered the end of the button bar, and sliders on rows
+  with an Auto box were shorter than the rest.
+- The lower wave heights look plausible; the storm has less foam than before (expected, decision 0006).
+- The `tests/visual/custom_ocean.tres` shots render the beach and shallows nearly white, on the base
+  branch too, so that comes from the visual-check scene's lighting, not this work. In the normal
+  scene the sand and water look right.
 
-The user chose **no visual checks** (`tools/visual_check/`) for this work. Ask again before doing any.
+Still a matter of taste for the user: `OceanAutoValues` against the new heights, and the jump when
+swell is switched on.
+
+On 2026-11-15 the user allowed checks to be run, including renders, so continue without asking again.
 
 ## Done
 
@@ -39,28 +39,23 @@ The user chose **no visual checks** (`tools/visual_check/`) for this work. Ask a
 | 3 | Separate swell: height, period, direction, spread | `ocean_spectrum.gd`, `compute/ocean_spectrum.glsl`, `presets/breeze_over_swell.tres` |
 | 3 | Wave height normalisation fixed; fixed energy per wave with random phase | `compute/ocean_spectrum.glsl` |
 | 3 | Auto boxes for foam amount and choppiness | `ocean_auto_values.gd`, `ocean_tuner_row.gd` |
-| 4 (part) | Save and load of sea state and look to `user://` | `ocean_tuner_storage.gd` |
+| 4 (part) | `OceanTuning`: sea state, look and the ocean's own values (level, shore) as one resource | `ocean_tuning.gd`, `tests/headless/ocean_tuning_test.gd` |
+| 4 (part) | Save / load (one `user://ocean_tuning.tres`), Snapshot and A/B swap | `ocean_tuner_storage.gd` |
 
 Decisions: `docs/decisions/0005-ocean-parameter-catalogue-and-look.md`,
 `0006-swell-and-wave-height.md`. The panel is shown in `prototypes/water_compare/custom_ocean_station.gd`.
 
 ## Next up, in order
 
-1. **Step 4: A/B snapshot.** A button that stores the current sea state, look and ocean values, and
-   a toggle that flips between the snapshot and the live values. Fits in `ocean_tuner_storage.gd`
-   or a sibling widget.
-2. **Save the ocean-level values too.** Sea level and the shore values (`level`, `breaker_ratio`,
-   `wave_setup`, `min_shore_wave`) live on the `Ocean` node, so save and load skip them. One
-   `OceanTuning` resource holding spectrum, look and those values would also serve the A/B snapshot.
-3. **Step 4: debug views.** Per-cascade tint, foam and fold (jacobian) map, water depth, rule
+1. **Step 4: debug views.** Per-cascade tint, foam and fold (jacobian) map, water depth, rule
    weights: a `debug_view` integer uniform in `ocean.gdshader` with a dropdown in the panel. Pause
    and time scale: `Ocean._time` advances in `_process`; add a `time_scale` export (it then appears
    in the panel by itself).
-4. **Step 5: shore and quality controls.** The beach profile values are constants in
+2. **Step 5: shore and quality controls.** The beach profile values are constants in
    `custom_ocean_station.gd` feeding `BeachProfile`; changing one means rebuilding the beach mesh and
    calling `Ocean.set_seabed()` again. Quality values are in `data/quality/ocean_*.tres`
    (`OceanQuality`); changing cascade count or mesh density means re-creating the simulation and mesh.
-5. **Make the overlay usable outside the prototype.** The plan's "toggled by a key, usable in any
+3. **Make the overlay usable outside the prototype.** The plan's "toggled by a key, usable in any
    scene with an `Ocean`" is not done: the panel only appears as a tab in the water comparison scene.
 
 ## Open items that need eyes on a desktop GPU
@@ -88,7 +83,7 @@ Then, from the project root:
 
 ```
 godot --headless --import
-for t in ocean_parameters ocean_rules ocean_height_field beach_profile river_flow_field; do
+for t in ocean_tuning ocean_parameters ocean_rules ocean_height_field beach_profile river_flow_field; do
   timeout 120 godot --headless --path . --script res://tests/headless/${t}_test.gd; done
 timeout 200 godot --headless --path . --script res://tests/smoke/ocean_smoke.gd
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json

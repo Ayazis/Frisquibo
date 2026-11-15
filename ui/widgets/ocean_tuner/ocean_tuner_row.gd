@@ -8,6 +8,8 @@ signal auto_toggled(parameter: StringName, on: bool)
 
 const LABEL_WIDTH := 150.0
 const VALUE_WIDTH := 76.0
+## Room for the Auto box; rows without one keep it empty so all sliders line up.
+const AUTO_WIDTH := 64.0
 const RESET_TEXT := "Reset"
 const AUTO_TEXT := "Auto"
 const AUTO_NOTE := "Auto: follows from the wind. Untick to set it by hand."
@@ -49,7 +51,12 @@ func _init(described: OceanParameter, can_be_auto: bool = false) -> void:
 		_auto.text = AUTO_TEXT
 		_auto.focus_mode = Control.FOCUS_NONE
 		_auto.toggled.connect(_on_auto_toggled)
+		_auto.custom_minimum_size.x = AUTO_WIDTH
 		add_child(_auto)
+	else:
+		var spacer := Control.new()
+		spacer.custom_minimum_size.x = AUTO_WIDTH
+		add_child(spacer)
 	_reset.text = RESET_TEXT
 	_reset.flat = true
 	_reset.focus_mode = Control.FOCUS_NONE

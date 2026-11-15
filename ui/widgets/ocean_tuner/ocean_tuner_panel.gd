@@ -48,7 +48,7 @@ func _init(ocean: Ocean) -> void:
 	_links.links_changed.connect(_sync)
 	_add_section(LINKS_TITLE).add_child(_links)
 	var storage := OceanTunerStorage.new(ocean)
-	storage.loaded.connect(_on_loaded)
+	storage.applied.connect(_on_applied)
 	_add_section(STORAGE_TITLE).add_child(storage)
 	mark_defaults()
 
@@ -110,10 +110,8 @@ func _on_color_changed(color_name: StringName, color: Color) -> void:
 	_ocean.set_look(_ocean.look)
 
 
-func _on_loaded(sea: OceanSpectrum, look: OceanLook) -> void:
-	_ocean.set_spectrum(sea)
-	_ocean.set_look(look)
-	_apply_derived(&"")
+## Loaded or A/B-swapped values are shown as they are; links and Auto apply again on the next edit.
+func _on_applied() -> void:
 	_sync()
 
 
