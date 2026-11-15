@@ -154,12 +154,13 @@ func _show_station(index: int) -> void:
 		_controls.queue_free()
 	_controls = _station.make_controls()
 	if _controls:
-		# Anchored to the top-right corner and growing leftwards to its own minimum width.
-		_controls.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		# Down the right edge to the bottom of the screen, growing leftwards to its own minimum width.
+		_controls.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
 		_controls.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 		_controls.offset_left = -CONTROLS_MARGIN
 		_controls.offset_right = -CONTROLS_MARGIN
 		_controls.offset_top = BUTTON_BAR_Y + CONTROLS_BELOW_BUTTONS
+		_controls.offset_bottom = -CONTROLS_MARGIN
 		_hud_layer.add_child(_controls)
 	for i in range(_station_buttons.size()):
 		_station_buttons[i].set_pressed_no_signal(i == index)
@@ -262,7 +263,8 @@ func _move_target(delta: float) -> void:
 
 
 ## Called by tools/visual_check before each shot. Keys: station (0-3), golden_hour (bool),
-## sea_state (index into CustomOceanStation.STATES).
+## sea_state (index into CustomOceanStation.STATES), ocean ({parameter name: value} set on the custom
+## ocean after the sea state, e.g. {"wind_speed": 80.0}).
 func apply_visual_check_state(state: Dictionary) -> void:
 	_hud_layer.visible = false
 	var station: int = state.get("station", 0)
@@ -273,6 +275,11 @@ func apply_visual_check_state(state: Dictionary) -> void:
 	if custom != null:
 		var sea_state: int = state.get("sea_state", 1)
 		custom.set_sea_state(sea_state)
+		var values: Dictionary = state.get("ocean", {})
+		for parameter: String in values:
+			var value: float = values[parameter]
+			if not custom.ocean.set_parameter(StringName(parameter), value):
+				push_error("Visual check: the ocean has no parameter '%s'" % parameter)
 
 
 func _exit_tree() -> void:

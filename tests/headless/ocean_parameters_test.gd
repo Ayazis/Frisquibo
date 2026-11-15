@@ -1,6 +1,8 @@
 extends SceneTree
 ## No GUT dependency: godot --headless --path . --script res://tests/headless/ocean_parameters_test.gd
 const TOLERANCE: float = 0.001
+## How close Auto must come to what the presets were tuned to by eye.
+const AUTO_PRESET_TOLERANCE: float = 0.08
 var _failures: int = 0
 
 
@@ -131,6 +133,14 @@ func _initialize() -> void:
 		for state: OceanSpectrum in [calm, breeze]:
 			var derived := OceanAutoValues.value(auto, state)
 			_near(described.clamp_value(derived), derived, "Auto '%s' stays inside its range" % auto)
+
+	for preset_name: String in ["calm_sea", "fresh_breeze", "storm"]:
+		var preset := load("res://world/water/ocean/presets/%s.tres" % preset_name) as OceanSpectrum
+		for auto: StringName in OceanAutoValues.PARAMETERS:
+			var authored: float = preset.get(auto)
+			_check(absf(OceanAutoValues.value(auto, preset) - authored) < AUTO_PRESET_TOLERANCE,
+					"Auto '%s' matches the %s preset (%.2f vs %.2f)" % [auto, preset_name,
+					OceanAutoValues.value(auto, preset), authored])
 
 	print("ocean_parameters_test: %s" % ("PASS" if _failures == 0 else "%d FAILED" % _failures))
 	quit(1 if _failures > 0 else 0)

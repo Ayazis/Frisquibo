@@ -46,8 +46,22 @@ uniform float foam_cascade_falloff = 0.6;                  // smaller cascades m
 uniform float shore_foam_width = 0.9;
 uniform float surf_depth = 1.6;
 uniform float foam_far_distance = 250.0;
+uniform float foam_streaks = 0.35;                         // cover of wind-blown streaks in a full gale
+uniform float streak_length = 24.0;                        // streaks are this many times longer than wide
+// Wind over the sea (direction * m/s), set by Ocean from the sea state.
+uniform vec2 wind = vec2(8.16, 3.8);
 uniform sampler2D foam_texture : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
 
+// Foam starts to blow into streaks along the wind at Beaufort 7 and covers the sea with them at 10.
+const float STREAK_WIND_START = 13.0;
+const float STREAK_WIND_FULL = 28.0;
+// Streaks are thinner than whitecaps: a softer white, and a coarser pattern than the bubbles.
+const float STREAK_OPACITY = 0.55;
+const float STREAK_PATTERN_SCALE = 0.35;
+// Streaks gather in bands and patches: a much larger stretched pattern decides where they lie.
+const float STREAK_PATCH_SCALE = 0.06;
+const vec2 STREAK_PATCH_RANGE = vec2(0.45, 0.75);
+const float STREAK_FAR_COVER = 0.35;
 group_uniforms caustics;
 uniform float caustic_strength = 2.4;
 uniform float caustic_scale = 0.3;
@@ -303,7 +317,17 @@ void fragment() {
 	float shore_line = 1.0 - smoothstep(0.0, shore_foam_width, contact);
 	float cover = clamp(max(whitecap, max(surf * 0.85, shore_line * 0.9)) + v_rule_foam, 0.0, 1.0);
 	float foam_near = smoothstep(1.0 - cover, 1.0 - cover + foam_softness, tex);
-	float foam = mix(foam_near, cover * 0.6, smoothstep(foam_far_distance * 0.3, foam_far_distance, dist));
+	// Wind-blown streaks: the foam pattern stretched along the wind, growing with the wind.
+	float wind_speed = length(wind);
+	vec2 wind_dir = wind_speed > 0.0 ? wind / wind_speed : vec2(1.0, 0.0);
+	vec2 along_wind = vec2(dot(v_rest, wind_dir) / streak_length, dot(v_rest, vec2(-wind_dir.y, wind_dir.x)));
+	float streak_cover = foam_streaks * smoothstep(STREAK_WIND_START, STREAK_WIND_FULL, wind_speed);
+	float streak_tex = texture(foam_texture, along_wind * foam_scale * STREAK_PATTERN_SCALE).r;
+	float streak_patch = texture(foam_texture, along_wind * foam_scale * STREAK_PATCH_SCALE + vec2(0.61, 0.23)).r;
+	float streak = smoothstep(1.0 - streak_cover, 1.0 - streak_cover + foam_softness, streak_tex) * STREAK_OPACITY
+			* smoothstep(STREAK_PATCH_RANGE.x, STREAK_PATCH_RANGE.y, streak_patch);
+	foam_near = max(foam_near, streak);
+	float foam = mix(foam_near, max(cover * 0.6, streak_cover * STREAK_FAR_COVER), smoothstep(foam_far_distance * 0.3, foam_far_distance, dist));
 	// Fade foam and reflection where the water is only millimetres thick, so the shore has no seam.
 	float edge = smoothstep(0.0, 0.08, path);
 	foam *= smoothstep(0.0, 0.03, path);

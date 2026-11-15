@@ -19,5 +19,9 @@ VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json xvfb-run -a \
 - `ocean_smoke.gd`: the water comparison scene with the custom ocean, preset changes and re-creation.
 - `ocean_wave_height.gd`: FFT path only. Checks that the simulated significant wave height matches
   the sea state: the wind sea's spectrum, and swells of a given height. Skips without a RenderingDevice.
+- `ocean_extremes.gd`: FFT path only. Every tunable at both ends of its range (open ranges pushed 4x
+  past the slider) plus nasty combinations; fails on a non-finite surface, a wave height above 40 m,
+  or a blacked-out picture. About 5 minutes. `ONLY=<name part>` runs a subset, `SHOTS=<dir>` saves
+  the frames of failing cases.
 
 Check the log as well as the exit code: Godot can exit successfully after reporting script errors.

@@ -1,6 +1,6 @@
 # Plan — water tuner: tweak water behaviour with UI controls
 
-Started: 2026-11-14. Last updated: 2026-11-15.
+Started: 2026-11-14. Last updated: 2026-11-15 (second session).
 Branch: `ccr-2a9bff4d-nh0kdm` (contains `claude/fft-ocean-wave-behavior-dvqs3n`). No PR yet.
 Status: steps 1 to 3 and the A/B part of step 4 built and pushed; the debug views, step 5 and the open
 items below remain.
@@ -21,6 +21,37 @@ The scene was rendered and the panel was screenshotted and driven from a script:
 - The `tests/visual/custom_ocean.tres` shots render the beach and shallows nearly white, on the base
   branch too, so that comes from the visual-check scene's lighting, not this work. In the normal
   scene the sand and water look right.
+
+### Extremes and the storm (2026-11-15, after user feedback)
+
+The user found the sliders work, but asked to push the extremes, said the storm didn't look like a
+storm, and wanted the panel full height. Done:
+
+- `tests/smoke/ocean_extremes.gd` (GPU): 94 cases, all pass. `tests/visual/ocean_extremes.tres`:
+  18 shots, including boats for scale. Visual-check shots can now set any ocean value
+  (`state.ocean`).
+- Black frames in the first extreme renders were the camera **under water** (an 11 m hurricane sea,
+  shore set-up above the camera), not NaN. Seen from below, the surface renders pitch black: there
+  is no underwater look yet.
+- Storm preset: 24 m/s, 600 km fetch, choppiness 1.4, foam threshold 0.85, 9 s foam. New look values
+  `foam_streaks` and `streak_length`: foam blown into long lines along the wind from Beaufort 7.
+  `OceanAutoValues` refitted to the square root of the wind; a test keeps it near the presets.
+- `prototypes/water_compare/scale_boat.gd`: an 8 m boat with a mast, one off the beach and one in deep
+  water at (-40, -1450).
+- The panel now runs to the bottom of the screen.
+
+Still odd at the extremes, left as they are:
+
+- **Foam threshold is very steep** around 0.8-1.0: at 24 m/s, 0.85 gives whitecaps, 0.9 turns the
+  sea mostly white. A control that maps to foam coverage would be easier to use.
+- **Shortest horizontal size (0.1)** and **6x height with 4x choppiness** turn into a field of white
+  spikes. Both are far steeper than real waves can be; the panel warns about it. Option: cap
+  steepness by lowering height when the horizontal size shrinks.
+- **Longest horizontal size (8x)** loses about a third of the wave height (1.72 -> 1.14 m): the
+  longest waves probably no longer fit in the largest cascade.
+- **Storm at the beach**: the whole surf zone and the low beach go white (set-up pushes foamy water
+  up the flat beach). Possibly right for a storm, but worth a look.
+- The sky stays sunny blue; a storm also needs an overcast sky, which the comparison scene owns.
 
 Still a matter of taste for the user: `OceanAutoValues` against the new heights, and the jump when
 swell is switched on.

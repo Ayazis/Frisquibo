@@ -73,6 +73,8 @@ const DESCRIPTIONS: Dictionary[StringName, String] = {
 	&"shore_foam_width": "Width of the foam line where water meets land.",
 	&"surf_depth": "Breaking-wave foam thins out in water deeper than this.",
 	&"foam_far_distance": "Beyond this distance foam loses its fine pattern.",
+	&"foam_streaks": "Foam blown into lines along the wind in a gale. Starts at Beaufort 7, full at 10.",
+	&"streak_length": "How many times longer than wide the wind-blown foam streaks are.",
 	&"caustic_strength": "Brightness of the light patterns on the seabed.",
 	&"caustic_scale": "Size of the light patterns on the seabed.",
 	&"caustic_fade": "How fast the light patterns fade with depth.",

@@ -359,6 +359,8 @@ func _apply_state(spectrum_changed: bool) -> void:
 	if _height_field.damping_at.is_null():
 		_height_field.damping_at = _damping_at
 	material.set_shader_parameter("sea_level", sea_level)
+	var wind_angle := deg_to_rad(_effective.wind_direction)
+	material.set_shader_parameter("wind", Vector2(cos(wind_angle), sin(wind_angle)) * _effective.wind_speed)
 	material.set_shader_parameter("breaker_ratio", _value(&"breaker_ratio"))
 	material.set_shader_parameter("min_shore_wave", _value(&"min_shore_wave"))
 	material.set_shader_parameter("wave_setup", _value(&"wave_setup"))

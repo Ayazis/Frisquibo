@@ -39,6 +39,9 @@ extends Resource
 @export_range(0.0, 5.0, 0.05, "or_greater", "suffix:m") var shore_foam_width := 0.9
 @export_range(0.0, 10.0, 0.05, "or_greater", "suffix:m") var surf_depth := 1.6
 @export_range(20.0, 2000.0, 10.0, "or_greater", "suffix:m") var foam_far_distance := 250.0
+## Cover of wind-blown foam streaks in a full gale; they start at Beaufort 7 and grow with the wind.
+@export_range(0.0, 1.0, 0.01) var foam_streaks := 0.35
+@export_range(1.0, 60.0, 0.5) var streak_length := 24.0
 
 @export_group("Caustics")
 @export_range(0.0, 10.0, 0.05, "or_greater") var caustic_strength := 2.4

@@ -19,7 +19,8 @@ const BEACH_CELLS: Vector2i = Vector2i(320, 600)
 const SHORE_ROW_FRACTION := 0.75
 const SHORE_ROW_LINEAR := 0.15
 const SEABED_RESOLUTION := 1024
-const CONTROLS_VIEW_SIZE := Vector2(560, 640)
+## Width of the controls; they run down to the bottom of the screen.
+const CONTROLS_VIEW_SIZE := Vector2(560, 0)
 const DEAN_A := 0.1                 # fine sand: a gentle, wide surf zone
 const BAR_DISTANCE := 70.0
 const BAR_HEIGHT := 0.8
@@ -34,6 +35,10 @@ const BARREL_SPACING: float = 2.0
 const BARREL_RADIUS: float = 0.45
 const BARREL_HEIGHT: float = 1.1
 const BARREL_MASS: float = 50.0
+## Boats for scale: one in the default view off the beach, one out in deep water past the shelf break.
+const BOAT_POSITIONS: Array[Vector3] = [Vector3(-14, 0.5, -70), Vector3(-40, 0.5, -1450)]
+## Bow pointing into the waves, roughly against the presets' wind.
+const BOAT_HEADING := 1.2
 const SHORELINE_Z := 6.0
 const SHORE_WAVINESS := 0.045
 const SHORE_WANDER := 3.0
@@ -70,6 +75,11 @@ func _ready() -> void:
 	ocean.set_seabed(_height, Rect2(BEACH_CENTER - BEACH_SIZE / 2.0, BEACH_SIZE), SEABED_RESOLUTION)
 	for i: int in range(BARREL_COUNT):
 		_add_barrel(Vector3((i - (BARREL_COUNT - 1) / 2.0) * BARREL_SPACING, 0.6, -5.0))
+	for boat_position: Vector3 in BOAT_POSITIONS:
+		var boat := ScaleBoat.new(ocean.height_at)
+		boat.position = boat_position
+		boat.rotation.y = BOAT_HEADING
+		add_child(boat)
 	_update_notes()
 
 func cycle_sea_state() -> void:
