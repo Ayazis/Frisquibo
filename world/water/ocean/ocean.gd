@@ -40,6 +40,8 @@ const UNDERWATER_REACH_MARGIN := 0.5
 ## Colour, clarity, foam and caustics. Null: the shader defaults.
 @export var look: OceanLook
 @export var planar_reflection := true
+## Waves, wakes and foam from objects in the water, near the camera (WaterRipples).
+@export var interaction_ripples := true
 @export_group("Depth and shore")
 @export_range(-20.0, 20.0, 0.05, "or_less", "or_greater", "suffix:m") var level := 0.0
 ## Share of the open-sea wave that still reaches the waterline, so the shore keeps a lapping wave.
@@ -87,6 +89,7 @@ func _ready() -> void:
 		_fallback = Sea.new()
 		_fallback.level = level
 		_fallback.planar_reflection = planar_reflection
+		_fallback.interaction_ripples = interaction_ripples
 		add_child(_fallback)
 		_update_rules(true)
 		return
@@ -112,6 +115,8 @@ func _ready() -> void:
 	_surface.layers = PlanarReflection.water_layer_mask()
 	_surface.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_surface)
+	if interaction_ripples and WaterRipples.find(get_tree()) == null:
+		add_child(WaterRipples.new())
 	if planar_reflection:
 		_reflection = PlanarReflection.new()
 		_reflection.plane_height = level

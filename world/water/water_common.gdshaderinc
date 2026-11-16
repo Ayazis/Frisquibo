@@ -9,6 +9,7 @@
 
 #include "res://world/water/water_optics.gdshaderinc"
 #include "res://world/water/water_reflection.gdshaderinc"
+#include "res://world/water/ripples/water_ripples.gdshaderinc"
 
 uniform vec3 absorption = vec3(0.45, 0.075, 0.05);      // per metre, per channel: red dies first
 uniform vec3 scatter_color : source_color = vec3(0.02, 0.16, 0.18);

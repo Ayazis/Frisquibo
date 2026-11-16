@@ -18,6 +18,8 @@ const DEFAULT_TIME_ROLLOVER := 3600.0
 @export var level := 0.0
 @export var planar_reflection := true
 @export var underwater_view := true
+## Waves, wakes and foam from objects in the water, near the camera (WaterRipples).
+@export var interaction_ripples := true
 
 var material: ShaderMaterial
 var _underwater: UnderwaterView
@@ -44,6 +46,8 @@ func _ready() -> void:
 		var reflection := PlanarReflection.new()
 		reflection.plane_height = level
 		add_child(reflection)
+	if interaction_ripples and WaterRipples.find(get_tree()) == null:
+		add_child(WaterRipples.new())
 	if underwater_view:
 		_underwater = UnderwaterView.new()
 		add_child(_underwater)

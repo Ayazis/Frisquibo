@@ -62,7 +62,7 @@ float streak(vec2 p, vec2 dir) {
 void vertex() {
 	vec4 f = flow_sample(VERTEX.xz);
 	float ripple = sin(VERTEX.x * 2.1 + VERTEX.z * 1.3 - TIME * 4.0) * sin(VERTEX.z * 2.7 - VERTEX.x * 0.9 + TIME * 3.1);
-	float height = f.a + ripple * chop_amplitude * f.b;
+	float height = f.a + ripple * chop_amplitude * f.b + water_ripples(VERTEX.xz).z;
 	VERTEX.y += height;
 	v_world = VERTEX;
 	v_crest = max(height, 0.0);
@@ -94,7 +94,9 @@ void fragment() {
 	float e = height_normal_step;
 	float dhdx = (flow_sample(p + vec2(e, 0.0)).a - flow_sample(p - vec2(e, 0.0)).a) / (2.0 * e);
 	float dhdz = (flow_sample(p + vec2(0.0, e)).a - flow_sample(p - vec2(0.0, e)).a) / (2.0 * e);
-	vec3 n_world = normalize(vec3(-dhdx + detail.x, 1.0, -dhdz + detail.y));
+	// Rings, wakes and splashes from objects in the water (WaterRipples).
+	vec4 disturbance = water_ripples(p);
+	vec3 n_world = normalize(vec3(-dhdx + detail.x - disturbance.x, 1.0, -dhdz + detail.y - disturbance.y));
 	vec3 n_view = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
 	bool from_below = !FRONT_FACING;
 
@@ -107,7 +109,7 @@ void fragment() {
 	// Foam rides the current and gathers where the field is turbulent.
 	float foam_tex = mix(streak(p0, dir), streak(p1, dir), w);
 	float coverage = clamp(pow(turbulence, 1.3) * foam_amount, 0.0, 1.0);
-	float foam = smoothstep(1.0 - coverage, 1.0 - coverage + foam_softness, foam_tex);
+	float foam = max(smoothstep(1.0 - coverage, 1.0 - coverage + foam_softness, foam_tex), disturbance.w);
 
 	WaterSurface surface = WaterSurface(n_world, n_view, v_world, VERTEX, variance, foam, vec2(0.0), from_below);
 	WaterResult r = water_shade(surface, SCREEN_UV, FRAGCOORD.xy, vec2(PROJECTION_MATRIX[0][0], PROJECTION_MATRIX[1][1]),

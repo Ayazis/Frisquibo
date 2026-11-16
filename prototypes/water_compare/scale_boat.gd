@@ -71,6 +71,12 @@ func _init(water_height: Callable) -> void:
 		probes.append(Vector3(x, PROBE_HEIGHT, PROBE_SIDE))
 	buoyancy.probes = probes
 	add_child(buoyancy)
+	# Rings as it rolls and a wake when it drifts (WaterRipples).
+	var wake := RippleEmitter.new()
+	wake.body = self
+	wake.water_height = water_height
+	wake.radius = BEAM * 0.5
+	add_child(wake)
 
 
 ## The hull lofted through cross-sections along x: U-shaped, pointed at both ends, open on top,

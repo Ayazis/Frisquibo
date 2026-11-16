@@ -66,6 +66,7 @@ void vertex() {
 		jxz -= q * wa * d.x * d.y * sf;
 	}
 	VERTEX += disp;
+	VERTEX.y += water_ripples(VERTEX.xz).z;
 	v_world = VERTEX;
 	v_wave_normal = normalize(n);
 	NORMAL = v_wave_normal;
@@ -83,6 +84,9 @@ void fragment() {
 	float dist = length(CAMERA_POSITION_WORLD - v_world);
 	float fade = mix(1.0, DETAIL_FAR_SHARE, smoothstep(DETAIL_FADE_START, DETAIL_FADE_END, dist));
 	vec2 detail = (na.xy + nb.xy) * detail_strength * fade;
+	// Rings, wakes and splashes from objects in the water (WaterRipples): their slope tilts the normal.
+	vec4 ripple = water_ripples(v_world.xz);
+	detail -= ripple.xy;
 	vec3 n_world = normalize(v_wave_normal + vec3(detail.x, 0.0, detail.y));
 	bool from_below = !FRONT_FACING;
 	vec3 n_view = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
@@ -95,7 +99,7 @@ void fragment() {
 	float lost = detail_strength * detail_strength * ((1.0 - fade * fade) * resolved + hidden);
 	vec2 variance = vec2(base_slope_variance + 0.5 * lost) + water_footprint_variance(dFdx(slope), dFdy(slope));
 
-	WaterSurface surface = WaterSurface(n_world, n_view, v_world, VERTEX, variance, v_crest_foam, wind * 0.15, from_below);
+	WaterSurface surface = WaterSurface(n_world, n_view, v_world, VERTEX, variance, max(v_crest_foam, ripple.w), wind * 0.15, from_below);
 	WaterResult r = water_shade(surface, SCREEN_UV, FRAGCOORD.xy, vec2(PROJECTION_MATRIX[0][0], PROJECTION_MATRIX[1][1]),
 			INV_PROJECTION_MATRIX, INV_VIEW_MATRIX, CAMERA_POSITION_WORLD, TIME);
 	NORMAL = from_below ? -n_view : n_view;

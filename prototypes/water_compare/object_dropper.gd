@@ -1,7 +1,8 @@
 class_name ObjectDropper
 extends Node3D
 ## Drops physics objects onto a water station: barrels, crates and planks float (lighter than water),
-## stones sink. Each body gets a Buoyancy component; hitting the water fast makes a splash.
+## stones sink. Each body gets a Buoyancy component and a RippleEmitter; hitting the water fast makes a
+## WaterSplash.
 ## The station supplies the water height (and optionally its current) as callables.
 
 enum Kind { BARREL, CRATE, PLANK, STONE }
@@ -15,12 +16,8 @@ const DROP_HEIGHT_MAX := 12.0
 const DESPAWN_DEPTH := -60.0
 ## Probes sit at this fraction of the half extents, so they stay inside the shape.
 const PROBE_INSET := 0.75
-const SPLASH_MIN_SPEED := 1.5
-const SPLASH_PARTICLES_PER_MPS := 18
-const SPLASH_MAX_PARTICLES := 160
-const SPLASH_LIFETIME := 1.4
-const SPLASH_UP_SPEED_PER_MPS := 0.55
-const SPLASH_DROPLET_SIZE := 0.06
+## Footprint of a floating object's ripples, as a share of its largest half extent.
+const RIPPLE_RADIUS_SHARE := 1.0
 
 ## Takes (xz: Vector2), returns the water surface height.
 var water_height: Callable
@@ -31,7 +28,6 @@ var drop_centre := Vector3.ZERO
 var _rng := RandomNumberGenerator.new()
 var _bodies: Array[RigidBody3D] = []
 var _materials: Dictionary[Kind, ShaderMaterial] = {}
-var _droplet_mesh: SphereMesh
 
 
 func _ready() -> void:
@@ -40,12 +36,6 @@ func _ready() -> void:
 	_materials[Kind.CRATE] = _material(Color(0.55, 0.4, 0.22), 0.85)
 	_materials[Kind.PLANK] = _material(Color(0.42, 0.29, 0.16), 0.8)
 	_materials[Kind.STONE] = _material(Color(0.36, 0.35, 0.33), 0.95)
-	_droplet_mesh = SphereMesh.new()
-	_droplet_mesh.radius = SPLASH_DROPLET_SIZE
-	_droplet_mesh.height = SPLASH_DROPLET_SIZE * 2.0
-	_droplet_mesh.radial_segments = 6
-	_droplet_mesh.rings = 3
-	_droplet_mesh.material = _material(Color(0.9, 0.95, 1.0), 0.1)
 
 
 func drop_burst() -> void:
@@ -149,6 +139,11 @@ func _make_body(kind: Kind) -> RigidBody3D:
 	buoyancy.probes = probes
 	buoyancy.entered_water.connect(_splash)
 	body.add_child(buoyancy)
+	var emitter := RippleEmitter.new()
+	emitter.body = body
+	emitter.water_height = water_height
+	emitter.radius = maxf(half.x, half.z) * RIPPLE_RADIUS_SHARE
+	body.add_child(emitter)
 	return body
 
 
@@ -163,27 +158,8 @@ func _volume(kind: Kind, half: Vector3) -> float:
 
 
 func _splash(point: Vector3, speed: float) -> void:
-	if speed < SPLASH_MIN_SPEED:
-		return
-	var p := CPUParticles3D.new()
-	p.mesh = _droplet_mesh
-	p.one_shot = true
-	p.explosiveness = 0.9
-	p.amount = mini(int(speed * SPLASH_PARTICLES_PER_MPS), SPLASH_MAX_PARTICLES)
-	p.lifetime = SPLASH_LIFETIME
-	p.direction = Vector3.UP
-	p.spread = 35.0
-	p.initial_velocity_min = speed * SPLASH_UP_SPEED_PER_MPS * 0.5
-	p.initial_velocity_max = speed * SPLASH_UP_SPEED_PER_MPS
-	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	p.emission_sphere_radius = 0.35
-	p.scale_amount_min = 0.5
-	p.scale_amount_max = 1.4
 	var surface: float = water_height.call(Vector2(point.x, point.z))
-	p.position = Vector3(point.x, surface, point.z)
-	add_child(p)
-	p.emitting = true
-	p.finished.connect(p.queue_free)
+	WaterSplash.spawn(self, Vector3(point.x, surface, point.z), speed)
 
 
 func _material(color: Color, roughness: float) -> ShaderMaterial:

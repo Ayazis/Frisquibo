@@ -6,6 +6,7 @@ render_mode blend_mix, depth_draw_always, cull_disabled, world_vertex_coords;
 //    wide, glittering sun path instead of aliasing
 //  - planar (desktop) or sky reflection with Fresnel, the planar one blurred by the same slope variance; refraction with per-channel absorption and caustics
 //  - subsurface light through thin crests (the Atlas model), persistent whitecaps and shoreline surf
+//  - interaction ripples, wakes and splash foam from objects in the water (WaterRipples)
 //  - seen from below: Snell's window and total internal reflection
 
 const int MAX_CASCADES = 4;
@@ -100,6 +101,7 @@ uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 
 #include "res://world/water/water_optics.gdshaderinc"
 #include "res://world/water/water_reflection.gdshaderinc"
+#include "res://world/water/ripples/water_ripples.gdshaderinc"
 
 varying vec2 v_rest;
 varying vec3 v_world;
@@ -213,7 +215,7 @@ void vertex() {
 	d.xz *= v_damping * v_fold;
 	d.y *= v_damping;
 	VERTEX += d;
-	VERTEX.y += lift;
+	VERTEX.y += lift + water_ripples(VERTEX.xz).z;
 	v_rest = p;
 	v_world = VERTEX;
 	v_crest = d.y;
@@ -242,6 +244,9 @@ void fragment() {
 	slope *= v_damping;
 	jac *= v_damping * v_fold;
 	variance *= v_damping * v_damping;
+	// Rings, wakes and splashes from objects in the water (WaterRipples).
+	vec4 ripple = water_ripples(v_world.xz);
+	slope += ripple.xy;
 	vec2 eff = slope / max(vec2(1.0) + jac, vec2(0.25));
 	vec3 n_world = normalize(vec3(-eff.x, 1.0, -eff.y));
 	// From above, a back face is the far side of a steep or folded crest: draw it as the top surface.
@@ -304,7 +309,7 @@ void fragment() {
 	float breaking = smoothstep(0.0, 0.6, 1.0 - v_damping) * (1.0 - smoothstep(0.0, surf_depth, v_seabed_depth) * 0.5);
 	float surf = breaking * smoothstep(0.02, 0.3, v_crest);
 	float shore_line = 1.0 - smoothstep(0.0, shore_foam_width, contact);
-	float cover = clamp(max(whitecap, max(surf * 0.85, shore_line * 0.9)) + v_rule_foam, 0.0, 1.0);
+	float cover = clamp(max(max(whitecap, ripple.w), max(surf * 0.85, shore_line * 0.9)) + v_rule_foam, 0.0, 1.0);
 	float foam_near = smoothstep(1.0 - cover, 1.0 - cover + foam_softness, tex);
 	// Wind-blown streaks: the foam pattern stretched along the wind, growing with the wind.
 	float wind_speed = length(wind);
