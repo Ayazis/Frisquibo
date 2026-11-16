@@ -2,10 +2,19 @@
 
 Status: in progress. Each step is committed on its own; the checklist below shows what is done.
 Visual checks are left to a person on a desktop GPU. In the container every step is verified with the
-headless import, the headless tests and the headless smoke test only (nothing is rendered there).
-Headless Godot does not compile spatial or canvas shaders, so **shader errors only show on a desktop
-run**: open the water comparison scene (`prototypes/water_compare/water_compare.tscn`) and check the
-output panel for shader errors before judging the look.
+headless import, the headless tests and the headless smoke test only (nothing is rendered there):
+
+```
+godot --headless --import
+for t in water_shaders ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field \
+    beach_profile river_flow_field; do
+  timeout 120 godot --headless --path . --script res://tests/headless/${t}_test.gd; done
+timeout 200 godot --headless --path . --script res://tests/smoke/ocean_smoke.gd
+```
+
+`water_shaders_test.gd` compiles every water and terrain shader: headless Godot renders nothing, but
+its dummy renderer still runs the shader compiler. Compute shaders (`.glsl`) are not compiled there;
+they only show errors on a desktop run.
 
 ## Steps, in order
 
