@@ -77,6 +77,14 @@ water_ripples_enabled={
 "type": "bool",
 "value": false
 }
+water_swash_runup={
+"type": "float",
+"value": 0.0
+}
+water_swash_period={
+"type": "float",
+"value": 8.0
+}
 water_reflection_clip_height={
 "type": "float",
 "value": -10000.0

@@ -73,6 +73,7 @@ func _ready() -> void:
 	_live = STATES[_state].duplicate() as OceanSpectrum
 	ocean.spectrum = _live
 	ocean.rules = RULES
+	ocean.foreshore_slope = _beach.beach_slope
 	add_child(ocean)
 	ocean.set_seabed(_height, Rect2(BEACH_CENTER - BEACH_SIZE / 2.0, BEACH_SIZE), SEABED_RESOLUTION)
 	for i: int in range(BARREL_COUNT):

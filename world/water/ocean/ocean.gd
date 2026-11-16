@@ -37,6 +37,9 @@ const FOAM_DRIFT_SHARE := 0.03
 ## The foam drift wraps after this many foam pattern tiles: whole tiles of both pattern layers
 ## (2.71 times apart in ocean.gdshader), so the wrap never shows.
 const FOAM_WRAP_TILES := 100.0
+## Global shader values the ground reads for the swash on the beach (terrain_ground.gdshader).
+const SWASH_RUNUP_PARAM := &"water_swash_runup"
+const SWASH_PERIOD_PARAM := &"water_swash_period"
 ## Metres above the local wave height where the camera lens can still dip into a crest.
 const UNDERWATER_REACH_MARGIN := 0.5
 
@@ -57,6 +60,9 @@ const UNDERWATER_REACH_MARGIN := 0.5
 ## Extra water level at the waterline from breaking waves, as a fraction of the crest height
 ## (real set-up is about 0.2 of the breaking wave height). Higher seas reach further up the beach.
 @export_range(0.0, 2.0) var wave_setup := 0.3
+## Slope of the beach face at the waterline (rise over run): with the waves it sets how far the swash
+## runs up the sand (ShoreRunup). 0.08 is a medium-sand beach, as BeachProfile builds by default.
+@export_range(0.01, 0.3, 0.005) var foreshore_slope := 0.08
 @export_group("")
 @export var rules: OceanRuleSet
 
@@ -134,6 +140,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	RenderingServer.global_shader_parameter_set(SWASH_RUNUP_PARAM, 0.0)
 	if _simulation != null:
 		# Release bindings before scheduling GPU destruction, after child meshes leave the tree.
 		_surface.material_override = null
@@ -304,6 +311,7 @@ func height_at(xz: Vector2) -> float:
 
 func _process(delta: float) -> void:
 	_time += delta
+	_publish_swash()
 	if _fallback != null:
 		_fallback.material.set_shader_parameter("wave_time", _time)
 	if _simulation == null:
@@ -335,6 +343,16 @@ func _process(delta: float) -> void:
 				var field := _height_field
 				var cascade := c
 				_simulation.request_displacement(c, func(bytes: PackedByteArray) -> void: field.set_cascade.call_deferred(cascade, bytes))
+
+
+## How far up the beach the waves run now, and how often, for the ground's swash.
+func _publish_swash() -> void:
+	var height := wave_height() if _height_field != null and _height_field.is_ready() \
+			else OceanSeaStats.expected_wave_height(_effective)
+	var period := OceanSeaStats.dominant_period(_effective)
+	RenderingServer.global_shader_parameter_set(SWASH_RUNUP_PARAM,
+			ShoreRunup.stockdon(height, period, _value(&"foreshore_slope")))
+	RenderingServer.global_shader_parameter_set(SWASH_PERIOD_PARAM, period)
 
 
 func _drift_foam(delta: float) -> void:
