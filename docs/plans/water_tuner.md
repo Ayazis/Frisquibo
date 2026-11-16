@@ -36,7 +36,7 @@ storm, and wanted the panel full height. Done:
 - Storm preset: 24 m/s, 600 km fetch, choppiness 1.4, foam threshold 0.85, 9 s foam. New look values
   `foam_streaks` and `streak_length`: foam blown into long lines along the wind from Beaufort 7.
   `OceanAutoValues` refitted to the square root of the wind; a test keeps it near the presets.
-- `prototypes/water_compare/scale_boat.gd`: an 8 m boat with a mast, one off the beach and one in deep
+- `prototypes/water_demo/scale_boat.gd`: an 8 m boat with a mast, one off the beach and one in deep
   water at (-40, -1450).
 - The panel now runs to the bottom of the screen.
 
@@ -95,7 +95,7 @@ container**: 1600x900 renders take about 17 minutes per shot there. Run them on 
 | 4 (part) | Save / load (one `user://ocean_tuning.tres`), Snapshot and A/B swap | `ocean_tuner_storage.gd` |
 
 Decisions: `docs/decisions/0005-ocean-parameter-catalogue-and-look.md`,
-`0006-swell-and-wave-height.md`. The panel is shown in `prototypes/water_compare/custom_ocean_station.gd`.
+`0006-swell-and-wave-height.md`. The panel is shown in `prototypes/water_demo/island_scene.gd`.
 
 ## Next up, in order
 

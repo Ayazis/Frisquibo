@@ -10,6 +10,7 @@ render_mode blend_mix, depth_draw_always, cull_disabled, world_vertex_coords;
 //  - subsurface light through thin crests (the Atlas model), persistent whitecaps and shoreline surf
 //  - interaction ripples, wakes and splash foam from objects in the water (WaterRipples)
 //  - wind gusts: drifting patches of rougher and glassier water
+//  - the swash: near the waterline the sea runs up the beach and slides back with each wave
 //  - seen from below: Snell's window and total internal reflection
 
 const int MAX_CASCADES = 4;
@@ -141,6 +142,7 @@ uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 #include "res://world/water/water_reflection.gdshaderinc"
 #include "res://world/water/ripples/water_ripples.gdshaderinc"
 #include "res://world/water/water_gusts.gdshaderinc"
+#include "res://world/water/swash.gdshaderinc"
 
 varying vec2 v_rest;
 varying vec3 v_world;
@@ -207,6 +209,18 @@ float setup_lift(float depth) {
 	return wave_setup * wave_amplitude * (1.0 - smoothstep(0.0, zone, depth));
 }
 
+// The swash: in the surf zone and on the beach the sea runs up the sand and slides back with each wave
+// (swash.gdshaderinc, the same edge the ground draws its wet film from). Extra water level at `p` on top
+// of `setup`, where the still water is `depth` deep (negative on land).
+float swash_lift(vec2 p, float depth, float setup) {
+	if (depth > 1e3) {
+		return 0.0;
+	}
+	float zone = wave_amplitude / max(breaker_ratio, 0.01);
+	float near_shore = 1.0 - smoothstep(0.0, zone, depth);
+	return max(water_swash(p, TIME).x * near_shore - setup, 0.0);
+}
+
 // Fraction of the open-sea wave that survives at this water depth. Ripples remain right up to the beach.
 float shore_damping(float depth) {
 	float limited = breaker_ratio * max(depth, 0.0) / max(wave_amplitude, 0.01);
@@ -252,7 +266,8 @@ void vertex() {
 	float depth = seabed_depth(p);
 	vec3 rules = local_rules(depth);
 	// Set-up and rule water rise the surface and deepen the water the waves see; low land floods.
-	float lift = setup_lift(depth) + rules.z;
+	float setup = setup_lift(depth);
+	float lift = setup + swash_lift(p, depth, setup) + rules.z;
 	v_seabed_depth = depth + lift;
 	v_damping = shore_damping(v_seabed_depth) * rules.y;
 	v_rule_foam = rules.x;
@@ -434,12 +449,12 @@ void fragment() {
 
 	// --- Reflection ------------------------------------------------------------------------------------
 	vec3 reflection = vec3(0.0);
-	bool planar = water_reflection_enabled && !from_below;
+	bool planar = water_reflection_available(0) && !from_below;
 	if (planar) {
 		// Slopes the pixel resolves shift the mirror image; the ones it averages away (LEAN variance) blur it.
 		float slope_sigma = sqrt(0.5 * (variance.x + variance.y)) * reflection_blur;
 		vec2 spread = water_reflection_spread(slope_sigma, ndv, vec2(PROJECTION_MATRIX[0][0], PROJECTION_MATRIX[1][1]));
-		reflection = water_reflection_sample(SCREEN_UV, n_view.xy * reflection_distortion, spread, FRAGCOORD.xy);
+		reflection = water_reflection_sample(0, SCREEN_UV, n_view.xy * reflection_distortion, spread, FRAGCOORD.xy);
 	}
 
 	float f = fresnel * edge;

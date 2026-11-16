@@ -11,7 +11,7 @@ The water comparison prototype evaluates our Gerstner lake/river water and the p
 
 Keep the production ocean in world/water/ocean. Use a cascaded JONSWAP spectrum, GPU inverse FFT, displacement/slope textures and mipmapped slope moments. Bind individual 2D layer/mip views because the installed Godot 4.7.2 build does not expose TEXTURE_SLICE_2D_ARRAY. RenderingDevice work and disposal run on the render thread. Deliver asynchronous displacement readbacks to the main thread before physics samples them.
 
-Keep GodotOceanWaves in prototypes/water_compare/vendor as a comparison reference, not a production dependency. The fourth station demonstrates our ocean, three sea states, beach damping and rigid-body barrels. Buoyancy receives a height callable rather than depending on one renderer.
+Keep GodotOceanWaves in prototypes/water_compare/vendor as a comparison reference, not a production dependency. The fourth station demonstrates our ocean, three sea states, beach damping and rigid-body barrels. (Update 2026-11-16, decision 0009: the comparison is over; the vendored copy and the comparison stations are removed, and `prototypes/water_demo` is the one water demo.) Buoyancy receives a height callable rather than depending on one renderer.
 
 On Web/Compatibility use Sea's Gerstner surface with matching CPU sampling and approximate sea-state parameters. Shared buoyancy logic stays unchanged. The fallback does not reproduce the FFT spectrum or its shoreline attenuation.
 

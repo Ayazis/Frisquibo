@@ -1,8 +1,9 @@
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
 // Ground material: grass soil inland, dry sand on the beach, dark wet sand at the waterline.
-// With an Ocean in the scene the wet sand follows the waves: damp up to the run-up of the highest waves
-// (ShoreRunup), and a glossy film of water with a foam edge that runs up and slides back once per wave.
+// With an Ocean in the scene the wet sand follows the waves (swash.gdshaderinc): damp up to the run-up
+// of the highest waves (ShoreRunup), and a glossy film the backwash leaves behind each wave. The water
+// running up the sand is the ocean surface itself.
 
 uniform vec3 soil_color : source_color = vec3(0.09, 0.14, 0.04);
 uniform vec3 sand_color : source_color = vec3(0.76, 0.66, 0.48);
@@ -11,23 +12,12 @@ uniform float sea_level = 0.0;
 uniform float beach_top = 0.9;
 uniform float blend_width = 0.35;
 uniform float wet_band = 0.35;
-uniform vec3 swash_foam_color : source_color = vec3(0.85, 0.87, 0.86);
-
-// Set by Ocean: R2% run-up above still water (m; 0 = no waves) and the dominant wave period (s).
-global uniform float water_swash_runup;
-global uniform float water_swash_period;
-
-// Share of a swash cycle spent running up; the rest is the slower backwash.
-const float UPRUSH_SHARE = 0.3;
-// Waves vary: each reaches between this share of the run-up and all of it.
-const float SMALLEST_SWASH = 0.45;
-// Metres along the shore over which neighbouring stretches of beach are hit at different times.
-const float SWASH_ALONGSHORE = 25.0;
-// Width (m of height) of the water film's edge and of the foam line on it.
+// Glossy film of water the backwash leaves on the sand: roughness, and how much darker the sand gets.
 const float FILM_EDGE = 0.03;
-const float FOAM_LINE = 0.025;
 const float FILM_ROUGHNESS = 0.06;
 const float FILM_DARKENING = 0.85;
+
+#include "res://world/water/swash.gdshaderinc"
 
 varying vec3 v_world;
 
@@ -54,24 +44,18 @@ void fragment() {
 	float wet = 1.0 - smoothstep(0.0, wet_band, h);
 	float grain = vnoise(v_world.xz * 9.0) * 0.12 + vnoise(v_world.xz * 2.3) * 0.08;
 
-	// Waves keep the sand damp up to the highest swash.
+	// Waves keep the sand damp up to the highest swash, and each backwash leaves a glossy film between
+	// where the water is now and where this wave reached.
 	float runup = max(water_swash_runup, 0.0);
 	if (runup > 0.0) {
 		wet = max(wet, 1.0 - smoothstep(runup * 0.7, runup, h - edge_jitter * 0.3));
 	}
-	// The current wave: up-rush, then backwash. Each wave reaches its own height, and the phase drifts
-	// along the shore so the swash never moves as one straight line.
-	float phase = TIME / max(water_swash_period, 0.1) + vnoise(v_world.xz / SWASH_ALONGSHORE) * 1.5;
-	float cycle = fract(phase);
-	float reach = runup * mix(SMALLEST_SWASH, 1.0, vnoise(v_world.xz / SWASH_ALONGSHORE + floor(phase) * 7.31));
-	float rush = cycle < UPRUSH_SHARE ? smoothstep(0.0, UPRUSH_SHARE, cycle) : 1.0 - smoothstep(UPRUSH_SHARE, 1.0, cycle);
-	float swash_edge = reach * rush;
-	float film = runup > 0.0 ? (1.0 - smoothstep(swash_edge - FILM_EDGE, swash_edge + FILM_EDGE, h)) * sand : 0.0;
-	float swash_foam = runup > 0.0 && cycle < 0.5 ? (1.0 - smoothstep(0.0, FOAM_LINE, abs(h - swash_edge))) * sand : 0.0;
+	vec2 swash = water_swash(v_world.xz, TIME);
+	float film = runup > 0.0 ? (1.0 - smoothstep(swash.x, swash.y + FILM_EDGE, h)) * sand : 0.0;
 
 	vec3 beach = mix(sand_color, wet_sand_color, wet) * (0.9 + grain);
 	vec3 ground = mix(soil_color, beach, sand) * mix(1.0, FILM_DARKENING, film);
-	ALBEDO = mix(ground, swash_foam_color, swash_foam * (0.6 + 0.4 * grain / 0.2));
-	ROUGHNESS = mix(mix(1.0, mix(0.9, 0.35, wet), sand), FILM_ROUGHNESS, film * (1.0 - swash_foam));
+	ALBEDO = ground;
+	ROUGHNESS = mix(mix(1.0, mix(0.9, 0.35, wet), sand), FILM_ROUGHNESS, film);
 	SPECULAR = mix(mix(0.3, 0.5, wet * sand), 0.5, film);
 }

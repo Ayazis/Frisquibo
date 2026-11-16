@@ -6,7 +6,8 @@ headless import, the headless tests and the headless smoke test only (nothing is
 
 ```
 godot --headless --import
-for t in water_shaders underwater_view water_ripples water_textures water_types shore_runup water_quality ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field \
+for t in water_shaders underwater_view water_ripples water_textures water_types shore_runup water_quality \
+    island_terrain ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field \
     beach_profile river_flow_field; do
   timeout 120 godot --headless --path . --script res://tests/headless/${t}_test.gd; done
 timeout 200 godot --headless --path . --script res://tests/smoke/ocean_smoke.gd
@@ -47,28 +48,33 @@ separate near-shore wave model (see the notes at the end once written).
 
 ## Desktop checks
 
-Nothing here was rendered (no rendering in cloud containers). On a desktop GPU, in
-`prototypes/water_compare/water_compare.tscn`, first look at the output panel for shader or script
-errors, then check:
+Nothing here was rendered (no rendering in cloud containers). On a desktop GPU, open
+`prototypes/water_demo/water_demo.tscn`, the island demo (keys 1-5 jump between the beach, the pond,
+the river, the river mouth and the island from the sea). First look at the output panel for shader or
+script errors, then check:
 
-1. **Reflections** (stations 1 and 4): distant rough water smears trees and boats into vertical streaks;
-   a calm lake close by stays a sharp mirror. Low tier: blockier streaks (4 taps).
-2. **Lake and river**: sun glint and colour still look right after the move to the ocean's optics
-   (the sky reflection is now physical F0 = 0.02, half of before); no shimmer on distant ripples.
-3. **Underwater** (Q to lower the camera, drag to look up): fog and colour by distance, blur, light
-   shafts from the sun, the surface from below with Snell's window, and a wavy waterline with a dark
-   meniscus when the camera is half in. Check the quad never shows in the planar reflection.
-4. **Ripples** (F to drop objects, the boats): rings spread from splashes, bobbing objects make rings,
-   foam appears and fades. If the rings only go one way (bumps, no troughs) the HDR viewport clamps
-   negative values: encode the height with an offset in `ripple_step.gdshader`.
-5. **Caustics** (station 4, shallow water by the beach): bright lines that move with the waves, with
-   faint colour fringes; deep sand darker and bluer. The underwater view shows the same caustics.
-6. **Gusts**: dark and light patches drifting downwind, most visible on the calm sea and the lake.
+1. **Reflections** (1, 5): distant rough sea smears the island and the boats into vertical streaks.
+   The **pond** (2) mirrors its trees sharply from its own mirror plane; that mirror only renders while
+   the pond is on screen. The river reflects the sky only. Low tier: blockier streaks (4 taps).
+2. **Pond and river** (2, 3): sun glint and colour look right with the ocean's optics (the sky
+   reflection is the physical F0 = 0.02); no shimmer on distant ripples; the river flows from the pond
+   to the sea, its surface following the falling water level, with no gap at the outlet or the mouth.
+3. **Underwater** (Q to lower the camera, drag to look up), in the sea and in the pond: fog and colour
+   by distance, blur, light shafts, the surface from below with Snell's window, and a wavy waterline with
+   a dark meniscus when the camera is half in. The pond's underwater view only switches on over the pond.
+4. **Ripples** (F to drop objects, the boats, the barrels off the beach): rings spread from splashes,
+   bobbing objects make rings, foam appears and fades. If the rings only go one way (bumps, no troughs)
+   the HDR viewport clamps negative values: encode the height with an offset in `ripple_step.gdshader`.
+5. **Caustics** (1, shallow water off the beach): bright lines that move with the waves, with faint
+   colour fringes; deep sand darker and bluer. The underwater view shows the same caustics.
+6. **Gusts**: dark and light patches drifting downwind, most visible on a calm sea and on the pond.
 7. **Close-up ripples**: fine ripples near the camera that fade into the glitter, with no visible tiling
    and no change in overall brightness with distance.
-8. **Water types** (L): clear, coastal, murky on the ocean and the lake; tune the colours by eye.
+8. **Water types** (L): clear, coastal, murky on the sea and the pond; tune the colours by eye.
 9. **Foam**: drifts slowly downwind, turquoise glow under fresh whitecaps, lumpy thick foam.
-10. **Beach**: damp sand up to where waves reach, a glossy film with a foam edge rushing up and back.
+10. **Beach** (1, 4): the sea itself runs up the sand with each wave and slides back, each wave reaching
+    its own height and neighbouring stretches of beach hit at different times; the sand stays damp up to
+    where the waves reach and the backwash leaves a glossy film; foam rides the moving water's edge.
 11. **Spray** (storm preset, C): droplets torn off breaking crests and carried downwind; none in a breeze.
     If droplets fly twice as fast as they should, the engine does not integrate VELOCITY for custom
     particle shaders: move them in `process()`.

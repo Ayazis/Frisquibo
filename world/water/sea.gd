@@ -17,6 +17,11 @@ const DEFAULT_TIME_ROLLOVER := 3600.0
 @export var web_subdivisions := 160
 @export var level := 0.0
 @export var planar_reflection := true
+## Which mirror plane this water reflects (PlanarReflection.slot): 0 the sea's level, 1 a second level
+## (a pond above the sea). With planar_reflection this water also makes that mirror.
+@export_range(0, 1) var reflection_slot := 0
+## Mirror resolution as a fraction of the screen.
+@export_range(0.25, 1.0) var reflection_resolution_scale := 0.6
 @export var underwater_view := true
 ## Waves, wakes and foam from objects in the water, near the camera (WaterRipples).
 @export var interaction_ripples := true
@@ -31,6 +36,7 @@ func _init() -> void:
 	material = ShaderMaterial.new()
 	material.shader = WATER_SHADER
 	WaterTextures.apply(material)
+	material.set_shader_parameter("reflection_slot", reflection_slot)
 
 
 func _ready() -> void:
@@ -44,11 +50,17 @@ func _ready() -> void:
 	layers = PlanarReflection.water_layer_mask()
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	position.y = level
+	material.set_shader_parameter("reflection_slot", reflection_slot)
 	if look != null:
 		set_look(look)
 	if planar_reflection:
 		var reflection := PlanarReflection.new()
 		reflection.plane_height = level
+		reflection.slot = reflection_slot
+		reflection.resolution_scale = reflection_resolution_scale
+		# A mirror that isn't the sea's only renders while this water is on screen.
+		if reflection_slot != 0:
+			reflection.visibility_aabb = _world_box()
 		add_child(reflection)
 	if interaction_ripples and WaterRipples.find(get_tree()) == null:
 		add_child(WaterRipples.new())
@@ -64,7 +76,12 @@ func _process(_delta: float) -> void:
 	if cam == null:
 		_underwater.follow(null, 0.0, 0.0, 0.0, 0.0)
 		return
-	var surface := height_at(Vector2(cam.global_position.x, cam.global_position.z), _wave_time())
+	var xz := Vector2(cam.global_position.x, cam.global_position.z)
+	# Only over this water: a pond's surface must not count for a camera on the beach below it.
+	if not covers(xz):
+		_underwater.follow(null, 0.0, 0.0, 0.0, 0.0)
+		return
+	var surface := height_at(xz, _wave_time())
 	# The lens waterline is drawn flat at the height under the camera: no cascades to follow here.
 	var reach := 2.0 * _parameter(&"wave_amplitude", 0.12) + UnderwaterView.DEFAULT_REACH
 	_underwater.follow(cam, surface, surface, 0.0, reach)
@@ -72,6 +89,25 @@ func _process(_delta: float) -> void:
 		# Read every frame while drawn: whoever set up this water may change its colour at any time.
 		_underwater.set_optics(_vector_parameter(&"absorption", DEFAULT_ABSORPTION),
 				_color_parameter(&"deep_color", DEFAULT_DEEP_COLOR))
+
+
+## World height of the surface at `xz` now, as the shader draws it.
+func surface_height_at(xz: Vector2) -> float:
+	return height_at(xz, _wave_time())
+
+
+## True when `xz` (world) lies over this water's square.
+func covers(xz: Vector2) -> bool:
+	var centre := Vector2(global_position.x, global_position.z)
+	var half := size * 0.5
+	return absf(xz.x - centre.x) <= half and absf(xz.y - centre.y) <= half
+
+
+## The water's square in world space, from a little below the surface to well above it.
+func _world_box() -> AABB:
+	var half := size * 0.5
+	return AABB(Vector3(global_position.x - half, level - size * 0.25, global_position.z - half),
+			Vector3(size, size * 0.5, size))
 
 
 ## The time water.gdshader animates with: wave_time when set (the ocean fallback), else the engine's.

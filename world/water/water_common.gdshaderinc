@@ -21,6 +21,9 @@ uniform float refraction_strength = 0.04;
 uniform float refraction_full_distance = 8.0;           // metres; the screen offset shrinks beyond this
 uniform float reflection_distortion = 0.03;
 uniform float reflection_blur = 1.0;                    // 1 = blur by the real unresolved slopes
+// Mirror plane this water reflects (PlanarReflection.slot): 0 the sea's level, 1 the second plane (a pond
+// above the sea), -1 none: the engine's sky reflection only (sloping water such as a river).
+uniform int reflection_slot = 0;
 uniform float murk_blur = 2.0;                          // screen mip levels of blur through deep water
 uniform float caustic_strength = 2.2;
 uniform float caustic_scale = 0.35;
@@ -147,11 +150,11 @@ WaterResult water_shade(WaterSurface s, vec2 screen_uv, vec2 frag_coord, vec2 pr
 	// Thin water at the very edge fades its reflection so the shore has no hard seam.
 	float edge = smoothstep(0.0, 0.12, path);
 	vec3 reflection = vec3(0.0);
-	bool planar = water_reflection_enabled;
+	bool planar = water_reflection_available(reflection_slot);
 	if (planar) {
 		float slope_sigma = sqrt(0.5 * (s.slope_variance.x + s.slope_variance.y)) * reflection_blur;
 		vec2 spread = water_reflection_spread(slope_sigma, ndv, proj);
-		reflection = water_reflection_sample(screen_uv, s.n_view.xy * reflection_distortion, spread, frag_coord);
+		reflection = water_reflection_sample(reflection_slot, screen_uv, s.n_view.xy * reflection_distortion, spread, frag_coord);
 	}
 	float f = fresnel * edge;
 	r.emission = (bottom * transmittance * (1.0 - f) + reflection * f) * (1.0 - foam);
