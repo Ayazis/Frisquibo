@@ -236,6 +236,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_time()
 		elif key.physical_keycode == KEY_F:
 			_drop_objects()
+		elif key.physical_keycode == KEY_K:
+			print("Curling breakers: ", "on" if _island.toggle_curls() else "off")
 
 
 func _cycle_water_type() -> void:

@@ -46,6 +46,13 @@ struct ShoreWave {
 	float lace;       // how much foam the last breaker left here, before ageing
 	float lace_age;   // 0 when its crest has just passed, 1 when the lace is gone
 	float lace_wave;  // number of the crest that left it
+	// Where in its wave this water is (ocean_breakers.gdshaderinc reads these):
+	float u;          // share of a period since the last crest passed
+	float front;      // share of a period the front of the wave takes
+	vec2 towards;     // unit direction of travel, towards the shore
+	float wavelength; // metres between crests here
+	float gain;       // open-sea crest height this coast gets, before shoaling and the per-wave size
+	vec2 end;         // the waterline point the wave is heading for
 };
 
 float shore_zone() {
@@ -83,6 +90,12 @@ ShoreWave shore_wave(vec2 p, float depth) {
 	w.lace = 0.0;
 	w.lace_age = 1.0;
 	w.lace_wave = 0.0;
+	w.u = 0.0;
+	w.front = 0.5;
+	w.towards = vec2(1.0, 0.0);
+	w.wavelength = 1.0;
+	w.gain = 0.0;
+	w.end = p;
 	if (w.weight <= 0.0) {
 		return w;
 	}
@@ -164,5 +177,11 @@ ShoreWave shore_wave(vec2 p, float depth) {
 	w.lace = white;
 	w.lace_age = clamp(u / SHORE_LACE_LIFE, 0.0, 1.0);
 	w.lace_wave = wave;
+	w.u = u;
+	w.front = front;
+	w.towards = towards_shore;
+	w.wavelength = cycle / slowness;
+	w.gain = wave_amplitude * sqrt(shore_wave_share) * lee * ray.z;
+	w.end = end;
 	return w;
 }

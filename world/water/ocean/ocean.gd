@@ -6,6 +6,9 @@ extends Node3D
 ## `spectrum` and the exported values are the authored sea state; `rules` (OceanRuleSet) change them
 ## at runtime ("if local_depth < 1 and wind_speed > 12 then local_foam += 5").
 
+## A plunging breaker's lip came down at `position`; the breaker was `height` metres high. For sound.
+signal breaker_plunged(position: Vector3, height: float)
+
 const SURFACE_SHADER := preload("res://world/water/ocean/ocean.gdshader")
 const DEFAULT_QUALITY := preload("res://data/quality/ocean_high.tres")
 const DEFAULT_SPECTRUM := preload("res://world/water/ocean/presets/fresh_breeze.tres")
@@ -81,6 +84,9 @@ const UNDERWATER_REACH_MARGIN := 0.5
 ## Shore waves left on a coast facing away from the open sea's main waves (refraction still bends
 ## some round to it).
 @export_range(0.0, 1.0, 0.01) var shore_lee_share := 0.3
+## How hard breakers plunge where the beach makes them (BreakerProfile): 1 is physical, 0 makes every
+## breaker spill. Curls are drawn near the camera only, as far as the quality tier's breaker_reach.
+@export_range(0.0, 2.0, 0.01) var curl_strength := 1.0
 @export_group("Sea state changes")
 ## Seconds a new sea state takes to fade in when it changes the longest waves' tile (a preset, a big
 ## wind change). 0 switches at once and rearranges every long wave in one frame.
@@ -97,6 +103,7 @@ var _seabed: Image
 var _seabed_area: Rect2
 var _seabed_resolution := DEFAULT_SEABED_RESOLUTION
 var _shore := ShoreWaves.new()
+var _breakers: BreakerSystem
 var _time := 0.0
 var _frames_since_readback := 0
 var _reflection: PlanarReflection
@@ -318,6 +325,14 @@ func rule_problems() -> PackedStringArray:
 
 
 ## Measured significant wave height of the open sea (twice the typical crest height), in metres.
+## The plunging breaker at world `xz`: its stage, its lip, and whether `xz` is inside its tube. An empty
+## state (stage < 0) where nothing is breaking or the ocean has no seabed or no curls.
+func breaker_at(xz: Vector2) -> BreakerState:
+	if _breakers == null:
+		return BreakerState.new()
+	return _breakers.query.at(xz)
+
+
 func wave_height() -> float:
 	return 2.0 * _amplitude
 
@@ -344,6 +359,7 @@ func set_seabed(height: Callable, area: Rect2, resolution: int = DEFAULT_SEABED_
 	_shore.field = ShoreField.bake(_depth_at, area)
 	material.set_shader_parameter("shore_field", ImageTexture.create_from_image(_shore.field.image))
 	material.set_shader_parameter("shore_origin", ImageTexture.create_from_image(_shore.field.origins))
+	_make_breakers(area)
 
 
 ## World height of the water surface at `xz` (the rest level until the first GPU readback arrives).
@@ -394,6 +410,8 @@ func _process(delta: float) -> void:
 		_underwater.follow(cam, surface, _level() + _local_lift(xz), _damping_at(xz), wave_height() + UNDERWATER_REACH_MARGIN)
 		if _spray != null:
 			_spray.follow(p)
+		if _breakers != null:
+			_breakers.update(xz, _time, _shore.period, _wind(), delta)
 	else:
 		_underwater.follow(null, 0.0, 0.0, 0.0, 0.0)
 	if quality.readback_interval > 0:
@@ -550,8 +568,7 @@ func _apply_state(spectrum_changed: bool) -> void:
 	if _height_field.damping_at.is_null():
 		_height_field.damping_at = _damping_at
 	material.set_shader_parameter("sea_level", sea_level)
-	var wind_angle := deg_to_rad(_effective.wind_direction)
-	var wind := Vector2(cos(wind_angle), sin(wind_angle)) * _effective.wind_speed
+	var wind := _wind()
 	material.set_shader_parameter("wind", wind)
 	if _spray != null:
 		_spray.set_sea(wind, sea_level, _look_value(&"foam_cascade_falloff"))
@@ -667,6 +684,28 @@ func _apply_shore_waves() -> void:
 	material.set_shader_parameter("shore_wave_share", _shore.share)
 	material.set_shader_parameter("shore_lee_share", _shore.lee_share)
 	material.set_shader_parameter("shore_wave_direction", _shore.direction)
+	material.set_shader_parameter("curl_strength", _value(&"curl_strength"))
+	if _breakers != null:
+		_breakers.set_sea(_level(), _value(&"curl_strength"))
+
+
+## The wind over the sea after the rules (direction * m/s).
+func _wind() -> Vector2:
+	var angle := deg_to_rad(_effective.wind_direction)
+	return Vector2(cos(angle), sin(angle)) * _effective.wind_speed
+
+
+## Plunging breakers along the baked seabed, when the quality tier asks for curls.
+func _make_breakers(area: Rect2) -> void:
+	if _breakers != null:
+		_breakers.queue_free()
+		_breakers = null
+	if quality.breaker_reach <= 0.0 or _shore.field.waterlines.is_empty():
+		return
+	_breakers = BreakerSystem.new(_shore, material, quality, area, _level(), _depth_at, _still_depth)
+	_breakers.plunged.connect(func(at: Vector3, height: float) -> void: breaker_plunged.emit(at, height))
+	_breakers.set_sea(_level(), _value(&"curl_strength"))
+	add_child(_breakers)
 
 
 ## Direction the bigger wave system travels in: the swell when it is higher than the wind sea.

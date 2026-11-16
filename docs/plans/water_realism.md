@@ -8,7 +8,7 @@ headless import, the headless tests and the headless smoke test only (nothing is
 godot --headless --import
 for t in water_shaders underwater_view water_ripples water_textures water_types shore_runup water_quality \
     island_terrain ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field \
-    beach_profile river_flow_field shore_waves water_mask planar_reflection; do
+    beach_profile river_flow_field shore_waves water_mask planar_reflection breaker_profile breakers; do
   timeout 120 godot --headless --path . --script res://tests/headless/${t}_test.gd; done
 timeout 200 godot --headless --path . --script res://tests/smoke/ocean_smoke.gd
 ```
@@ -135,3 +135,30 @@ Breaking waves, phase A (`docs/plans/breaking_waves.md`, decision 0011):
 22. **Refraction** (5 and around the island): breakers are bigger on the points of the island and
     smaller in its bays. No stripes or blotches in wave height that follow the 3 m texels or small
     wiggles of the coast. If points look too violent, lower `ShoreField.REFRACTION_MAX` (2.0).
+
+Breaking waves, phases B and C: curling breakers (decision 0012). Run
+`prototypes/breakers/breaker_bench.tscn` first: a straight beach, keys 1-5 for the views, T for slow
+motion, P to pause, K for curls on/off, L for the sun behind or in front, C for the sea state. Then
+check the island demo too (K toggles curls there as well).
+
+23. **The curl** (bench 1 and 2, "breeze over swell", T): the crest pitches forward, a lip flies out and
+    down into the trough ahead with a tube of air under it, the water splashes up where it lands, and
+    the wave runs on as a foaming bore. Breaking runs along the crest rather than the whole crest
+    flipping at once. Compare with real surf footage at the same distance. Fails if it reads as a
+    rubbery tube, a rolling pipe or a flip.
+24. **Seams** (bench 3, slow motion): no line, gap or flicker where a ribbon meets the ocean surface:
+    across the crest at the ends of the curl, along the crest where curls start and stop, and at the
+    edge of the curls' reach (80 m on High). No holes in the sea where a crest curls without a ribbon.
+25. **Lip and tube light** (bench, L for the sun behind the waves): the thin lip glows green against the
+    sun; the inside of the tube is darker than the open face; the face under the lip shows the water's
+    own colour, not the seabed behind it.
+26. **White water, no cotton balls** (bench, all views, sun and shade): the lip whitens from its tip as
+    it flies, a burst of foam where it lands, then foam over the face. Spray: thin, fast streaks that
+    are mostly clear, with no round soft dots. Mist: one faint sheet rising over the plunge line,
+    gone soon after. Fails if anything reads as puffs or blobs from any distance.
+27. **Breaker types** (C through the sea states): the calm and moderate seas plunge on the bench's
+    beach, the storm spills (surf similarity). On the island the curls appear where its shallows are
+    steep enough.
+28. **Cost** (High, island demo, on the beach): frame time with curls on against off (K). The ribbons
+    add about 30-80k vertices. The CPU sampling for spray and mist runs 20 times a second at about
+    2 ms a time; watch for a hitch every third frame.

@@ -11,7 +11,8 @@ render_mode blend_mix, depth_draw_always, cull_disabled, world_vertex_coords;
 //  - subsurface light through thin crests (the Atlas model), persistent whitecaps and shoreline surf
 //  - interaction ripples, wakes and splash foam from objects in the water (WaterRipples)
 //  - wind gusts: drifting patches of rougher and glassier water
-//  - shore waves: near the coast crests turn to meet the beach, steepen and break (ocean_shore_waves)
+//  - shore waves: near the coast crests turn to meet the beach, steepen and break (ocean_shore_waves);
+//    near the camera plunging breakers curl over, drawn on ribbons along the crests (ocean_breakers)
 //  - the swash: near the waterline the sea runs up the beach and slides back with each wave
 //  - seen from below: Snell's window and total internal reflection
 
@@ -164,6 +165,14 @@ varying float v_fold;
 varying float v_still_depth;
 // Amplitude share the FFT waves keep where shore waves took the rest.
 varying float v_open_sea;
+// Plunging breakers (ocean_breakers): how far this water is carried onto the curl, the curl's normal,
+// the part of the folded sheet it is on, and the breaker's stage. v_lip: thin lip, set in fragment()
+// for light().
+varying float v_lip;
+varying float v_curl;
+varying vec3 v_curl_normal;
+varying float v_curl_part;
+varying float v_curl_stage;
 
 float seabed_depth(vec2 p) {
 	if (seabed_rect.z <= 0.0) {
@@ -269,7 +278,28 @@ float fold_limit(vec2 jac) {
 	return clamp(k, 0.0, 1.0);
 }
 
+// Still water depth at `p` with set-up and rule water (the shore waves' depth; Ocean._still_depth()).
+float ocean_still_depth(vec2 p) {
+	float depth = seabed_depth(p);
+	return depth + setup_lift(depth) + local_rules(depth).z;
+}
+
+#include "res://world/water/ocean/breakers/ocean_breakers.gdshaderinc"
+#include "res://world/water/ocean/breakers/ocean_breaker_foam.gdshaderinc"
+
+// Breakers: the light through a thin lip (on top of the crest glow), and how dark it is inside the tube,
+// out of the sky's light.
+const float LIP_GLOW = 2.5;
+const float TUBE_SHADE = 0.55;
+// Detail ripples keep this share of their slope on a curl.
+const float CURL_DETAIL = 0.5;
+
 void vertex() {
+	if (breaker_is_ribbon()) {
+		// A ribbon vertex: its rest position lies on the wave rays, along its crest.
+		vec2 on_ray = breaker_ribbon_rest(VERTEX);
+		VERTEX = vec3(on_ray.x, sea_level, on_ray.y);
+	}
 	vec2 p = VERTEX.xz;
 	float dist = length(p - CAMERA_POSITION_WORLD.xz);
 	float spacing = max(dist, 1.0) * mesh_angular_step;
@@ -311,6 +341,22 @@ void vertex() {
 	d.y = d.y * open_sea + shore.offset.y;
 	VERTEX += d;
 	VERTEX.y += lift + water_ripples(VERTEX.xz).z;
+	// A plunging breaker carries the water onto its curl (the ocean surface too, so the two agree where
+	// they overlap; it leaves a hole for the ribbon where the curl is strong).
+	Breaker breaker = breaker_at(p, shore, dist);
+	v_curl = breaker.curl;
+	v_curl_normal = vec3(0.0, 1.0, 0.0);
+	v_curl_part = 0.0;
+	v_curl_stage = breaker.stage;
+	if (breaker.curl > 0.0) {
+		BreakerSheet sheet = breaker_sheet(breaker.phi, breaker.stage, breaker.crest, breaker.distance);
+		vec3 along = vec3(breaker.towards.x, 0.0, breaker.towards.y);
+		vec3 curled = vec3(breaker.crest_rest.x, sea_level + setup + rules.z, breaker.crest_rest.y)
+				+ along * sheet.position.x + vec3(0.0, sheet.position.y, 0.0);
+		VERTEX = mix(VERTEX, curled, breaker.curl);
+		v_curl_normal = normalize(along * sheet.normal.x + vec3(0.0, sheet.normal.y, 0.0));
+		v_curl_part = sheet.part;
+	}
 	v_rest = p;
 	v_world = VERTEX;
 	v_crest = d.y;
@@ -372,6 +418,14 @@ void fragment() {
 	slope *= open_sea;
 	variance *= open_sea * open_sea;
 	ShoreWave shore = shore_wave(v_rest, v_still_depth);
+	// Where a breaker curls, the ribbon draws it and the ocean surface leaves a hole; they overlap a
+	// little where the curl is weak.
+	Breaker breaker = breaker_at(v_rest, shore, length(v_rest - CAMERA_POSITION_WORLD.xz));
+	if (!breaker_drawn_here(breaker, shore.roller_wave)) {
+		discard;
+	}
+	// Small ripples ride the curl; the wave's own shape is the curl's.
+	vec2 detail_slope = slope;
 	slope += shore.slope;
 	jac = (jac * open_sea + shore.stretch) * v_fold;
 	// Rings, wakes and splashes from objects in the water (WaterRipples).
@@ -379,6 +433,14 @@ void fragment() {
 	slope += ripple.xy;
 	vec2 eff = slope / max(vec2(1.0) + jac, vec2(0.25));
 	vec3 n_world = normalize(vec3(-eff.x, 1.0, -eff.y));
+	if (v_curl > 0.0) {
+		vec3 on_curl = normalize(normalize(v_curl_normal) - vec3(detail_slope.x, 0.0, detail_slope.y) * CURL_DETAIL);
+		n_world = normalize(mix(n_world, on_curl, v_curl));
+	}
+	// The lip (outer side and tip), and the inside of the tube (its ceiling and back wall).
+	float lip = v_curl * (1.0 - smoothstep(BREAKER_PART_TIP, BREAKER_PART_CEILING + 0.5, v_curl_part));
+	float tube = v_curl * smoothstep(BREAKER_PART_TIP, BREAKER_PART_CEILING, v_curl_part)
+			* (1.0 - smoothstep(BREAKER_PART_BACK_WALL + 0.6, BREAKER_PART_TROUGH, v_curl_part));
 	// From above, a back face is the far side of a steep or folded crest: draw it as the top surface.
 	bool from_below = !FRONT_FACING && camera_underwater;
 	if (from_below) {
@@ -428,6 +490,11 @@ void fragment() {
 	vec3 downwelling = mix(vec3(1.0), exp(-absorption * bottom_depth), seabed_light_loss);
 	bottom *= mix(vec3(1.0), caustic, caustic_weight) * downwelling;
 	vec3 refracted = bottom * transmittance;
+	// Behind the face of a curl and through its lip lies the wave's own water, not what the screen showed
+	// before any water was drawn: light scattered inside the water (the albedo below) instead.
+	float in_wave = max(lip, tube);
+	refracted *= 1.0 - in_wave;
+	murk = mix(murk, 1.0, in_wave);
 
 	// --- Foam: whitecaps from the simulation, surf on shallow ground, a line where water meets land -----
 	vec2 fuv = (v_rest - foam_offset) * foam_scale;
@@ -442,6 +509,7 @@ void fragment() {
 	float foam_near = smoothstep(1.0 - cover, 1.0 - cover + foam_softness, tex);
 	// Breakers: the roller on the breaking front and the lace it leaves behind (near, far).
 	vec2 white_water = ocean_shore_foam(shore, v_rest, water_wave_time);
+	white_water = max(white_water, ocean_breaker_foam(v_rest, lip, v_curl, v_curl_part, v_curl_stage, shore.roller_wave));
 	foam_near = max(foam_near, white_water.x);
 	// Wind-blown streaks: the foam pattern stretched along the wind, growing with the wind.
 	float wind_speed = length(wind);
@@ -490,8 +558,10 @@ void fragment() {
 
 	float f = fresnel * edge;
 	if (!from_below) {
-		EMISSION = (refracted * (1.0 - f) + reflection * f) * (1.0 - foam);
-		ALBEDO = mix(scatter_color * murk * (1.0 - f), foam_color, foam) + bubble_albedo * bubbles * (1.0 - f);
+		// Inside the tube the lip hides most of the sky.
+		float sky_seen = 1.0 - TUBE_SHADE * tube;
+		EMISSION = (refracted * (1.0 - f) + reflection * f * sky_seen) * (1.0 - foam);
+		ALBEDO = (mix(scatter_color * murk * (1.0 - f), foam_color, foam) + bubble_albedo * bubbles * (1.0 - f)) * sky_seen;
 		// Only used for the engine's sky reflection, where neither the mirror nor the march found anything.
 		SPECULAR = planar ? 0.0 : WATER_ENGINE_SPECULAR * edge * (1.0 - foam) * (1.0 - traced.a);
 	} else {
@@ -505,6 +575,7 @@ void fragment() {
 	v_front = from_below ? 0.0 : 1.0;
 	v_foam = foam;
 	v_fresnel_scale = 1.0 - f;
+	v_lip = lip * (1.0 - foam);
 }
 
 void light() {
@@ -516,5 +587,8 @@ void light() {
 		SPECULAR_LIGHT += glint * ATTENUATION * LIGHT_COLOR * (1.0 - v_foam);
 		float scatter = water_scatter(NORMAL, VIEW, LIGHT, v_crest, sss_crest_strength, sss_view_strength);
 		SPECULAR_LIGHT += scatter * sss_color * LIGHT_COLOR * ATTENUATION * v_fresnel_scale * (1.0 - v_foam);
+		// A thin lip with the sun behind it glows green: light straight through it, from either side.
+		float through = pow(clamp(dot(LIGHT, -VIEW), 0.0, 1.0), 3.0);
+		SPECULAR_LIGHT += v_lip * LIP_GLOW * through * sss_color * LIGHT_COLOR * ATTENUATION / PI;
 	}
 }

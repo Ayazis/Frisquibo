@@ -1,6 +1,11 @@
 # Breaking waves plan
 
-Status: phase A built (desktop look pending); phases B and C not started. Follows decision 0010 (shore waves).
+Status: phases A, B and C built (decisions 0011 and 0012). None of it has been looked at on a desktop GPU
+yet. Phase B's pass/fail judgement was meant to come before phase C. On request, both were built
+together, so the judgement now comes afterwards, on the finished thing: run `prototypes/breakers/breaker_bench.tscn`
+and the checks in `docs/plans/water_realism.md`. If the curl or its white water fails, set
+`curl_strength` to 0 (or the tier's `breaker_reach` to 0) and the shore falls back to phase A's spilling
+breakers. Follows decision 0010 (shore waves).
 
 ## Goal
 
@@ -55,7 +60,11 @@ So the order is:
 Checks: headless import, tests and both exports for every step, and a person's look on a desktop
 GPU (checks 19-22 in `water_realism.md`).
 
-## Phase B: two test scenes with pass/fail bars (before any production curl)
+## Phase B: two test scenes with pass/fail bars (built as one bench, judgement pending)
+
+Built as `prototypes/breakers/breaker_bench.tscn`, which runs the production code: a straight 1:17 beach
+with viewpoints at 15 m and at 40 m, a low view and a backlit sun, slow motion and curls on/off. Use it
+for both judgements below.
 
 Each one is a throwaway scene in `prototypes/breakers/`: a straight beach and one breaker driven by
 hand. A person judges it on a desktop GPU, side by side with real surf footage at the same distance
@@ -78,7 +87,7 @@ if a scene fails twice, its part is dropped.
 
    Passes if nothing reads as soft round blobs from any distance, in sun and in overcast light.
 
-## Phase C: production curls (only if both B scenes pass)
+## Phase C: production curls (built; keep only if the bench passes)
 
 As in the earlier version of this plan:
 1. **Breaker type.** Spill, plunge or surge is chosen from the surf similarity number

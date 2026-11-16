@@ -35,6 +35,8 @@ var image: Image
 ## drawn from the waterline point, so it stays the same along a wave's path and matches the swash where
 ## it lands.
 var origins: Image
+## The waterlines in the area (depth 0), as polylines in world (x, z); closed ones end where they start.
+var waterlines: Array[PackedVector2Array] = []
 var area: Rect2
 var width := 0
 var height := 0
@@ -61,6 +63,7 @@ static func bake(depth_at: Callable, bake_area: Rect2, cell: float = DEFAULT_CEL
 	field._sample_depths(depth_at)
 	field._march()
 	field._encode()
+	field.waterlines = WaterlineTracer.trace(field._depths, field.width, field.height, bake_area)
 	field._depths = PackedFloat32Array()
 	field._times = PackedFloat32Array()
 	field._ends = PackedVector2Array()

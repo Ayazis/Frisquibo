@@ -4,7 +4,7 @@ extends SceneTree
 const TIERS: Array[String] = ["low", "medium", "high", "ultra"]
 const OCEAN_VALUES: Array[StringName] = [&"cascade_count", &"radial_segments", &"reflection_resolution_scale",
 		&"reflection_blur_samples", &"reflection_march_steps", &"underwater_shaft_steps", &"spray_particles",
-		&"spray_area"]
+		&"spray_area", &"breaker_reach", &"breaker_segments", &"breaker_spray"]
 const WATER_VALUES: Array[StringName] = [&"ripple_resolution", &"ripple_area", &"splash_particle_scale"]
 var _failures: int = 0
 
