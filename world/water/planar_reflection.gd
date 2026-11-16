@@ -1,29 +1,54 @@
 class_name PlanarReflection
 extends Node
-## Renders the scene mirrored in a horizontal water plane into a SubViewport and publishes it as the
-## global shader texture `water_reflection`. Water shaders sample it with the screen UV (Y flipped).
-## The water itself is on WATER_LAYER so the mirror camera doesn't see it. Desktop only: on the web
-## this node disables itself and water falls back to the engine's sky reflection.
+## Renders the scene mirrored in a horizontal water plane into a SubViewport and publishes it as a
+## global shader texture that water shaders sample with the screen UV (Y flipped). Two planes can exist
+## at once (`slot`): 0 is the sea's (`water_reflection`), 1 a second level such as a pond above the sea
+## (`water_reflection_2`); each water material picks one with its reflection_slot.
+## The water itself is on WATER_LAYER so mirror cameras don't see it. Desktop only: on the web this node
+## disables itself and water falls back to the engine's sky reflection.
 
 const WATER_LAYER := 20
-## Terrain shaders discard fragments below this height while the mirror camera (below water) renders.
-const CLIP_PARAM := &"water_reflection_clip_height"
+## An otherwise empty layer that only the second mirror camera leaves out, so ground shaders know which
+## clip height applies (reflection_clip.gdshaderinc). Put nothing on this layer.
+const SECOND_MIRROR_LAYER := 19
+const SLOT_COUNT := 2
+## Per slot: the texture, whether it is drawn, and the height below which ground is clipped.
+const TEXTURE_PARAMS: Array[StringName] = [&"water_reflection", &"water_reflection_2"]
+const ENABLED_PARAMS: Array[StringName] = [&"water_reflection_enabled", &"water_reflection_2_enabled"]
+const CLIP_PARAMS: Array[StringName] = [&"water_reflection_clip_height", &"water_reflection_2_clip_height"]
+## Taps water shaders use to blur the reflection by unresolved ripples (water_reflection.gdshaderinc).
+const BLUR_SAMPLES_PARAM := &"water_reflection_blur_samples"
+## Used when no quality tier sets blur_samples (lakes and rivers): the High tier's value.
+const DEFAULT_BLUR_SAMPLES := 12
 
 @export var plane_height := 0.0
 ## Fraction of the main viewport resolution; lower is cheaper and softer.
 @export_range(0.25, 1.0) var resolution_scale := 0.6
+## Taps of the rough-water blur; 1 gives a sharp mirror everywhere.
+@export_range(1, 32) var blur_samples := DEFAULT_BLUR_SAMPLES
+## Which mirror this is: 0 the sea's level, 1 a second level.
+@export_range(0, 1) var slot := 0
+## World box of the water this mirror serves. When set, the mirror only renders while that box is on
+## screen (a pond seen from the beach costs nothing). Empty: always render.
+@export var visibility_aabb := AABB()
 
 var _viewport: SubViewport
 var _camera: Camera3D
+var _on_screen := true
 
 
 static func water_layer_mask() -> int:
 	return 1 << (WATER_LAYER - 1)
 
 
+static func second_mirror_mask() -> int:
+	return 1 << (SECOND_MIRROR_LAYER - 1)
+
+
 func _ready() -> void:
+	slot = clampi(slot, 0, SLOT_COUNT - 1)
 	if OS.has_feature("web") or RenderingServer.get_current_rendering_method() == "gl_compatibility":
-		RenderingServer.global_shader_parameter_set(&"water_reflection_enabled", false)
+		RenderingServer.global_shader_parameter_set(ENABLED_PARAMS[slot], false)
 		set_process(false)
 		return
 	_viewport = SubViewport.new()
@@ -32,24 +57,41 @@ func _ready() -> void:
 	_viewport.positional_shadow_atlas_size = 0
 	_camera = Camera3D.new()
 	_camera.cull_mask = ~water_layer_mask()
+	if slot == 1:
+		_camera.cull_mask &= ~second_mirror_mask()
 	_viewport.add_child(_camera)
 	add_child(_viewport)
-	RenderingServer.global_shader_parameter_set(CLIP_PARAM, plane_height)
-	RenderingServer.global_shader_parameter_set(&"water_reflection", _viewport.get_texture())
-	RenderingServer.global_shader_parameter_set(&"water_reflection_enabled", true)
+	if visibility_aabb.has_volume():
+		var notifier := VisibleOnScreenNotifier3D.new()
+		notifier.aabb = visibility_aabb
+		notifier.screen_entered.connect(_set_on_screen.bind(true))
+		notifier.screen_exited.connect(_set_on_screen.bind(false))
+		add_child(notifier)
+		_set_on_screen(false)
+	RenderingServer.global_shader_parameter_set(CLIP_PARAMS[slot], plane_height)
+	RenderingServer.global_shader_parameter_set(BLUR_SAMPLES_PARAM, blur_samples)
+	RenderingServer.global_shader_parameter_set(TEXTURE_PARAMS[slot], _viewport.get_texture())
+	RenderingServer.global_shader_parameter_set(ENABLED_PARAMS[slot], true)
 
 
 func set_plane_height(value: float) -> void:
 	plane_height = value
 	if _viewport != null:
-		RenderingServer.global_shader_parameter_set(CLIP_PARAM, value)
+		RenderingServer.global_shader_parameter_set(CLIP_PARAMS[slot], value)
 
 
 func _exit_tree() -> void:
-	RenderingServer.global_shader_parameter_set(&"water_reflection_enabled", false)
+	RenderingServer.global_shader_parameter_set(ENABLED_PARAMS[slot], false)
+
+
+func _set_on_screen(on_screen: bool) -> void:
+	_on_screen = on_screen
+	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on_screen else SubViewport.UPDATE_DISABLED
 
 
 func _process(_delta: float) -> void:
+	if not _on_screen:
+		return
 	var main := get_viewport().get_camera_3d()
 	if main == null:
 		return

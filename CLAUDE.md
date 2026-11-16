@@ -25,6 +25,9 @@ This game is built mostly by AI, without engine experts on the team (see `docs/d
 
 ### Visual checks: opt-in, ask first
 The visual check (`tools/visual_check/`) costs time and tokens, so it is **not part of the default workflow**.
+- **Never render in a cloud container.** No visual checks and no software-Vulkan (lavapipe/xvfb) runs there:
+  only the headless import, the headless tests and the headless smoke tests. Rendered checks are done by a
+  person on a desktop GPU.
 - **At the start of each feature request, assess whether it needs a visual check**: does it change how the game
   looks (shaders, lighting, materials, post-processing, terrain, foliage, scene layout)? Pure logic, gameplay
   systems, tooling and docs don't.

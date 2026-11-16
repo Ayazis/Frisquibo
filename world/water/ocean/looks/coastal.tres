@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="OceanLook" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://world/water/ocean/ocean_look.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+absorption_red = 0.48
+absorption_green = 0.17
+absorption_blue = 0.32
+scatter_color = Color(0.02, 0.085, 0.07, 1)
+sss_color = Color(0.1, 0.45, 0.3, 1)
+deep_color = Color(0.008, 0.035, 0.028, 1)
+murk_blur = 4.0

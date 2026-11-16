@@ -12,7 +12,7 @@ const ARTISTIC_TITLE := "Artistic overrides"
 ## look and foam, the depth and shore, then the look. Values that leave physics behind come last.
 ## Every export group of OceanSpectrum, OceanLook and Ocean must be listed (ocean_parameters_test).
 const SECTION_ORDER: Array[String] = [READOUTS_TITLE, "Main waves (swell)", "Wind and surface waves",
-	"Crest shape", "Foam", "Depth and shore", "Water colour", "Surface light", "Caustics", ARTISTIC_TITLE,
+	"Crest shape", "Foam", "Depth and shore", "Sea state changes", "Water colour", "Surface light", "Caustics", ARTISTIC_TITLE,
 	LINKS_TITLE, STORAGE_TITLE]
 ## Sections that start folded: rarely needed, and they make the sea less physical.
 const FOLDED_SECTIONS: Array[String] = [ARTISTIC_TITLE]

@@ -36,7 +36,7 @@ storm, and wanted the panel full height. Done:
 - Storm preset: 24 m/s, 600 km fetch, choppiness 1.4, foam threshold 0.85, 9 s foam. New look values
   `foam_streaks` and `streak_length`: foam blown into long lines along the wind from Beaufort 7.
   `OceanAutoValues` refitted to the square root of the wind; a test keeps it near the presets.
-- `prototypes/water_compare/scale_boat.gd`: an 8 m boat with a mast, one off the beach and one in deep
+- `prototypes/water_demo/scale_boat.gd`: an 8 m boat with a mast, one off the beach and one in deep
   water at (-40, -1450).
 - The panel now runs to the bottom of the screen.
 
@@ -95,7 +95,7 @@ container**: 1600x900 renders take about 17 minutes per shot there. Run them on 
 | 4 (part) | Save / load (one `user://ocean_tuning.tres`), Snapshot and A/B swap | `ocean_tuner_storage.gd` |
 
 Decisions: `docs/decisions/0005-ocean-parameter-catalogue-and-look.md`,
-`0006-swell-and-wave-height.md`. The panel is shown in `prototypes/water_compare/custom_ocean_station.gd`.
+`0006-swell-and-wave-height.md`. The panel is shown in `prototypes/water_demo/island_scene.gd`.
 
 ## Next up, in order
 
@@ -112,12 +112,11 @@ Decisions: `docs/decisions/0005-ocean-parameter-catalogue-and-look.md`,
 
 ## Open items that need eyes on a desktop GPU
 
-- **Water-type presets** (clear ocean, coastal, murky) as `OceanLook` `.tres` files. Not written
-  because the colours would be guesses.
-- **Blended transitions between sea states.** The longest cascade's tile grows with the longest wave
-  (233 m for a breeze, about 940 m for the storm preset), and a tile change rearranges every long
-  wave at once. Blending the numbers alone would turn one jump into several. Doing it properly means
-  running the old and the new longest cascade side by side and cross-fading them.
+- **Water-type presets**: written in `world/water/ocean/looks/` (absorption from Jerlov's water types);
+  their colours still need judging on a desktop GPU.
+- **Blended transitions between sea states**: done in the water realism pass (`Ocean.transition_time`):
+  a change of tiles waits for the values to settle, then runs the old simulation beside the new one and
+  cross-fades them. Needs a look on a desktop GPU.
 - **Auto values showing how far a manual value is from physical.** The Auto box exists; the
   deviation display from the original design does not.
 - **The steepness and depth links** are still hard-coded in `ocean_tuner_links.gd`.
@@ -131,7 +130,8 @@ and the software Vulkan driver first (`apt-get update` is needed before the inst
 apt-get update && apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
 ```
 
-Then, from the project root:
+Then, from the project root (the two `xvfb-run` lines render: run them on a desktop only, never in a
+cloud container):
 
 ```
 godot --headless --import

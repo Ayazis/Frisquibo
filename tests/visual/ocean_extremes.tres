@@ -6,131 +6,131 @@
 [sub_resource type="Resource" id="storm_open_sea"]
 script = ExtResource("2")
 name = "storm_open_sea"
-camera_position = Vector3(-10, 16, -1380)
-look_at_target = Vector3(-40, 0, -1450)
-state = {"station": 3, "sea_state": 2}
+camera_position = Vector3(-10, 16, -1531)
+look_at_target = Vector3(-40, 0, -1601)
+state = {"view": 0, "sea_state": 2}
 
 [sub_resource type="Resource" id="storm_beach_low"]
 script = ExtResource("2")
 name = "storm_beach_low"
-camera_position = Vector3(4, 5, 14)
-look_at_target = Vector3(-10, 0, -60)
-state = {"station": 3, "sea_state": 2}
+camera_position = Vector3(4, 5, -137)
+look_at_target = Vector3(-10, 0, -211)
+state = {"view": 0, "sea_state": 2}
 
 [sub_resource type="Resource" id="hurricane_open_sea"]
 script = ExtResource("2")
 name = "hurricane_open_sea"
-camera_position = Vector3(0, 25, -1300)
-look_at_target = Vector3(-60, 0, -1500)
-state = {"station": 3, "sea_state": 2, "ocean": {"wind_speed": 40.0, "fetch": 2000.0}}
+camera_position = Vector3(0, 25, -1451)
+look_at_target = Vector3(-60, 0, -1651)
+state = {"view": 0, "sea_state": 2, "ocean": {"wind_speed": 40.0, "fetch": 2000.0}}
 
 [sub_resource type="Resource" id="swell_against_wind"]
 script = ExtResource("2")
 name = "swell_against_wind"
-camera_position = Vector3(0, 12, -1300)
-look_at_target = Vector3(-60, 0, -1500)
-state = {"station": 3, "sea_state": 1, "ocean": {"swell_height": 4.0, "swell_period": 14.0, "swell_direction": -155.0, "wind_speed": 14.0}}
+camera_position = Vector3(0, 12, -1451)
+look_at_target = Vector3(-60, 0, -1651)
+state = {"view": 0, "sea_state": 1, "ocean": {"swell_height": 4.0, "swell_period": 14.0, "swell_direction": -155.0, "wind_speed": 14.0}}
 
 [sub_resource type="Resource" id="wind_min"]
 script = ExtResource("2")
 name = "wind_min"
-camera_position = Vector3(0, 3, -1300)
-look_at_target = Vector3(-30, 0, -1400)
-state = {"station": 3, "sea_state": 0, "ocean": {"wind_speed": 0.5}}
+camera_position = Vector3(0, 3, -1451)
+look_at_target = Vector3(-30, 0, -1551)
+state = {"view": 0, "sea_state": 0, "ocean": {"wind_speed": 0.5}}
 
 [sub_resource type="Resource" id="height_x6_chop_x4"]
 script = ExtResource("2")
 name = "height_x6_chop_x4"
-camera_position = Vector3(0, 25, -1300)
-look_at_target = Vector3(-60, 0, -1500)
-state = {"station": 3, "sea_state": 1, "ocean": {"height_scale": 6.0, "choppiness": 4.0}}
+camera_position = Vector3(0, 25, -1451)
+look_at_target = Vector3(-60, 0, -1651)
+state = {"view": 0, "sea_state": 1, "ocean": {"height_scale": 6.0, "choppiness": 4.0}}
 
 [sub_resource type="Resource" id="wavelength_min"]
 script = ExtResource("2")
 name = "wavelength_min"
-camera_position = Vector3(0, 4, -1300)
-look_at_target = Vector3(-30, 0, -1400)
-state = {"station": 3, "sea_state": 1, "ocean": {"wavelength_scale": 0.1}}
+camera_position = Vector3(0, 4, -1451)
+look_at_target = Vector3(-30, 0, -1551)
+state = {"view": 0, "sea_state": 1, "ocean": {"wavelength_scale": 0.1}}
 
 [sub_resource type="Resource" id="wavelength_max"]
 script = ExtResource("2")
 name = "wavelength_max"
-camera_position = Vector3(0, 8, -1300)
-look_at_target = Vector3(-60, 0, -1500)
-state = {"station": 3, "sea_state": 1, "ocean": {"wavelength_scale": 8.0}}
+camera_position = Vector3(0, 8, -1451)
+look_at_target = Vector3(-60, 0, -1651)
+state = {"view": 0, "sea_state": 1, "ocean": {"wavelength_scale": 8.0}}
 
 [sub_resource type="Resource" id="swell_max"]
 script = ExtResource("2")
 name = "swell_max"
-camera_position = Vector3(0, 15, -1300)
-look_at_target = Vector3(-60, 0, -1500)
-state = {"station": 3, "sea_state": 1, "ocean": {"swell_height": 8.0, "swell_period": 22.0, "swell_spread": 1.0}}
+camera_position = Vector3(0, 15, -1451)
+look_at_target = Vector3(-60, 0, -1651)
+state = {"view": 0, "sea_state": 1, "ocean": {"swell_height": 8.0, "swell_period": 22.0, "swell_spread": 1.0}}
 
 [sub_resource type="Resource" id="swell_max_beach"]
 script = ExtResource("2")
 name = "swell_max_beach"
-camera_position = Vector3(6, 4, 8)
-look_at_target = Vector3(-4, 0, -40)
-state = {"station": 3, "sea_state": 1, "ocean": {"swell_height": 8.0, "swell_period": 22.0}}
+camera_position = Vector3(6, 4, -143)
+look_at_target = Vector3(-4, 0, -191)
+state = {"view": 0, "sea_state": 1, "ocean": {"swell_height": 8.0, "swell_period": 22.0}}
 
 [sub_resource type="Resource" id="smoothness_max"]
 script = ExtResource("2")
 name = "smoothness_max"
-camera_position = Vector3(0, 4, -1300)
-look_at_target = Vector3(-30, 0, -1400)
-state = {"station": 3, "sea_state": 1, "ocean": {"short_wave_cutoff": 3.0}}
+camera_position = Vector3(0, 4, -1451)
+look_at_target = Vector3(-30, 0, -1551)
+state = {"view": 0, "sea_state": 1, "ocean": {"short_wave_cutoff": 3.0}}
 
 [sub_resource type="Resource" id="foam_max"]
 script = ExtResource("2")
 name = "foam_max"
-camera_position = Vector3(0, 6, -1300)
-look_at_target = Vector3(-60, 0, -1500)
-state = {"station": 3, "sea_state": 1, "ocean": {"foam_gain": 20.0, "foam_threshold": 3.0, "foam_lifetime": 40.0}}
+camera_position = Vector3(0, 6, -1451)
+look_at_target = Vector3(-60, 0, -1651)
+state = {"view": 0, "sea_state": 1, "ocean": {"foam_gain": 20.0, "foam_threshold": 3.0, "foam_lifetime": 40.0}}
 
 [sub_resource type="Resource" id="breakers_max_beach"]
 script = ExtResource("2")
 name = "breakers_max_beach"
-camera_position = Vector3(6, 9, 20)
-look_at_target = Vector3(-4, 0, -40)
-state = {"station": 3, "sea_state": 2, "ocean": {"breaker_ratio": 2.0, "wave_setup": 2.0, "min_shore_wave": 1.0}}
+camera_position = Vector3(6, 9, -131)
+look_at_target = Vector3(-4, 0, -191)
+state = {"view": 0, "sea_state": 2, "ocean": {"breaker_ratio": 2.0, "wave_setup": 2.0, "min_shore_wave": 1.0}}
 
 [sub_resource type="Resource" id="level_high_beach"]
 script = ExtResource("2")
 name = "level_high_beach"
-camera_position = Vector3(6, 25, 30)
-look_at_target = Vector3(-4, 0, -40)
-state = {"station": 3, "sea_state": 1, "ocean": {"level": 20.0}}
+camera_position = Vector3(6, 25, -121)
+look_at_target = Vector3(-4, 0, -191)
+state = {"view": 0, "sea_state": 1, "ocean": {"level": 20.0}}
 
 [sub_resource type="Resource" id="level_low_beach"]
 script = ExtResource("2")
 name = "level_low_beach"
-camera_position = Vector3(6, 4, 8)
-look_at_target = Vector3(-4, -10, -60)
-state = {"station": 3, "sea_state": 1, "ocean": {"level": -20.0}}
+camera_position = Vector3(6, 4, -143)
+look_at_target = Vector3(-4, -10, -211)
+state = {"view": 0, "sea_state": 1, "ocean": {"level": -20.0}}
 
 [sub_resource type="Resource" id="look_extremes"]
 script = ExtResource("2")
 name = "look_extremes"
-camera_position = Vector3(0, 4, -1300)
-look_at_target = Vector3(-30, 0, -1400)
-state = {"station": 3, "sea_state": 1, "ocean": {"absorption_red": 4.0, "refraction_strength": 0.6, "sun_specular_strength": 8.0, "whitecap_strength": 8.0, "min_jacobian": 1.0}}
+camera_position = Vector3(0, 4, -1451)
+look_at_target = Vector3(-30, 0, -1551)
+state = {"view": 0, "sea_state": 1, "ocean": {"absorption_red": 4.0, "refraction_strength": 0.6, "sun_specular_strength": 8.0, "whitecap_strength": 8.0, "min_jacobian": 1.0}}
 
 [sub_resource type="Resource" id="boat_beach_breeze"]
 script = ExtResource("2")
 name = "boat_beach_breeze"
-camera_position = Vector3(2, 4, -50)
-look_at_target = Vector3(-14, 1, -70)
-state = {"station": 3, "sea_state": 1}
+camera_position = Vector3(-2, 4, -184)
+look_at_target = Vector3(-18, 1, -204)
+state = {"view": 0, "sea_state": 1}
 
 [sub_resource type="Resource" id="boat_storm_close"]
 script = ExtResource("2")
 name = "boat_storm_close"
-camera_position = Vector3(-15, 12, -1420)
-look_at_target = Vector3(-40, 1, -1450)
-state = {"station": 3, "sea_state": 2}
+camera_position = Vector3(-310, 12, -550)
+look_at_target = Vector3(-335, 1, -580)
+state = {"view": 0, "sea_state": 2}
 
 [resource]
 script = ExtResource("1")
-scene_path = "res://prototypes/water_compare/water_compare.tscn"
+scene_path = "res://prototypes/water_demo/water_demo.tscn"
 settle_frames = 240
 shots = Array[ExtResource("2")]([SubResource("storm_open_sea"), SubResource("storm_beach_low"), SubResource("hurricane_open_sea"), SubResource("swell_against_wind"), SubResource("wind_min"), SubResource("height_x6_chop_x4"), SubResource("wavelength_min"), SubResource("wavelength_max"), SubResource("swell_max"), SubResource("swell_max_beach"), SubResource("smoothness_max"), SubResource("foam_max"), SubResource("breakers_max_beach"), SubResource("level_high_beach"), SubResource("level_low_beach"), SubResource("look_extremes"), SubResource("boat_beach_breeze"), SubResource("boat_storm_close")])

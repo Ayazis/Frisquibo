@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="WaterQuality" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://world/water/water_quality.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+ripple_resolution = 128
+ripple_area = 24.0
+splash_particle_scale = 0.4

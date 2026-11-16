@@ -4,20 +4,31 @@ render_mode blend_mix, depth_draw_always, cull_disabled, world_vertex_coords;
 //  - normals from the summed slopes of all cascades, sharpened by the horizontal-displacement jacobian
 //  - LEAN mapping: slope variance from the mip chain becomes GGX roughness, so distant waves turn into a
 //    wide, glittering sun path instead of aliasing
-//  - planar (desktop) or sky reflection with Fresnel; refraction with per-channel absorption and caustics
+//  - planar (desktop) or sky reflection with Fresnel, the planar one blurred by the same slope variance;
+//    refraction with per-channel absorption, light lost on its way down to the seabed, and caustics
+//    focused by the simulated waves (ocean_caustics)
 //  - subsurface light through thin crests (the Atlas model), persistent whitecaps and shoreline surf
+//  - interaction ripples, wakes and splash foam from objects in the water (WaterRipples)
+//  - wind gusts: drifting patches of rougher and glassier water
+//  - the swash: near the waterline the sea runs up the beach and slides back with each wave
 //  - seen from below: Snell's window and total internal reflection
 
 const int MAX_CASCADES = 4;
 const int MAX_LOCAL_RULES = 8; // must match OceanLocalRules.MAX_RULES
-const float WATER_F0 = 0.02;
-const float WATER_IOR = 1.333;
 
 uniform sampler2DArray displacement_maps : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray slope_maps : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray moment_maps : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float tile_lengths[4];
 uniform int cascade_count = 4;
+// While the sea state changes the tiles, the old simulation runs on and fades out (Ocean): its maps,
+// and how far the change is (0: all old, 1: all new).
+uniform sampler2DArray prev_displacement_maps : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2DArray prev_slope_maps : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2DArray prev_moment_maps : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform float prev_tile_lengths[4];
+uniform int prev_cascade_count = 0;
+uniform float transition = 1.0;
 uniform float map_size = 256.0;
 // Angular step of the surface mesh, to estimate vertex spacing for anti-aliased displacement.
 uniform float mesh_angular_step = 0.0123;
@@ -33,7 +44,23 @@ uniform float sss_view_strength = 0.35;
 uniform float refraction_strength = 0.06;
 uniform float refraction_full_distance = 8.0;                // metres; the offset shrinks beyond this
 uniform float reflection_distortion = 0.035;
+uniform float reflection_blur = 1.0;                       // 1 = blur by the real unresolved slopes
 uniform float base_slope_variance = 0.0006;                // capillary ripples below the smallest cascade
+uniform float capillary_tile = 1.2;                        // metres covered by the close-up ripple normal maps
+uniform float capillary_speed = 0.25;                      // m/s the close-up ripples drift downwind
+uniform float gust_strength = 0.5;                         // 0 = even wind; patches of rougher and glassier water
+uniform float gust_size = 60.0;                            // metres across a gust patch
+uniform sampler2D gust_texture : hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform sampler2D normal_map_a : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D normal_map_b : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+// Slope variance per axis of the two detail normal maps (WaterTextures) together, measured by
+// tests/headless/water_textures_test.gd.
+const float CAPILLARY_MAP_VARIANCE = 0.0269;
+// Size of a ripple in the detail maps, as a share of capillary_tile.
+const float CAPILLARY_FEATURE = 0.16;
+// The second map is smaller and drifts across the wind, so the two never line up.
+const float CAPILLARY_SECOND_SCALE = 1.7;
+const float CAPILLARY_SECOND_SPEED = 0.7;
 uniform float sun_specular_strength = 1.0;
 uniform float murk_blur = 3.0;                             // screen mip levels of blur through deep water
 
@@ -48,6 +75,10 @@ uniform float surf_depth = 1.6;
 uniform float foam_far_distance = 250.0;
 uniform float foam_streaks = 0.35;                         // cover of wind-blown streaks in a full gale
 uniform float streak_length = 24.0;                        // streaks are this many times longer than wide
+uniform float bubble_strength = 0.5;                       // turquoise glow of bubbles under fresh whitecaps
+uniform float foam_relief = 1.0;                           // lumpiness of thick foam (1: a few cm on 20 cm)
+// Metres the foam pattern has drifted downwind (set by Ocean, wrapped so the pattern never jumps).
+uniform vec2 foam_offset = vec2(0.0);
 // Wind over the sea (direction * m/s), set by Ocean from the sea state.
 uniform vec2 wind = vec2(8.16, 3.8);
 uniform sampler2D foam_texture : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -62,11 +93,17 @@ const float STREAK_PATTERN_SCALE = 0.35;
 const float STREAK_PATCH_SCALE = 0.06;
 const vec2 STREAK_PATCH_RANGE = vec2(0.45, 0.75);
 const float STREAK_FAR_COVER = 0.35;
+// Bubbles scatter light like a bright, diffuse version of the crest glow.
+const float BUBBLE_ALBEDO = 0.45;
+// Slope of the foam surface per unit of foam-pattern change across one pattern tile.
+const float FOAM_LUMP = 0.025;
+// Pattern tiles between the two samples of the foam relief gradient.
+const float FOAM_RELIEF_STEP = 0.004;
 group_uniforms caustics;
-uniform float caustic_strength = 2.4;
-uniform float caustic_scale = 0.3;
-uniform float caustic_fade = 0.35;                         // per metre of depth
-uniform sampler2D caustic_texture : hint_default_black, filter_linear_mipmap, repeat_enable;
+uniform float caustic_strength = 1.0;                      // 1 = the light the waves really focus
+uniform float caustic_fade = 0.1;                          // per metre of depth, on top of the sun-disk blur
+// Light on the seabed has crossed the water once already, on its way down. 1 = physical, 0 = none.
+uniform float seabed_light_loss = 1.0;
 
 group_uniforms shore;
 // Seabed height map baked by Ocean.set_seabed(); rect = (origin x, origin z, size x, size z), size 0 = none.
@@ -96,11 +133,16 @@ uniform int local_rule_count = 0;
 uniform vec4 local_rule_depth[MAX_LOCAL_RULES];
 uniform vec4 local_rule_effect[MAX_LOCAL_RULES];
 
+#include "res://world/water/ocean/ocean_caustics.gdshaderinc"
+
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 
-global uniform sampler2D water_reflection : filter_linear;
-global uniform bool water_reflection_enabled;
+#include "res://world/water/water_optics.gdshaderinc"
+#include "res://world/water/water_reflection.gdshaderinc"
+#include "res://world/water/ripples/water_ripples.gdshaderinc"
+#include "res://world/water/water_gusts.gdshaderinc"
+#include "res://world/water/swash.gdshaderinc"
 
 varying vec2 v_rest;
 varying vec3 v_world;
@@ -167,10 +209,41 @@ float setup_lift(float depth) {
 	return wave_setup * wave_amplitude * (1.0 - smoothstep(0.0, zone, depth));
 }
 
+// The swash: in the surf zone and on the beach the sea runs up the sand and slides back with each wave
+// (swash.gdshaderinc, the same edge the ground draws its wet film from). Extra water level at `p` on top
+// of `setup`, where the still water is `depth` deep (negative on land).
+float swash_lift(vec2 p, float depth, float setup) {
+	if (depth > 1e3) {
+		return 0.0;
+	}
+	float zone = wave_amplitude / max(breaker_ratio, 0.01);
+	float near_shore = 1.0 - smoothstep(0.0, zone, depth);
+	return max(water_swash(p, TIME).x * near_shore - setup, 0.0);
+}
+
 // Fraction of the open-sea wave that survives at this water depth. Ripples remain right up to the beach.
 float shore_damping(float depth) {
 	float limited = breaker_ratio * max(depth, 0.0) / max(wave_amplitude, 0.01);
 	return clamp(max(limited, min_shore_wave * smoothstep(0.0, 0.5, depth)), 0.0, 1.0);
+}
+
+// Share of the new sea state, eased in and out.
+float transition_share() {
+	return smoothstep(0.0, 1.0, transition);
+}
+
+// Amplitude weights (old, new) of cascade i during a sea-state change. A cascade that kept its tile has
+// the same wave phases in both states, so its amplitudes blend linearly. One whose tile changed is an
+// unrelated wave field: square-root weights keep the energy (and so the wave height) steady.
+vec2 transition_weights(int i) {
+	if (transition >= 1.0 || i >= prev_cascade_count) {
+		return vec2(0.0, 1.0);
+	}
+	float w = transition_share();
+	if (abs(prev_tile_lengths[i] - tile_lengths[i]) < 0.001) {
+		return vec2(1.0 - w, w);
+	}
+	return vec2(sqrt(1.0 - w), sqrt(w));
 }
 
 // Scale on horizontal displacement that keeps the jacobian (1 + dDx/dx)(1 + dDz/dz) from folding.
@@ -186,15 +259,6 @@ float fold_limit(vec2 jac) {
 	return clamp(k, 0.0, 1.0);
 }
 
-vec3 view_from_depth(vec2 uv, float raw, mat4 inv_proj) {
-	vec4 v = inv_proj * vec4(uv * 2.0 - 1.0, raw, 1.0);
-	return v.xyz / v.w;
-}
-
-float schlick(float cos_theta) {
-	return WATER_F0 + (1.0 - WATER_F0) * pow(1.0 - clamp(cos_theta, 0.0, 1.0), 5.0);
-}
-
 void vertex() {
 	vec2 p = VERTEX.xz;
 	float dist = length(p - CAMERA_POSITION_WORLD.xz);
@@ -202,7 +266,8 @@ void vertex() {
 	float depth = seabed_depth(p);
 	vec3 rules = local_rules(depth);
 	// Set-up and rule water rise the surface and deepen the water the waves see; low land floods.
-	float lift = setup_lift(depth) + rules.z;
+	float setup = setup_lift(depth);
+	float lift = setup + swash_lift(p, depth, setup) + rules.z;
 	v_seabed_depth = depth + lift;
 	v_damping = shore_damping(v_seabed_depth) * rules.y;
 	v_rule_foam = rules.x;
@@ -216,14 +281,22 @@ void vertex() {
 		// Pick the mip whose texels match the vertex spacing: waves the mesh can't carry average out.
 		float lod = log2(max(spacing * map_size / tile, 1.0));
 		vec3 uv = vec3(p / tile, float(i));
-		d += textureLod(displacement_maps, uv, lod).xyz;
-		jac += textureLod(slope_maps, uv, lod).zw;
+		vec2 tw = transition_weights(i);
+		d += textureLod(displacement_maps, uv, lod).xyz * tw.y;
+		jac += textureLod(slope_maps, uv, lod).zw * tw.y;
+		if (tw.x > 0.0) {
+			float prev_tile = prev_tile_lengths[i];
+			float prev_lod = log2(max(spacing * map_size / prev_tile, 1.0));
+			vec3 prev_uv = vec3(p / prev_tile, float(i));
+			d += textureLod(prev_displacement_maps, prev_uv, prev_lod).xyz * tw.x;
+			jac += textureLod(prev_slope_maps, prev_uv, prev_lod).zw * tw.x;
+		}
 	}
 	v_fold = fold_limit(jac * v_damping);
 	d.xz *= v_damping * v_fold;
 	d.y *= v_damping;
 	VERTEX += d;
-	VERTEX.y += lift;
+	VERTEX.y += lift + water_ripples(VERTEX.xz).z;
 	v_rest = p;
 	v_world = VERTEX;
 	v_crest = d.y;
@@ -233,7 +306,9 @@ void fragment() {
 	// --- Surface shape from the simulation -----------------------------------------------------------
 	vec2 slope = vec2(0.0);
 	vec2 jac = vec2(0.0);
-	vec2 variance = vec2(base_slope_variance);
+	// Gusts change the energy of the smallest ripples: the capillaries and the shortest cascade.
+	float gust = water_gusts(gust_texture, v_rest, wind, gust_size, gust_strength, TIME);
+	vec2 variance = vec2(base_slope_variance * gust);
 	float foam_cover = 0.0;
 	float foam_weight = 1.0;
 	for (int i = 0; i < MAX_CASCADES; i++) {
@@ -243,15 +318,48 @@ void fragment() {
 		vec3 uv = vec3(v_rest / tile_lengths[i], float(i));
 		vec4 s = texture(slope_maps, uv);
 		vec4 m = texture(moment_maps, uv);
-		slope += s.xy;
+		vec2 tw = transition_weights(i);
+		vec2 cascade_variance = max(m.xy - s.xy * s.xy, vec2(0.0));
+		s *= tw.y;
+		float cascade_foam = m.z;
+		if (tw.x > 0.0) {
+			// Unresolved slope variance and foam blend by share: (1 - w) old + w new for both weightings.
+			float w = transition_share();
+			vec3 prev_uv = vec3(v_rest / prev_tile_lengths[i], float(i));
+			vec4 ps = texture(prev_slope_maps, prev_uv);
+			vec4 pm = texture(prev_moment_maps, prev_uv);
+			cascade_variance = mix(max(pm.xy - ps.xy * ps.xy, vec2(0.0)), cascade_variance, w);
+			cascade_foam = mix(pm.z, cascade_foam, w);
+			s += ps * tw.x;
+		}
+		float energy = (i == cascade_count - 1 && cascade_count > 1) ? gust : 1.0;
+		slope += s.xy * sqrt(energy);
 		jac += s.zw;
-		variance += max(m.xy - s.xy * s.xy, vec2(0.0));
-		foam_cover += m.z * foam_weight;
+		variance += cascade_variance * energy;
+		foam_cover += cascade_foam * foam_weight;
 		foam_weight *= foam_cascade_falloff;
 	}
+	// Close-up ripples: near the camera the capillary roughness is drawn as real ripples carrying the same
+	// energy; where a pixel covers several of them they fade back into roughness.
+	float wind_speed_now = length(wind);
+	vec2 wind_dir_now = wind_speed_now > 0.0 ? wind / wind_speed_now : vec2(1.0, 0.0);
+	vec2 cuv = v_rest / capillary_tile;
+	vec2 drift = wind_dir_now * capillary_speed * TIME / capillary_tile;
+	vec3 ca = texture(normal_map_a, cuv - drift).xyz * 2.0 - 1.0;
+	vec3 cb = texture(normal_map_b, cuv * CAPILLARY_SECOND_SCALE - vec2(-wind_dir_now.y, wind_dir_now.x) * drift * CAPILLARY_SECOND_SPEED).xyz * 2.0 - 1.0;
+	float footprint = length(fwidth(v_rest));
+	float feature = CAPILLARY_FEATURE * capillary_tile;
+	float resolved = 1.0 - smoothstep(0.1 * feature, 0.5 * feature, footprint);
+	float capillary_energy = base_slope_variance * gust;
+	slope += (ca.xy + cb.xy) * sqrt(capillary_energy / CAPILLARY_MAP_VARIANCE) * resolved;
+	variance -= vec2(capillary_energy * resolved * resolved);
+
 	slope *= v_damping;
 	jac *= v_damping * v_fold;
 	variance *= v_damping * v_damping;
+	// Rings, wakes and splashes from objects in the water (WaterRipples).
+	vec4 ripple = water_ripples(v_world.xz);
+	slope += ripple.xy;
 	vec2 eff = slope / max(vec2(1.0) + jac, vec2(0.25));
 	vec3 n_world = normalize(vec3(-eff.x, 1.0, -eff.y));
 	// From above, a back face is the far side of a steep or folded crest: draw it as the top surface.
@@ -260,19 +368,18 @@ void fragment() {
 		n_world = -n_world;
 	}
 	vec3 n_view = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
-	// GGX alpha ~ Beckmann m, m^2 = sigma_x^2 + sigma_z^2; Godot roughness is sqrt(alpha).
-	float roughness = clamp(pow(variance.x + variance.y, 0.25), 0.03, 1.0);
+	float roughness = water_roughness(variance);
 
 	vec3 v = normalize(CAMERA_POSITION_WORLD - v_world);
 	float dist = length(CAMERA_POSITION_WORLD - v_world);
 	float ndv = dot(n_world, v);
-	float fresnel = schlick(ndv);
+	float fresnel = water_schlick(ndv);
 	// Rough, distant water reflects less sharply at grazing angles (masking of wave backs).
 	fresnel *= mix(1.0, 0.75, roughness);
 
 	// --- What lies under the surface ------------------------------------------------------------------
 	float raw = texture(depth_tex, SCREEN_UV).r;
-	vec3 straight_view = view_from_depth(SCREEN_UV, raw, INV_PROJECTION_MATRIX);
+	vec3 straight_view = water_view_from_depth(SCREEN_UV, raw, INV_PROJECTION_MATRIX);
 	float thickness = max(VERTEX.z - straight_view.z, 0.0);
 	// Fade the offset out at the screen edges, where it would sample outside the screen.
 	vec2 to_edge = min(SCREEN_UV, vec2(1.0) - SCREEN_UV);
@@ -283,7 +390,7 @@ void fragment() {
 	float distance_scale = min(1.0, refraction_full_distance / max(-VERTEX.z, 0.001));
 	vec2 ruv = SCREEN_UV + n_view.xy * refraction_strength * clamp(thickness * 0.5, 0.0, 1.0) * edge_fade * distance_scale;
 	ruv = clamp(ruv, vec2(0.0), vec2(1.0));
-	vec3 bottom_view = view_from_depth(ruv, texture(depth_tex, ruv).r, INV_PROJECTION_MATRIX);
+	vec3 bottom_view = water_view_from_depth(ruv, texture(depth_tex, ruv).r, INV_PROJECTION_MATRIX);
 	if (bottom_view.z > VERTEX.z) {
 		// The refracted sample hit something in front of the water: fall back to straight through.
 		ruv = SCREEN_UV;
@@ -300,22 +407,22 @@ void fragment() {
 
 	vec3 bottom = textureLod(screen_tex, ruv, murk * murk_blur).rgb;
 	float bottom_depth = max(v_world.y - bottom_world.y, 0.0);
-	vec2 cp = bottom_world.xz * caustic_scale + eff * 0.6;
-	float ca = texture(caustic_texture, cp + vec2(TIME * 0.031, TIME * 0.017)).r;
-	float cb = texture(caustic_texture, cp * 1.31 + vec2(-TIME * 0.022, TIME * 0.029) + 0.5).r;
-	float caustic = pow(min(ca, cb), 2.0) * 4.0 * exp(-bottom_depth * caustic_fade) * smoothstep(0.0, 0.3, bottom_depth);
-	bottom *= 1.0 + caustic * caustic_strength;
+	float caustic_weight = caustic_strength * exp(-bottom_depth * caustic_fade) * smoothstep(0.0, 0.3, bottom_depth);
+	vec3 caustic = ocean_caustics(bottom_world.xz, bottom_depth, v_damping);
+	vec3 downwelling = mix(vec3(1.0), exp(-absorption * bottom_depth), seabed_light_loss);
+	bottom *= mix(vec3(1.0), caustic, caustic_weight) * downwelling;
 	vec3 refracted = bottom * transmittance;
 
 	// --- Foam: whitecaps from the simulation, surf on shallow ground, a line where water meets land -----
-	vec2 fuv = v_rest * foam_scale;
-	float tex = texture(foam_texture, fuv).r * 0.65 + texture(foam_texture, fuv * 2.71 + vec2(0.37, 0.11)).r * 0.35;
+	vec2 fuv = (v_rest - foam_offset) * foam_scale;
+	float tex_a = texture(foam_texture, fuv).r;
+	float tex = tex_a * 0.65 + texture(foam_texture, fuv * 2.71 + vec2(0.37, 0.11)).r * 0.35;
 	float whitecap = clamp(foam_cover * whitecap_strength, 0.0, 1.0);
 	// Surf only where the depth limit is actually cutting a wave down (it is breaking), on its crest.
 	float breaking = smoothstep(0.0, 0.6, 1.0 - v_damping) * (1.0 - smoothstep(0.0, surf_depth, v_seabed_depth) * 0.5);
 	float surf = breaking * smoothstep(0.02, 0.3, v_crest);
 	float shore_line = 1.0 - smoothstep(0.0, shore_foam_width, contact);
-	float cover = clamp(max(whitecap, max(surf * 0.85, shore_line * 0.9)) + v_rule_foam, 0.0, 1.0);
+	float cover = clamp(max(max(whitecap, ripple.w), max(surf * 0.85, shore_line * 0.9)) + v_rule_foam, 0.0, 1.0);
 	float foam_near = smoothstep(1.0 - cover, 1.0 - cover + foam_softness, tex);
 	// Wind-blown streaks: the foam pattern stretched along the wind, growing with the wind.
 	float wind_speed = length(wind);
@@ -331,34 +438,39 @@ void fragment() {
 	// Fade foam and reflection where the water is only millimetres thick, so the shore has no seam.
 	float edge = smoothstep(0.0, 0.08, path);
 	foam *= smoothstep(0.0, 0.03, path);
+	// Fresh whitecaps push bubbles under the surface; they scatter light back up as a turquoise glow
+	// around and under the foam.
+	float bubbles = smoothstep(0.15, 0.85, whitecap) * bubble_strength * (1.0 - foam) * edge;
+	vec3 bubble_albedo = sss_color / max(max(sss_color.r, sss_color.g), max(sss_color.b, 1e-3)) * BUBBLE_ALBEDO;
+	// Thick foam is lumpy: tilt the normal by the slope of the foam pattern.
+	vec2 lump = vec2(texture(foam_texture, fuv + vec2(FOAM_RELIEF_STEP, 0.0)).r - tex_a,
+			texture(foam_texture, fuv + vec2(0.0, FOAM_RELIEF_STEP)).r - tex_a) / FOAM_RELIEF_STEP * FOAM_LUMP;
+	vec3 n_foam = normalize(n_world - vec3(lump.x, 0.0, lump.y) * foam_relief * foam);
 
 	// --- Reflection ------------------------------------------------------------------------------------
 	vec3 reflection = vec3(0.0);
-	bool planar = water_reflection_enabled && !from_below;
+	bool planar = water_reflection_available(0) && !from_below;
 	if (planar) {
-		vec2 puv = vec2(SCREEN_UV.x, 1.0 - SCREEN_UV.y) + n_view.xy * reflection_distortion;
-		reflection = texture(water_reflection, clamp(puv, vec2(0.001), vec2(0.999))).rgb;
+		// Slopes the pixel resolves shift the mirror image; the ones it averages away (LEAN variance) blur it.
+		float slope_sigma = sqrt(0.5 * (variance.x + variance.y)) * reflection_blur;
+		vec2 spread = water_reflection_spread(slope_sigma, ndv, vec2(PROJECTION_MATRIX[0][0], PROJECTION_MATRIX[1][1]));
+		reflection = water_reflection_sample(0, SCREEN_UV, n_view.xy * reflection_distortion, spread, FRAGCOORD.xy);
 	}
 
 	float f = fresnel * edge;
 	if (!from_below) {
 		EMISSION = (refracted * (1.0 - f) + reflection * f) * (1.0 - foam);
-		ALBEDO = mix(scatter_color * murk * (1.0 - f), foam_color, foam);
-		// Godot's F0 is 0.16 * specular^2; 0.354 gives water's 0.02. Only used for sky reflection.
-		SPECULAR = planar ? 0.0 : 0.354 * edge * (1.0 - foam);
+		ALBEDO = mix(scatter_color * murk * (1.0 - f), foam_color, foam) + bubble_albedo * bubbles * (1.0 - f);
+		// Only used for the engine's sky reflection, when there is no planar one.
+		SPECULAR = planar ? 0.0 : WATER_ENGINE_SPECULAR * edge * (1.0 - foam);
 	} else {
-		// Below the surface: inside Snell's window we see the world above, outside it the water mirrors itself.
-		float cos_i = clamp(dot(n_world, v), 0.0, 1.0);
-		float sin_t2 = WATER_IOR * WATER_IOR * (1.0 - cos_i * cos_i);
-		float under_f = sin_t2 >= 1.0 ? 1.0 : schlick(sqrt(1.0 - sin_t2));
 		vec3 above = textureLod(screen_tex, SCREEN_UV + n_view.xy * refraction_strength, 0.0).rgb;
-		vec3 fog = exp(-absorption * dist);
-		EMISSION = mix(above, deep_color, under_f) * fog + deep_color * (1.0 - fog);
+		EMISSION = water_seen_from_below(n_world, v, above, deep_color, absorption, dist);
 		ALBEDO = vec3(0.0);
 		SPECULAR = 0.0;
 	}
 	ROUGHNESS = mix(roughness, 0.7, foam);
-	NORMAL = n_view;
+	NORMAL = from_below ? n_view : normalize((VIEW_MATRIX * vec4(n_foam, 0.0)).xyz);
 	v_front = from_below ? 0.0 : 1.0;
 	v_foam = foam;
 	v_fresnel_scale = 1.0 - f;
@@ -366,30 +478,12 @@ void fragment() {
 
 void light() {
 	if (v_front > 0.5) {
-	vec3 n = NORMAL;
-	vec3 l = LIGHT;
-	vec3 v = VIEW;
-	float ndl = clamp(dot(n, l), 0.0, 1.0);
-	float ndv = clamp(dot(n, v), 1e-4, 1.0);
-	DIFFUSE_LIGHT += ndl * ATTENUATION * LIGHT_COLOR / PI;
-
-	// Sun glint: GGX with the LEAN roughness, height-correlated Smith visibility.
-	vec3 h = normalize(v + l);
-	float ndh = clamp(dot(n, h), 0.0, 1.0);
-	float a = ROUGHNESS * ROUGHNESS;
-	float a2 = a * a;
-	float dd = ndh * ndh * (a2 - 1.0) + 1.0;
-	float distribution = a2 / (PI * dd * dd);
-	float vis = 0.5 / (ndl * sqrt(ndv * ndv * (1.0 - a2) + a2) + ndv * sqrt(ndl * ndl * (1.0 - a2) + a2) + 1e-5);
-	float fres = schlick(dot(v, h));
-	SPECULAR_LIGHT += distribution * vis * fres * ndl * ATTENUATION * LIGHT_COLOR * sun_specular_strength * (1.0 - v_foam);
-
-	// Light scattered inside the water (Atlas, GDC 2019): bright through thin crests facing away from the
-	// sun, plus a soft term towards the viewer.
-	float crest = max(v_crest, 0.0);
-	float k1 = sss_crest_strength * crest * pow(clamp(dot(l, -v), 0.0, 1.0), 4.0) * pow(0.5 - 0.5 * dot(l, n), 3.0);
-	float k2 = sss_view_strength * pow(ndv, 2.0);
-	vec3 scatter = (k1 + k2) * sss_color * LIGHT_COLOR * ATTENUATION / PI;
-	SPECULAR_LIGHT += scatter * v_fresnel_scale * (1.0 - v_foam);
-}
+		float ndl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+		DIFFUSE_LIGHT += ndl * ATTENUATION * LIGHT_COLOR / PI;
+		// Sun glint with the LEAN roughness; light through thin crests (Atlas).
+		float glint = water_ggx_specular(NORMAL, VIEW, LIGHT, ROUGHNESS) * sun_specular_strength;
+		SPECULAR_LIGHT += glint * ATTENUATION * LIGHT_COLOR * (1.0 - v_foam);
+		float scatter = water_scatter(NORMAL, VIEW, LIGHT, v_crest, sss_crest_strength, sss_view_strength);
+		SPECULAR_LIGHT += scatter * sss_color * LIGHT_COLOR * ATTENUATION * v_fresnel_scale * (1.0 - v_foam);
+	}
 }

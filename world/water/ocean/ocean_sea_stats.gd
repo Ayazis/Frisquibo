@@ -32,6 +32,13 @@ static func peak_period(sea: OceanSpectrum) -> float:
 	return TAU / sea.peak_frequency()
 
 
+## Seconds between crests of the bigger wave system: the swell when it is higher than the wind sea.
+static func dominant_period(sea: OceanSpectrum) -> float:
+	if swell_wave_height(sea) > surface_wave_height(sea):
+		return sea.swell_period
+	return peak_period(sea)
+
+
 ## Significant height (m) of the wind sea the spectrum describes, in deep water and before
 ## height_scale. wavelength_scale leaves it unchanged by design.
 static func wind_wave_height(sea: OceanSpectrum) -> float:

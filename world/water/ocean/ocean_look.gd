@@ -25,9 +25,18 @@ extends Resource
 ## The refraction offset shrinks beyond this distance.
 @export_range(0.5, 50.0, 0.5, "or_greater", "suffix:m") var refraction_full_distance := 8.0
 @export_range(0.0, 0.2, 0.001, "or_greater") var reflection_distortion := 0.035
+## Blur of the mirrored world by ripples too small to see. 1 is physical; 0 is a sharp mirror.
+@export_range(0.0, 3.0, 0.01, "or_greater") var reflection_blur := 1.0
 ## Roughness from ripples smaller than the simulation resolves.
 @export_range(0.0, 0.01, 0.0001, "or_greater") var base_slope_variance := 0.0006
 @export_range(0.0, 4.0, 0.05, "or_greater") var sun_specular_strength := 1.0
+## Metres covered by the close-up ripple pattern; its ripples are about a sixth of this.
+@export_range(0.2, 10.0, 0.05, "or_greater", "suffix:m") var capillary_tile := 1.2
+## How fast the close-up ripples drift downwind.
+@export_range(0.0, 2.0, 0.01, "or_greater", "suffix:m/s") var capillary_speed := 0.25
+## Uneven wind: drifting patches of rougher and glassier water. 0 is an even wind.
+@export_range(0.0, 1.0, 0.01) var gust_strength := 0.5
+@export_range(5.0, 500.0, 1.0, "or_greater", "suffix:m") var gust_size := 60.0
 
 @export_group("Foam")
 @export var foam_color := Color(0.86, 0.9, 0.9)
@@ -42,11 +51,18 @@ extends Resource
 ## Cover of wind-blown foam streaks in a full gale; they start at Beaufort 7 and grow with the wind.
 @export_range(0.0, 1.0, 0.01) var foam_streaks := 0.35
 @export_range(1.0, 60.0, 0.5) var streak_length := 24.0
+## Turquoise glow of bubbles pushed under the surface by fresh whitecaps.
+@export_range(0.0, 2.0, 0.01, "or_greater") var bubble_strength := 0.5
+## Lumpiness of thick foam.
+@export_range(0.0, 3.0, 0.05, "or_greater") var foam_relief := 1.0
 
 @export_group("Caustics")
-@export_range(0.0, 10.0, 0.05, "or_greater") var caustic_strength := 2.4
-@export_range(0.02, 2.0, 0.01, "or_greater") var caustic_scale := 0.3
-@export_range(0.0, 2.0, 0.01, "or_greater", "suffix:/m") var caustic_fade := 0.35
+## 1: the light the simulated waves really focus onto the seabed.
+@export_range(0.0, 4.0, 0.05, "or_greater") var caustic_strength := 1.0
+## Extra fading with depth, on top of the blur the sun's size gives deep caustics.
+@export_range(0.0, 2.0, 0.01, "or_greater", "suffix:/m") var caustic_fade := 0.1
+## Light on the seabed already crossed the water once on its way down. 1 is physical.
+@export_range(0.0, 1.0, 0.01) var seabed_light_loss := 1.0
 
 @export_group("Crest shape")
 ## Crests are held back where the surface would compress below this (see choppiness).

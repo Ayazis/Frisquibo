@@ -6,33 +6,33 @@
 [sub_resource type="Resource" id="overview"]
 script = ExtResource("2")
 name = "overview"
-camera_position = Vector3(14, 14, 18)
-look_at_target = Vector3(0, 0, 0)
-state = {"station": 1}
+camera_position = Vector3(83.63, 15.8, 26.06)
+look_at_target = Vector3(69.63, 1.8, 8.06)
+state = {"view": 2}
 
 [sub_resource type="Resource" id="low_upstream"]
 script = ExtResource("2")
 name = "low_upstream"
-camera_position = Vector3(-18, 2.5, 6)
-look_at_target = Vector3(0, 0, 0)
-state = {"station": 1}
+camera_position = Vector3(51.63, 4.3, 14.06)
+look_at_target = Vector3(69.63, 1.8, 8.06)
+state = {"view": 2}
 
 [sub_resource type="Resource" id="top_down"]
 script = ExtResource("2")
 name = "top_down"
-camera_position = Vector3(0.1, 22, 0)
-look_at_target = Vector3(0, 0, 0)
-state = {"station": 1}
+camera_position = Vector3(69.73, 23.8, 8.06)
+look_at_target = Vector3(69.63, 1.8, 8.06)
+state = {"view": 2}
 
 [sub_resource type="Resource" id="golden_bank"]
 script = ExtResource("2")
 name = "golden_bank"
-camera_position = Vector3(6, 3, 12)
-look_at_target = Vector3(-6, 0, 0)
-state = {"station": 1, "golden_hour": true}
+camera_position = Vector3(75.63, 4.8, 20.06)
+look_at_target = Vector3(63.63, 1.8, 8.06)
+state = {"view": 2, "golden_hour": true}
 
 [resource]
 script = ExtResource("1")
-scene_path = "res://prototypes/water_compare/water_compare.tscn"
+scene_path = "res://prototypes/water_demo/water_demo.tscn"
 settle_frames = 120
 shots = Array[ExtResource("2")]([SubResource("overview"), SubResource("low_upstream"), SubResource("top_down"), SubResource("golden_bank")])
