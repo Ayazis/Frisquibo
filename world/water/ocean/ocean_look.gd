@@ -46,9 +46,12 @@ extends Resource
 @export_range(1.0, 60.0, 0.5) var streak_length := 24.0
 
 @export_group("Caustics")
-@export_range(0.0, 10.0, 0.05, "or_greater") var caustic_strength := 2.4
-@export_range(0.02, 2.0, 0.01, "or_greater") var caustic_scale := 0.3
-@export_range(0.0, 2.0, 0.01, "or_greater", "suffix:/m") var caustic_fade := 0.35
+## 1: the light the simulated waves really focus onto the seabed.
+@export_range(0.0, 4.0, 0.05, "or_greater") var caustic_strength := 1.0
+## Extra fading with depth, on top of the blur the sun's size gives deep caustics.
+@export_range(0.0, 2.0, 0.01, "or_greater", "suffix:/m") var caustic_fade := 0.1
+## Light on the seabed already crossed the water once on its way down. 1 is physical.
+@export_range(0.0, 1.0, 0.01) var seabed_light_loss := 1.0
 
 @export_group("Crest shape")
 ## Crests are held back where the surface would compress below this (see choppiness).

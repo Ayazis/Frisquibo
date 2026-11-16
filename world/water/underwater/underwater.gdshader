@@ -6,6 +6,7 @@ render_mode blend_mix, depth_draw_never, depth_test_disabled, cull_disabled, sha
 // opaque scene; the water surface, which shades itself from below, draws on top of it afterwards.
 //  - per-channel absorption and in-scatter over the distance to each pixel, darker with depth
 //  - the scene blurs with distance (forward scattering)
+//  - sunlight on things under water lost light on its way down, and the waves focus it into caustics
 //  - a waterline where the wavy surface crosses the lens, with a dark meniscus
 //  - light shafts: the sun refracted through the surface, focused by the waves, scattering towards
 //    the camera (ray-marched in light(), which has the sun's direction and colour)
@@ -42,8 +43,17 @@ group_uniforms surface;
 uniform float surface_level = 0.0;
 uniform float wave_scale = 1.0;
 uniform sampler2DArray displacement_maps : filter_linear, repeat_enable;
+uniform sampler2DArray slope_maps : filter_linear_mipmap, repeat_enable;
 uniform float tile_lengths[4];
 uniform int cascade_count = 0;
+uniform float map_size = 256.0;
+
+group_uniforms seabed;
+uniform float caustic_strength = 1.0;                      // 1 = the light the waves really focus
+uniform float caustic_fade = 0.1;                          // per metre of depth
+uniform float seabed_light_loss = 1.0;                     // 1 = physical
+
+#include "res://world/water/ocean/ocean_caustics.gdshaderinc"
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
@@ -101,8 +111,16 @@ void fragment() {
 	lod = 0.0; // Web / Compatibility: the screen copy may have no mip levels.
 #endif
 	vec3 scene = textureLod(screen_tex, SCREEN_UV, lod).rgb;
-	// Less daylight reaches deeper water: darken the in-scatter by the depth halfway along the ray.
 	vec3 end = near_world + dir * dist;
+	// The opaque pass lit the seabed with the full sun: take off what the water above it absorbs, and
+	// focus what is left into caustics (lakes without cascades get the loss only).
+	float end_depth = surface_level - end.y;
+	if (end_depth > 0.0) {
+		vec3 caustic = ocean_caustics(end.xz, end_depth, wave_scale);
+		float weight = caustic_strength * exp(-end_depth * caustic_fade);
+		scene *= mix(vec3(1.0), caustic, weight) * mix(vec3(1.0), exp(-absorption * end_depth), seabed_light_loss);
+	}
+	// Less daylight reaches deeper water: darken the in-scatter by the depth halfway along the ray.
 	float mid_depth = max(surface_level - 0.5 * (near_world.y + end.y), 0.0);
 	vec3 ambient = deep_color * exp(-absorption * mid_depth);
 	vec3 transmittance = exp(-absorption * dist);

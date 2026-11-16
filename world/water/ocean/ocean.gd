@@ -108,7 +108,6 @@ func _ready() -> void:
 	material.set_shader_parameter("map_size", float(OceanSimulation.MAP_SIZE))
 	material.set_shader_parameter("mesh_angular_step", TAU / quality.radial_segments)
 	material.set_shader_parameter("foam_texture", WaterTextures.foam())
-	material.set_shader_parameter("caustic_texture", WaterTextures.caustics())
 	_surface = MeshInstance3D.new()
 	_surface.mesh = OceanSurfaceMesh.build(quality.radial_segments, quality.inner_radius, quality.far_radius)
 	_surface.material_override = material
@@ -133,7 +132,7 @@ func _exit_tree() -> void:
 		material.set_shader_parameter("displacement_maps", null)
 		material.set_shader_parameter("slope_maps", null)
 		material.set_shader_parameter("moment_maps", null)
-		_underwater.set_waves(null, PackedFloat32Array(), 0)
+		_underwater.set_waves(null, null, PackedFloat32Array(), 0, OceanSimulation.MAP_SIZE)
 		# Queued on the render thread right away: a deferred call would never run when the game quits.
 		_simulation.free_resources()
 		_simulation = null
@@ -335,7 +334,8 @@ func _apply_cascades() -> void:
 		tiles[c] = _simulation.tile_lengths[c]
 	material.set_shader_parameter("tile_lengths", tiles)
 	material.set_shader_parameter("cascade_count", _simulation.cascade_count)
-	_underwater.set_waves(_simulation.displacement, tiles, _simulation.cascade_count)
+	_underwater.set_waves(_simulation.displacement, _simulation.slope, tiles, _simulation.cascade_count,
+			OceanSimulation.MAP_SIZE)
 
 
 ## Re-applies the rules to the authored state. Without `force`, only pushes what actually changed,
@@ -391,7 +391,10 @@ func _apply_state(spectrum_changed: bool) -> void:
 	material.set_shader_parameter("min_shore_wave", _value(&"min_shore_wave"))
 	material.set_shader_parameter("wave_setup", _value(&"wave_setup"))
 	OceanLookBinding.apply(_authored_look(), material, _values)
-	_underwater.set_optics(OceanLookBinding.absorption(_authored_look(), _values), _authored_look().deep_color)
+	var look_now := _authored_look()
+	_underwater.set_optics(OceanLookBinding.absorption(look_now, _values), look_now.deep_color)
+	_underwater.set_seabed_light(_look_value(&"caustic_strength"), _look_value(&"caustic_fade"),
+			_look_value(&"seabed_light_loss"))
 	material.set_shader_parameter("local_rule_count", _local.count())
 	if _local.count() > 0:
 		material.set_shader_parameter("local_rule_depth", _local.depth_ranges)
@@ -404,6 +407,14 @@ func _value(parameter: StringName) -> float:
 	if _values.has(parameter):
 		return _values[parameter]
 	var authored: float = get(parameter)
+	return authored
+
+
+## A look value after the rules.
+func _look_value(parameter: StringName) -> float:
+	if _values.has(parameter):
+		return _values[parameter]
+	var authored: float = _authored_look().get(parameter)
 	return authored
 
 

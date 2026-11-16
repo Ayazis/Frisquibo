@@ -4,7 +4,9 @@ render_mode blend_mix, depth_draw_always, cull_disabled, world_vertex_coords;
 //  - normals from the summed slopes of all cascades, sharpened by the horizontal-displacement jacobian
 //  - LEAN mapping: slope variance from the mip chain becomes GGX roughness, so distant waves turn into a
 //    wide, glittering sun path instead of aliasing
-//  - planar (desktop) or sky reflection with Fresnel, the planar one blurred by the same slope variance; refraction with per-channel absorption and caustics
+//  - planar (desktop) or sky reflection with Fresnel, the planar one blurred by the same slope variance;
+//    refraction with per-channel absorption, light lost on its way down to the seabed, and caustics
+//    focused by the simulated waves (ocean_caustics)
 //  - subsurface light through thin crests (the Atlas model), persistent whitecaps and shoreline surf
 //  - interaction ripples, wakes and splash foam from objects in the water (WaterRipples)
 //  - seen from below: Snell's window and total internal reflection
@@ -63,10 +65,10 @@ const float STREAK_PATCH_SCALE = 0.06;
 const vec2 STREAK_PATCH_RANGE = vec2(0.45, 0.75);
 const float STREAK_FAR_COVER = 0.35;
 group_uniforms caustics;
-uniform float caustic_strength = 2.4;
-uniform float caustic_scale = 0.3;
-uniform float caustic_fade = 0.35;                         // per metre of depth
-uniform sampler2D caustic_texture : hint_default_black, filter_linear_mipmap, repeat_enable;
+uniform float caustic_strength = 1.0;                      // 1 = the light the waves really focus
+uniform float caustic_fade = 0.1;                          // per metre of depth, on top of the sun-disk blur
+// Light on the seabed has crossed the water once already, on its way down. 1 = physical, 0 = none.
+uniform float seabed_light_loss = 1.0;
 
 group_uniforms shore;
 // Seabed height map baked by Ocean.set_seabed(); rect = (origin x, origin z, size x, size z), size 0 = none.
@@ -95,6 +97,8 @@ group_uniforms rules;
 uniform int local_rule_count = 0;
 uniform vec4 local_rule_depth[MAX_LOCAL_RULES];
 uniform vec4 local_rule_effect[MAX_LOCAL_RULES];
+
+#include "res://world/water/ocean/ocean_caustics.gdshaderinc"
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
@@ -294,11 +298,10 @@ void fragment() {
 
 	vec3 bottom = textureLod(screen_tex, ruv, murk * murk_blur).rgb;
 	float bottom_depth = max(v_world.y - bottom_world.y, 0.0);
-	vec2 cp = bottom_world.xz * caustic_scale + eff * 0.6;
-	float ca = texture(caustic_texture, cp + vec2(TIME * 0.031, TIME * 0.017)).r;
-	float cb = texture(caustic_texture, cp * 1.31 + vec2(-TIME * 0.022, TIME * 0.029) + 0.5).r;
-	float caustic = pow(min(ca, cb), 2.0) * 4.0 * exp(-bottom_depth * caustic_fade) * smoothstep(0.0, 0.3, bottom_depth);
-	bottom *= 1.0 + caustic * caustic_strength;
+	float caustic_weight = caustic_strength * exp(-bottom_depth * caustic_fade) * smoothstep(0.0, 0.3, bottom_depth);
+	vec3 caustic = ocean_caustics(bottom_world.xz, bottom_depth, v_damping);
+	vec3 downwelling = mix(vec3(1.0), exp(-absorption * bottom_depth), seabed_light_loss);
+	bottom *= mix(vec3(1.0), caustic, caustic_weight) * downwelling;
 	vec3 refracted = bottom * transmittance;
 
 	// --- Foam: whitecaps from the simulation, surf on shallow ground, a line where water meets land -----

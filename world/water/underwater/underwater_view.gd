@@ -54,9 +54,21 @@ func set_optics(absorption: Vector3, deep_color: Color) -> void:
 	material.set_shader_parameter("deep_color", deep_color)
 
 
-## FFT ocean only: the displacement cascades, so the waterline on the lens follows the waves.
-func set_waves(displacement: Texture, tile_lengths: PackedFloat32Array, cascade_count: int) -> void:
+## Light on the seabed: caustic brightness (1 physical), extra fade per metre, and the share of the
+## light the water absorbs on the way down (1 physical).
+func set_seabed_light(caustic_strength: float, caustic_fade: float, light_loss: float) -> void:
+	material.set_shader_parameter("caustic_strength", caustic_strength)
+	material.set_shader_parameter("caustic_fade", caustic_fade)
+	material.set_shader_parameter("seabed_light_loss", light_loss)
+
+
+## FFT ocean only: the displacement and slope cascades, so the waterline on the lens follows the waves
+## and the seabed gets their caustics.
+func set_waves(displacement: Texture, slopes: Texture, tile_lengths: PackedFloat32Array, cascade_count: int,
+		map_size: int) -> void:
 	material.set_shader_parameter("displacement_maps", displacement)
+	material.set_shader_parameter("slope_maps", slopes)
+	material.set_shader_parameter("map_size", float(map_size))
 	material.set_shader_parameter("tile_lengths", tile_lengths)
 	material.set_shader_parameter("cascade_count", cascade_count)
 

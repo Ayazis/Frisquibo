@@ -24,6 +24,8 @@ uniform float murk_blur = 2.0;                          // screen mip levels of 
 uniform float caustic_strength = 2.2;
 uniform float caustic_scale = 0.35;
 uniform float caustic_fade = 0.6;                       // per metre of depth
+// Light on the bottom has crossed the water once already, on its way down. 1 = physical, 0 = none.
+uniform float seabed_light_loss = 1.0;
 uniform float shore_foam_width = 0.6;
 uniform float shore_foam_strength = 0.9;
 uniform float crest_foam_strength = 0.8;
@@ -126,7 +128,7 @@ WaterResult water_shade(WaterSurface s, vec2 screen_uv, vec2 frag_coord, vec2 pr
 #endif
 	vec3 bottom = textureLod(screen_tex, ruv, murk_lod).rgb;
 	float caustic = water_caustics(g_world.xz, t) * exp(-depth_below * caustic_fade) * smoothstep(0.0, 0.25, depth_below);
-	bottom *= 1.0 + caustic * caustic_strength;
+	bottom *= (1.0 + caustic * caustic_strength) * mix(vec3(1.0), exp(-absorption * depth_below), seabed_light_loss);
 
 	// Moving foam bands that hug the shoreline, broken up by the foam texture.
 	vec2 fuv = s.world.xz * 0.35 - s.foam_motion * t;

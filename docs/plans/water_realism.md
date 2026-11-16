@@ -29,7 +29,7 @@ they only show errors on a desktop run.
 4. [x] **Interaction ripples and wakes.** A camera-centred ripple simulation (wave equation on the GPU)
    that floating and moving objects disturb, added to the water normals and foam; boat wakes; splash
    foam where `Buoyancy.entered_water` fires.
-5. [ ] **Caustics from the waves.** Caustics derived from the simulated slopes (light bunching under
+5. [x] **Caustics from the waves.** Caustics derived from the simulated slopes (light bunching under
    focusing waves) instead of a drifting noise texture, with slight colour dispersion.
 6. [ ] **Gust patches.** Large, slow, wind-driven patches of rougher and calmer water ("cat's paws").
 7. [ ] **Close-up ripple detail.** Fine scrolling detail normals near the camera, below the smallest

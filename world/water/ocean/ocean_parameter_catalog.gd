@@ -78,9 +78,9 @@ const DESCRIPTIONS: Dictionary[StringName, String] = {
 	&"foam_far_distance": "Beyond this distance foam loses its fine pattern.",
 	&"foam_streaks": "Foam blown into lines along the wind in a gale. Starts at Beaufort 7, full at 10.",
 	&"streak_length": "How many times longer than wide the wind-blown foam streaks are.",
-	&"caustic_strength": "Brightness of the light patterns on the seabed.",
-	&"caustic_scale": "Size of the light patterns on the seabed.",
-	&"caustic_fade": "How fast the light patterns fade with depth.",
+	&"caustic_strength": "Light the waves focus onto the seabed. 1 is physical; the pattern comes from the waves.",
+	&"caustic_fade": "Extra fading of the light patterns with depth (deep ones already blur by the sun's size).",
+	&"seabed_light_loss": "Light reaching the seabed crossed the water on the way down: deep sand is darker and bluer. 1 is physical.",
 	&"min_jacobian": "Crests are held back where the surface would fold. Lower: sharper crests, more folding.",
 }
 
