@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="OceanSpectrum" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://world/water/ocean/ocean_spectrum.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+wind_speed = 24.0
+wind_direction = 35.0
+fetch = 600.0
+swell = 0.1
+choppiness = 1.4
+foam_threshold = 0.85
+foam_lifetime = 9.0

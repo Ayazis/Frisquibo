@@ -1,0 +1,49 @@
+class_name OceanTunerReadouts
+extends VBoxContainer
+## What the current sea state amounts to, in physical terms, and warnings when it stops being a sea
+## that could exist.
+
+const REFRESH_INTERVAL := 0.25
+const WARNING_COLOR := Color(1.0, 0.72, 0.35)
+
+var _ocean: Ocean
+var _summary := Label.new()
+var _warnings := Label.new()
+var _until_refresh := 0.0
+
+
+func _init(ocean: Ocean) -> void:
+	_ocean = ocean
+	add_child(_summary)
+	_warnings.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_warnings.add_theme_color_override("font_color", WARNING_COLOR)
+	add_child(_warnings)
+
+
+func _process(delta: float) -> void:
+	_until_refresh -= delta
+	if _until_refresh > 0.0 or not is_visible_in_tree():
+		return
+	_until_refresh = REFRESH_INTERVAL
+	refresh()
+
+
+func refresh() -> void:
+	var sea := _ocean.spectrum
+	if sea == null:
+		return
+	var measured := _ocean.wave_height()
+	var wind := sea.wind_speed
+	var lines := PackedStringArray([
+		"Beaufort %d: %s" % [OceanSeaStats.beaufort(wind), OceanSeaStats.beaufort_name(wind)],
+		"Wave height %.2f m (expected in deep water: %.2f m)" % [measured, OceanSeaStats.expected_wave_height(sea)],
+		"Wind sea: period %.1f s, length %.0f m, steepness 1/%.0f" % [OceanSeaStats.peak_period(sea),
+				sea.peak_wavelength(), 1.0 / maxf(OceanSeaStats.steepness(sea, measured), 1.0e-4)],
+	])
+	if sea.swell_height > 0.0:
+		lines.append("Swell: length %.0f m, speed %.1f m/s" % [sea.swell_wavelength(),
+				sea.swell_wavelength() / sea.swell_period])
+	_summary.text = "\n".join(lines)
+	var warnings := OceanSeaStats.warnings(sea, measured)
+	_warnings.text = "\n".join(warnings)
+	_warnings.visible = not warnings.is_empty()

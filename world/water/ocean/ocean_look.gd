@@ -1,0 +1,53 @@
+class_name OceanLook
+extends Resource
+## How the sea looks once the waves exist: the colour and clarity of the water, foam, caustics.
+## Every value has the name of the ocean.gdshader uniform it drives; OceanLookBinding pushes them.
+## The defaults are the shader's own, so an untouched look changes nothing.
+
+@export_group("Water colour")
+## Light lost per metre of water, per colour. Red dies first, which is what makes the sea blue-green.
+@export_range(0.0, 2.0, 0.005, "or_greater", "suffix:/m") var absorption_red := 0.42
+@export_range(0.0, 2.0, 0.005, "or_greater", "suffix:/m") var absorption_green := 0.07
+@export_range(0.0, 2.0, 0.005, "or_greater", "suffix:/m") var absorption_blue := 0.045
+## Colour of light scattered back out of deep water.
+@export var scatter_color := Color(0.012, 0.095, 0.11)
+## Glow of sunlight passing through thin wave crests.
+@export var sss_color := Color(0.06, 0.42, 0.36)
+## Seen from below, outside the bright window overhead.
+@export var deep_color := Color(0.004, 0.03, 0.04)
+@export_range(0.0, 10.0, 0.05, "or_greater") var sss_crest_strength := 3.2
+@export_range(0.0, 2.0, 0.01, "or_greater") var sss_view_strength := 0.35
+## Screen mip levels of blur on what is seen through deep water.
+@export_range(0.0, 8.0, 0.1) var murk_blur := 3.0
+
+@export_group("Surface light")
+@export_range(0.0, 0.3, 0.005, "or_greater") var refraction_strength := 0.06
+## The refraction offset shrinks beyond this distance.
+@export_range(0.5, 50.0, 0.5, "or_greater", "suffix:m") var refraction_full_distance := 8.0
+@export_range(0.0, 0.2, 0.001, "or_greater") var reflection_distortion := 0.035
+## Roughness from ripples smaller than the simulation resolves.
+@export_range(0.0, 0.01, 0.0001, "or_greater") var base_slope_variance := 0.0006
+@export_range(0.0, 4.0, 0.05, "or_greater") var sun_specular_strength := 1.0
+
+@export_group("Foam look")
+@export var foam_color := Color(0.86, 0.9, 0.9)
+@export_range(0.02, 2.0, 0.01, "or_greater") var foam_scale := 0.22
+@export_range(0.01, 1.0, 0.01) var foam_softness := 0.18
+@export_range(0.0, 4.0, 0.05, "or_greater") var whitecap_strength := 1.0
+## Smaller wave scales make thinner, shorter-lived foam.
+@export_range(0.0, 1.0, 0.01) var foam_cascade_falloff := 0.6
+@export_range(0.0, 5.0, 0.05, "or_greater", "suffix:m") var shore_foam_width := 0.9
+@export_range(0.0, 10.0, 0.05, "or_greater", "suffix:m") var surf_depth := 1.6
+@export_range(20.0, 2000.0, 10.0, "or_greater", "suffix:m") var foam_far_distance := 250.0
+## Cover of wind-blown foam streaks in a full gale; they start at Beaufort 7 and grow with the wind.
+@export_range(0.0, 1.0, 0.01) var foam_streaks := 0.35
+@export_range(1.0, 60.0, 0.5) var streak_length := 24.0
+
+@export_group("Caustics")
+@export_range(0.0, 10.0, 0.05, "or_greater") var caustic_strength := 2.4
+@export_range(0.02, 2.0, 0.01, "or_greater") var caustic_scale := 0.3
+@export_range(0.0, 2.0, 0.01, "or_greater", "suffix:/m") var caustic_fade := 0.35
+
+@export_group("Folding")
+## Crests are held back where the surface would compress below this (see choppiness).
+@export_range(0.0, 1.0, 0.01) var min_jacobian := 0.12

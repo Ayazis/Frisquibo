@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dmuibv45760hy"
+path="res://.godot/imported/ocean_mipmap.glsl-69651756fe834cc6cdbf9fe3b2adadd8.res"
+
+[deps]
+
+source_file="res://world/water/ocean/compute/ocean_mipmap.glsl"
+dest_files=["res://.godot/imported/ocean_mipmap.glsl-69651756fe834cc6cdbf9fe3b2adadd8.res"]
+
+[params]
+

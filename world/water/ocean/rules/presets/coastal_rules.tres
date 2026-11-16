@@ -1,0 +1,55 @@
+[gd_resource type="Resource" script_class="OceanRuleSet" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://world/water/ocean/rules/ocean_rule_set.gd" id="1"]
+[ext_resource type="Script" path="res://world/water/ocean/rules/ocean_rule.gd" id="2"]
+[ext_resource type="Script" path="res://world/water/ocean/rules/ocean_rule_condition.gd" id="3"]
+[ext_resource type="Script" path="res://world/water/ocean/rules/ocean_rule_effect.gd" id="4"]
+
+[sub_resource type="Resource" id="shallow"]
+script = ExtResource("3")
+parameter = &"local_depth"
+comparison = 0
+threshold = 1.0
+softness = 0.6
+
+[sub_resource type="Resource" id="windy"]
+script = ExtResource("3")
+parameter = &"wind_speed"
+comparison = 1
+threshold = 12.0
+softness = 4.0
+
+[sub_resource type="Resource" id="foam"]
+script = ExtResource("4")
+target = &"local_foam"
+operation = 0
+amount = 5.0
+
+[sub_resource type="Resource" id="rough_shallows"]
+script = ExtResource("2")
+label = "Shallows foam up in strong wind"
+conditions = Array[ExtResource("3")]([SubResource("shallow"), SubResource("windy")])
+effects = Array[ExtResource("4")]([SubResource("foam")])
+
+[sub_resource type="Resource" id="big_waves"]
+script = ExtResource("3")
+parameter = &"wave_height"
+comparison = 1
+threshold = 2.0
+softness = 1.5
+
+[sub_resource type="Resource" id="surge"]
+script = ExtResource("4")
+target = &"level"
+operation = 0
+amount = 0.4
+
+[sub_resource type="Resource" id="storm_surge"]
+script = ExtResource("2")
+label = "Storm surge: high seas raise the water"
+conditions = Array[ExtResource("3")]([SubResource("big_waves")])
+effects = Array[ExtResource("4")]([SubResource("surge")])
+
+[resource]
+script = ExtResource("1")
+rules = Array[ExtResource("2")]([SubResource("rough_shallows"), SubResource("storm_surge")])

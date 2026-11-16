@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="VisualShotList" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot_list.gd" id="1"]
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot.gd" id="2"]
+
+[sub_resource type="Resource" id="beach_breeze"]
+script = ExtResource("2")
+name = "beach_breeze"
+camera_position = Vector3(6, 4, 8)
+look_at_target = Vector3(-4, 0, -20)
+state = {"station": 3, "sea_state": 1}
+
+[sub_resource type="Resource" id="horizon_golden"]
+script = ExtResource("2")
+name = "horizon_golden"
+camera_position = Vector3(0, 3, -6)
+look_at_target = Vector3(-40, 0, -200)
+state = {"station": 3, "sea_state": 1, "golden_hour": true}
+
+[sub_resource type="Resource" id="storm_wide"]
+script = ExtResource("2")
+name = "storm_wide"
+camera_position = Vector3(10, 9, 6)
+look_at_target = Vector3(0, 0, -40)
+state = {"station": 3, "sea_state": 2}
+
+[sub_resource type="Resource" id="calm_shallows"]
+script = ExtResource("2")
+name = "calm_shallows"
+camera_position = Vector3(2, 2.5, 4)
+look_at_target = Vector3(0, -0.5, -8)
+state = {"station": 3, "sea_state": 0}
+
+[resource]
+script = ExtResource("1")
+scene_path = "res://prototypes/water_compare/water_compare.tscn"
+settle_frames = 120
+shots = Array[ExtResource("2")]([SubResource("beach_breeze"), SubResource("horizon_golden"), SubResource("storm_wide"), SubResource("calm_shallows")])
