@@ -84,6 +84,14 @@ water_swash_period={
 "type": "float",
 "value": 8.0
 }
+water_wave_time={
+"type": "float",
+"value": 0.0
+}
+water_ssr_steps={
+"type": "int",
+"value": 24
+}
 water_reflection_2={
 "type": "sampler2D",
 "value": ""

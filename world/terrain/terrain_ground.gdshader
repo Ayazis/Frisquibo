@@ -50,7 +50,7 @@ void fragment() {
 	if (runup > 0.0) {
 		wet = max(wet, 1.0 - smoothstep(runup * 0.7, runup, h - edge_jitter * 0.3));
 	}
-	vec2 swash = water_swash(v_world.xz, TIME);
+	vec2 swash = water_swash(v_world.xz, water_wave_time);
 	float film = runup > 0.0 ? (1.0 - smoothstep(swash.x, swash.y + FILM_EDGE, h)) * sand : 0.0;
 
 	vec3 beach = mix(sand_color, wet_sand_color, wet) * (0.9 + grain);

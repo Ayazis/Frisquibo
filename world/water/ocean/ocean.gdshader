@@ -10,6 +10,7 @@ render_mode blend_mix, depth_draw_always, cull_disabled, world_vertex_coords;
 //  - subsurface light through thin crests (the Atlas model), persistent whitecaps and shoreline surf
 //  - interaction ripples, wakes and splash foam from objects in the water (WaterRipples)
 //  - wind gusts: drifting patches of rougher and glassier water
+//  - shore waves: near the coast crests turn to meet the beach, steepen and break (ocean_shore_waves)
 //  - the swash: near the waterline the sea runs up the beach and slides back with each wave
 //  - seen from below: Snell's window and total internal reflection
 
@@ -143,6 +144,7 @@ uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 #include "res://world/water/ripples/water_ripples.gdshaderinc"
 #include "res://world/water/water_gusts.gdshaderinc"
 #include "res://world/water/swash.gdshaderinc"
+#include "res://world/water/ocean/ocean_shore_waves.gdshaderinc"
 
 varying vec2 v_rest;
 varying vec3 v_world;
@@ -154,6 +156,10 @@ varying float v_foam;
 varying float v_fresnel_scale;
 varying float v_rule_foam;
 varying float v_fold;
+// Still water depth with set-up and rule water (no swash): what the shore waves see.
+varying float v_still_depth;
+// Amplitude share the FFT waves keep where shore waves took the rest.
+varying float v_open_sea;
 
 float seabed_depth(vec2 p) {
 	if (seabed_rect.z <= 0.0) {
@@ -218,7 +224,7 @@ float swash_lift(vec2 p, float depth, float setup) {
 	}
 	float zone = wave_amplitude / max(breaker_ratio, 0.01);
 	float near_shore = 1.0 - smoothstep(0.0, zone, depth);
-	return max(water_swash(p, TIME).x * near_shore - setup, 0.0);
+	return max(water_swash(p, water_wave_time).x * near_shore - setup, 0.0);
 }
 
 // Fraction of the open-sea wave that survives at this water depth. Ripples remain right up to the beach.
@@ -270,6 +276,9 @@ void vertex() {
 	float lift = setup + swash_lift(p, depth, setup) + rules.z;
 	v_seabed_depth = depth + lift;
 	v_damping = shore_damping(v_seabed_depth) * rules.y;
+	v_still_depth = depth + setup + rules.z;
+	v_open_sea = shore_open_sea_share(v_still_depth);
+	ShoreWave shore = shore_wave(p, v_still_depth);
 	v_rule_foam = rules.x;
 	vec3 d = vec3(0.0);
 	vec2 jac = vec2(0.0);
@@ -292,9 +301,10 @@ void vertex() {
 			jac += textureLod(prev_slope_maps, prev_uv, prev_lod).zw * tw.x;
 		}
 	}
-	v_fold = fold_limit(jac * v_damping);
-	d.xz *= v_damping * v_fold;
-	d.y *= v_damping;
+	float open_sea = v_damping * v_open_sea;
+	v_fold = fold_limit(jac * open_sea + shore.stretch);
+	d.xz = (d.xz * open_sea + shore.offset.xz) * v_fold;
+	d.y = d.y * open_sea + shore.offset.y;
 	VERTEX += d;
 	VERTEX.y += lift + water_ripples(VERTEX.xz).z;
 	v_rest = p;
@@ -354,9 +364,12 @@ void fragment() {
 	slope += (ca.xy + cb.xy) * sqrt(capillary_energy / CAPILLARY_MAP_VARIANCE) * resolved;
 	variance -= vec2(capillary_energy * resolved * resolved);
 
-	slope *= v_damping;
-	jac *= v_damping * v_fold;
-	variance *= v_damping * v_damping;
+	float open_sea = v_damping * v_open_sea;
+	slope *= open_sea;
+	variance *= open_sea * open_sea;
+	ShoreWave shore = shore_wave(v_rest, v_still_depth);
+	slope += shore.slope;
+	jac = (jac * open_sea + shore.stretch) * v_fold;
 	// Rings, wakes and splashes from objects in the water (WaterRipples).
 	vec4 ripple = water_ripples(v_world.xz);
 	slope += ripple.xy;
@@ -408,7 +421,7 @@ void fragment() {
 	vec3 bottom = textureLod(screen_tex, ruv, murk * murk_blur).rgb;
 	float bottom_depth = max(v_world.y - bottom_world.y, 0.0);
 	float caustic_weight = caustic_strength * exp(-bottom_depth * caustic_fade) * smoothstep(0.0, 0.3, bottom_depth);
-	vec3 caustic = ocean_caustics(bottom_world.xz, bottom_depth, v_damping);
+	vec3 caustic = ocean_caustics(bottom_world.xz, bottom_depth, v_damping * v_open_sea);
 	vec3 downwelling = mix(vec3(1.0), exp(-absorption * bottom_depth), seabed_light_loss);
 	bottom *= mix(vec3(1.0), caustic, caustic_weight) * downwelling;
 	vec3 refracted = bottom * transmittance;
@@ -422,7 +435,7 @@ void fragment() {
 	float breaking = smoothstep(0.0, 0.6, 1.0 - v_damping) * (1.0 - smoothstep(0.0, surf_depth, v_seabed_depth) * 0.5);
 	float surf = breaking * smoothstep(0.02, 0.3, v_crest);
 	float shore_line = 1.0 - smoothstep(0.0, shore_foam_width, contact);
-	float cover = clamp(max(max(whitecap, ripple.w), max(surf * 0.85, shore_line * 0.9)) + v_rule_foam, 0.0, 1.0);
+	float cover = clamp(max(max(max(whitecap, ripple.w), shore.foam), max(surf * 0.85, shore_line * 0.9)) + v_rule_foam, 0.0, 1.0);
 	float foam_near = smoothstep(1.0 - cover, 1.0 - cover + foam_softness, tex);
 	// Wind-blown streaks: the foam pattern stretched along the wind, growing with the wind.
 	float wind_speed = length(wind);
