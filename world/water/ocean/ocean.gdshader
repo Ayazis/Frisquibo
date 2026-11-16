@@ -4,7 +4,8 @@ render_mode blend_mix, depth_draw_always, cull_disabled, world_vertex_coords;
 //  - normals from the summed slopes of all cascades, sharpened by the horizontal-displacement jacobian
 //  - LEAN mapping: slope variance from the mip chain becomes GGX roughness, so distant waves turn into a
 //    wide, glittering sun path instead of aliasing
-//  - planar (desktop) or sky reflection with Fresnel, the planar one blurred by the same slope variance;
+//  - planar (desktop) or sky reflection with the mean Fresnel of the unresolved slopes, the planar one
+//    blurred by the same slope variance and kept below the horizon; screen-space reflections on top;
 //    refraction with per-channel absorption, light lost on its way down to the seabed, and caustics
 //    focused by the simulated waves (ocean_caustics)
 //  - subsurface light through thin crests (the Atlas model), persistent whitecaps and shoreline surf
@@ -143,6 +144,7 @@ uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 #include "res://world/water/water_reflection.gdshaderinc"
 #include "res://world/water/ripples/water_ripples.gdshaderinc"
 #include "res://world/water/water_gusts.gdshaderinc"
+#include "res://world/water/water_ssr.gdshaderinc"
 #include "res://world/water/swash.gdshaderinc"
 #include "res://world/water/ocean/ocean_shore_waves.gdshaderinc"
 
@@ -386,9 +388,8 @@ void fragment() {
 	vec3 v = normalize(CAMERA_POSITION_WORLD - v_world);
 	float dist = length(CAMERA_POSITION_WORLD - v_world);
 	float ndv = dot(n_world, v);
-	float fresnel = water_schlick(ndv);
-	// Rough, distant water reflects less sharply at grazing angles (masking of wave backs).
-	fresnel *= mix(1.0, 0.75, roughness);
+	// Rough, distant water reflects less at grazing angles: Fresnel averaged over the unresolved slopes.
+	float fresnel = water_mean_fresnel(ndv, water_view_slope_sigma(v, variance));
 
 	// --- What lies under the surface ------------------------------------------------------------------
 	float raw = texture(depth_tex, SCREEN_UV).r;
@@ -463,19 +464,29 @@ void fragment() {
 	// --- Reflection ------------------------------------------------------------------------------------
 	vec3 reflection = vec3(0.0);
 	bool planar = water_reflection_available(0) && !from_below;
+	// Slopes the pixel resolves shift the mirror image; the ones it averages away (LEAN variance) blur it.
+	float slope_sigma = sqrt(0.5 * (variance.x + variance.y)) * reflection_blur;
+	vec2 spread = water_reflection_spread(slope_sigma, ndv, vec2(PROJECTION_MATRIX[0][0], PROJECTION_MATRIX[1][1]));
 	if (planar) {
-		// Slopes the pixel resolves shift the mirror image; the ones it averages away (LEAN variance) blur it.
-		float slope_sigma = sqrt(0.5 * (variance.x + variance.y)) * reflection_blur;
-		vec2 spread = water_reflection_spread(slope_sigma, ndv, vec2(PROJECTION_MATRIX[0][0], PROJECTION_MATRIX[1][1]));
-		reflection = water_reflection_sample(0, SCREEN_UV, n_view.xy * reflection_distortion, spread, FRAGCOORD.xy);
+		vec2 horizon = water_reflection_horizon(VERTEX, SCREEN_UV, VIEW_MATRIX, INV_VIEW_MATRIX, PROJECTION_MATRIX);
+		reflection = water_reflection_sample(0, SCREEN_UV, n_view.xy * reflection_distortion, spread, FRAGCOORD.xy, horizon);
+	}
+	// What the ray off the real, displaced surface hits on screen: right where the flat mirror is wrong
+	// (a boat on a crest), and the mirror or the sky everywhere it finds nothing.
+	vec4 traced = vec4(0.0);
+	if (!from_below) {
+		vec3 ray = water_ssr_direction(reflect(-v, n_world), VIEW_MATRIX);
+		traced = water_ssr(VERTEX, ray, PROJECTION_MATRIX, INV_PROJECTION_MATRIX, FRAGCOORD.xy,
+				water_ssr_blur_lod(spread, VIEWPORT_SIZE));
+		reflection = mix(reflection, traced.rgb, traced.a);
 	}
 
 	float f = fresnel * edge;
 	if (!from_below) {
 		EMISSION = (refracted * (1.0 - f) + reflection * f) * (1.0 - foam);
 		ALBEDO = mix(scatter_color * murk * (1.0 - f), foam_color, foam) + bubble_albedo * bubbles * (1.0 - f);
-		// Only used for the engine's sky reflection, when there is no planar one.
-		SPECULAR = planar ? 0.0 : WATER_ENGINE_SPECULAR * edge * (1.0 - foam);
+		// Only used for the engine's sky reflection, where neither the mirror nor the march found anything.
+		SPECULAR = planar ? 0.0 : WATER_ENGINE_SPECULAR * edge * (1.0 - foam) * (1.0 - traced.a);
 	} else {
 		vec3 above = textureLod(screen_tex, SCREEN_UV + n_view.xy * refraction_strength, 0.0).rgb;
 		EMISSION = water_seen_from_below(n_world, v, above, deep_color, absorption, dist);

@@ -10,6 +10,28 @@ float water_schlick(float cos_theta) {
 	return WATER_F0 + (1.0 - WATER_F0) * pow(1.0 - clamp(cos_theta, 0.0, 1.0), 5.0);
 }
 
+// Mean Fresnel reflectance over the slopes a pixel can't resolve (Bruneton, Neyret & Holzschuch 2010,
+// their fit to the integral over a Gaussian slope distribution, with shadowing and masking). cos_v:
+// cosine between the view and the resolved normal; sigma_v: rms unresolved slope along the view
+// direction. Rough water seen at a low angle reflects less than one mirror facet would: some facets
+// face away, others hide behind the wave backs. Smooth water gets Schlick's mirror value back.
+float water_mean_fresnel(float cos_v, float sigma_v) {
+	float s = max(sigma_v, 0.0);
+	float grazing = pow(1.0 - clamp(cos_v, 0.0, 1.0), 5.0 * exp(-2.69 * s)) / (1.0 + 22.7 * pow(s, 1.5));
+	return WATER_F0 + (1.0 - WATER_F0) * grazing;
+}
+
+// Rms unresolved slope along the horizontal direction of `v` (towards the viewer), from the slope
+// variance per world axis (x, z).
+float water_view_slope_sigma(vec3 v, vec2 slope_variance) {
+	vec2 h = v.xz;
+	float len2 = dot(h, h);
+	if (len2 < 1e-8) {
+		return sqrt(0.5 * (slope_variance.x + slope_variance.y));
+	}
+	return sqrt(max(dot(h * h / len2, slope_variance), 0.0));
+}
+
 vec3 water_view_from_depth(vec2 uv, float raw, mat4 inv_proj) {
 #if CURRENT_RENDERER == RENDERER_COMPATIBILITY
 	vec4 v = inv_proj * vec4(vec3(uv, raw) * 2.0 - 1.0, 1.0);

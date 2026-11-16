@@ -45,6 +45,8 @@ const SWASH_RUNUP_PARAM := &"water_swash_runup"
 const SWASH_PERIOD_PARAM := &"water_swash_period"
 ## The wave clock the swash and the shore waves run on, so the CPU heights match what is drawn.
 const WAVE_TIME_PARAM := &"water_wave_time"
+## Ray-march steps of the screen-space reflections on all water, from the quality tier.
+const SSR_STEPS_PARAM := &"water_ssr_steps"
 ## Metres above the local wave height where the camera lens can still dip into a crest.
 const UNDERWATER_REACH_MARGIN := 0.5
 
@@ -121,6 +123,7 @@ func _ready() -> void:
 		spectrum = DEFAULT_SPECTRUM
 	if quality == null:
 		quality = DEFAULT_QUALITY
+	RenderingServer.global_shader_parameter_set(SSR_STEPS_PARAM, quality.reflection_march_steps)
 	for tunable: Object in _tunables():
 		_limits.merge(OceanRuleEngine.limits(tunable))
 	_effective = spectrum.duplicate() as OceanSpectrum

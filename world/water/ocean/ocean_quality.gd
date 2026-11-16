@@ -12,6 +12,9 @@ extends Resource
 @export_range(0.25, 1.0) var reflection_resolution_scale := 0.75
 ## Taps of the planar reflection's blur on rough water. More taps: smoother streaks.
 @export_range(1, 32) var reflection_blur_samples := 12
+## Ray-march steps of the screen-space reflections on all water (water_ssr.gdshaderinc); 0 turns
+## them off. Lakes and rivers in a scene without an ocean use the project default (High's value).
+@export_range(0, 64) var reflection_march_steps := 24
 ## Ray-march steps of the underwater light shafts; 0 turns them off.
 @export_range(0, 64) var underwater_shaft_steps := 16
 ## Droplets of wind-blown spray around the camera in strong wind; 0 turns spray off.

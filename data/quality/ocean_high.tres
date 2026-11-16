@@ -9,6 +9,7 @@ radial_segments = 512
 far_radius = 6000.0
 reflection_resolution_scale = 0.75
 reflection_blur_samples = 12
+reflection_march_steps = 24
 underwater_shaft_steps = 16
 spray_particles = 6000
 spray_area = 120.0

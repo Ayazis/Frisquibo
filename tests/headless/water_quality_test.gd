@@ -3,7 +3,8 @@ extends SceneTree
 ## Every scalable water value grows from Low to Ultra, and High is what code uses by default.
 const TIERS: Array[String] = ["low", "medium", "high", "ultra"]
 const OCEAN_VALUES: Array[StringName] = [&"cascade_count", &"radial_segments", &"reflection_resolution_scale",
-		&"reflection_blur_samples", &"underwater_shaft_steps", &"spray_particles", &"spray_area"]
+		&"reflection_blur_samples", &"reflection_march_steps", &"underwater_shaft_steps", &"spray_particles",
+		&"spray_area"]
 const WATER_VALUES: Array[StringName] = [&"ripple_resolution", &"ripple_area", &"splash_particle_scale"]
 var _failures: int = 0
 
@@ -14,6 +15,11 @@ func _initialize() -> void:
 	var high_ocean := load("res://data/quality/ocean_high.tres") as OceanQuality
 	_check(UnderwaterView.DEFAULT_SHAFT_STEPS == high_ocean.underwater_shaft_steps, "Lakes' shaft steps are High's")
 	_check(PlanarReflection.DEFAULT_BLUR_SAMPLES == high_ocean.reflection_blur_samples, "Lakes' reflection blur is High's")
+	var march: Dictionary = ProjectSettings.get_setting("shader_globals/water_ssr_steps")
+	var march_steps: int = march.get("value", -1)
+	_check(march_steps == high_ocean.reflection_march_steps, "Lakes' reflection march is High's")
+	var low_ocean := load("res://data/quality/ocean_low.tres") as OceanQuality
+	_check(low_ocean.reflection_march_steps == 0, "Low has no reflection march")
 	_check(WaterRipples.DEFAULT_QUALITY.resource_path.ends_with("water_high.tres"), "Ripples default to High")
 	var spray := OceanSpray.new(123, 80.0)
 	_check(spray.amount == 123 and not spray.local_coords, "Spray: given droplets, flying in world space")

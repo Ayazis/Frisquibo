@@ -20,6 +20,13 @@ const CLIP_PARAMS: Array[StringName] = [&"water_reflection_clip_height", &"water
 const BLUR_SAMPLES_PARAM := &"water_reflection_blur_samples"
 ## Used when no quality tier sets blur_samples (lakes and rivers): the High tier's value.
 const DEFAULT_BLUR_SAMPLES := 12
+## Seconds between copies of the main camera's environment into the mirror's (fog, sky, light changes).
+const ENVIRONMENT_REFRESH := 0.5
+## Post-processing the main camera applies to the whole picture, reflection included: the mirror must
+## not apply it as well. The mirror image is linear scene light, like the screen copy water reads
+## for refraction and screen-space reflections, so the two blend without a seam.
+const MAIN_PASS_ONLY: Array[StringName] = [&"tonemap_mode", &"tonemap_exposure", &"tonemap_white",
+		&"glow_enabled", &"adjustment_enabled"]
 
 @export var plane_height := 0.0
 ## Fraction of the main viewport resolution; lower is cheaper and softer.
@@ -35,6 +42,9 @@ const DEFAULT_BLUR_SAMPLES := 12
 var _viewport: SubViewport
 var _camera: Camera3D
 var _on_screen := true
+var _environment := Environment.new()
+var _environment_source: Environment
+var _environment_age := 0.0
 
 
 static func water_layer_mask() -> int:
@@ -54,6 +64,9 @@ func _ready() -> void:
 	_viewport = SubViewport.new()
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_viewport.msaa_3d = Viewport.MSAA_DISABLED
+	# Linear, unclamped light: without HDR the image would be tone mapped and sRGB-encoded, then
+	# tone mapped again as part of the water.
+	_viewport.use_hdr_2d = true
 	_viewport.positional_shadow_atlas_size = 0
 	_camera = Camera3D.new()
 	_camera.cull_mask = ~water_layer_mask()
@@ -89,7 +102,7 @@ func _set_on_screen(on_screen: bool) -> void:
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on_screen else SubViewport.UPDATE_DISABLED
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not _on_screen:
 		return
 	var main := get_viewport().get_camera_3d()
@@ -101,10 +114,42 @@ func _process(_delta: float) -> void:
 	_camera.fov = main.fov
 	_camera.near = main.near
 	_camera.far = main.far
-	_camera.environment = main.environment
+	# The camera's own environment, or else the scene's (WorldEnvironment), as the main pass uses.
+	var source := main.environment if main.environment != null else main.get_world_3d().environment
+	_camera.environment = _mirror_environment(source, delta)
 	# Mirror across the plane, then flip the camera's local Y back so its basis is a proper rotation.
 	# The image ends up upside down, which the shader undoes by sampling at (u, 1 - v).
 	var mirror := Transform3D(Basis(Vector3.RIGHT, Vector3.DOWN, Vector3.BACK), Vector3(0, 2.0 * plane_height, 0))
 	var t := mirror * main.global_transform
 	t.basis = t.basis * Basis.from_scale(Vector3(1, -1, 1))
 	_camera.global_transform = t
+
+
+## The main environment without the post-processing the main pass applies to the whole picture.
+## Copied when the main camera's environment changes and every ENVIRONMENT_REFRESH seconds after.
+func _mirror_environment(source: Environment, delta: float) -> Environment:
+	if source == null:
+		return null
+	_environment_age += delta
+	if source == _environment_source and _environment_age < ENVIRONMENT_REFRESH:
+		return _environment
+	_environment_source = source
+	_environment_age = 0.0
+	copy_environment(source, _environment)
+	return _environment
+
+
+## Copies `source` into `target` as a mirror needs it: everything but the main pass's post-processing,
+## and a linear tone map at exposure 1.
+static func copy_environment(source: Environment, target: Environment) -> void:
+	for property: Dictionary in source.get_property_list():
+		var usage: int = property.usage
+		var property_name: String = property.name
+		if (usage & PROPERTY_USAGE_STORAGE) == 0 or StringName(property_name) in MAIN_PASS_ONLY:
+			continue
+		target.set(property_name, source.get(property_name))
+	target.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	target.tonemap_exposure = 1.0
+	target.glow_enabled = false
+	target.adjustment_enabled = false
+
