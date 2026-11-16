@@ -63,6 +63,7 @@ const DESCRIPTIONS: Dictionary[StringName, String] = {
 	&"breaker_ratio": "Crest height allowed per metre of depth. Real waves break at about 0.39.",
 	&"wave_setup": "Extra water at the waterline from breaking waves. Real set-up is about 0.2.",
 	&"min_shore_wave": "Share of the wave that still reaches the waterline as a lapping wave.",
+	&"transition_time": "Seconds a new sea state takes to fade in when it changes the longest waves. 0: at once.",
 	&"foreshore_slope": "Slope of the sand at the waterline. Steeper beaches: waves run further up (wet sand, swash).",
 	&"absorption_red": "Red light lost per metre of water. Red dies first: that makes the sea blue-green.",
 	&"absorption_green": "Green light lost per metre. Higher: bluer, darker water.",

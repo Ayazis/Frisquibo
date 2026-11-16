@@ -40,7 +40,7 @@ they only show errors on a desktop run.
    compute shader made it: moving it there would read and write the same image in place.)
 10. [x] **Shoreline.** Wet sand that follows the swash (how far each wave runs up the beach).
 11. [x] **Spray** blown off breaking crests in strong wind.
-12. [ ] **Sea-state transitions.** Cross-fade the longest cascade when its tile length changes.
+12. [x] **Sea-state transitions.** Cross-fade the longest cascade when its tile length changes.
 
 Wave refraction towards the shore and curling breakers are out of scope for this pass: both need a
 separate near-shore wave model (see the notes at the end once written).

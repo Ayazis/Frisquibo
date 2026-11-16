@@ -37,6 +37,9 @@ const FOAM_DRIFT_SHARE := 0.03
 ## The foam drift wraps after this many foam pattern tiles: whole tiles of both pattern layers
 ## (2.71 times apart in ocean.gdshader), so the wrap never shows.
 const FOAM_WRAP_TILES := 100.0
+## A tile change waits until the sea state has stopped changing this long (a slider being dragged),
+## so one drag makes one transition, not one per frame.
+const TRANSITION_SETTLE := 0.3
 ## Global shader values the ground reads for the swash on the beach (terrain_ground.gdshader).
 const SWASH_RUNUP_PARAM := &"water_swash_runup"
 const SWASH_PERIOD_PARAM := &"water_swash_period"
@@ -63,6 +66,10 @@ const UNDERWATER_REACH_MARGIN := 0.5
 ## Slope of the beach face at the waterline (rise over run): with the waves it sets how far the swash
 ## runs up the sand (ShoreRunup). 0.08 is a medium-sand beach, as BeachProfile builds by default.
 @export_range(0.01, 0.3, 0.005) var foreshore_slope := 0.08
+@export_group("Sea state changes")
+## Seconds a new sea state takes to fade in when it changes the longest waves' tile (a preset, a big
+## wind change). 0 switches at once and rearranges every long wave in one frame.
+@export_range(0.0, 30.0, 0.5, "suffix:s") var transition_time := 6.0
 @export_group("")
 @export var rules: OceanRuleSet
 
@@ -79,6 +86,14 @@ var _frames_since_readback := 0
 var _reflection: PlanarReflection
 var _underwater: UnderwaterView
 var _spray: OceanSpray
+## During a sea-state change: the old simulation and its height field, fading out.
+var _outgoing: OceanSimulation
+var _outgoing_field: OceanHeightField
+## 0: all old, 1: all new.
+var _transition := 1.0
+## A sea state with new tiles, waiting to settle before it starts its transition.
+var _pending: OceanSpectrum
+var _pending_age := 0.0
 var _foam_offset := Vector2.ZERO
 var _amplitude := DEFAULT_AMPLITUDE
 ## The sea state after the rules: spectrum and ocean values actually simulated and drawn.
@@ -111,9 +126,7 @@ func _ready() -> void:
 	material = ShaderMaterial.new()
 	material.shader = SURFACE_SHADER
 	material.set_shader_parameter("wave_amplitude", _amplitude)
-	material.set_shader_parameter("displacement_maps", _simulation.displacement)
-	material.set_shader_parameter("slope_maps", _simulation.slope)
-	material.set_shader_parameter("moment_maps", _simulation.moments)
+	_bind_maps()
 	_underwater = UnderwaterView.new()
 	_underwater.shaft_steps = quality.underwater_shaft_steps
 	add_child(_underwater)
@@ -154,6 +167,7 @@ func _exit_tree() -> void:
 		_underwater.set_waves(null, null, PackedFloat32Array(), 0, OceanSimulation.MAP_SIZE)
 		if _spray != null:
 			_spray.set_waves(null, null, PackedFloat32Array(), 0)
+		_end_transition()
 		# Queued on the render thread right away: a deferred call would never run when the game quits.
 		_simulation.free_resources()
 		_simulation = null
@@ -310,9 +324,17 @@ func height_at(xz: Vector2) -> float:
 	if _fallback != null:
 		return _fallback.height_at(xz, _time)
 	var rest_level := _level() + _local_lift(xz)
-	if _height_field == null or not _height_field.is_ready():
+	var current := _height_field != null and _height_field.is_ready()
+	var outgoing := _outgoing_field != null and _outgoing_field.is_ready()
+	if outgoing and not current:
+		return rest_level + _outgoing_field.height_at(xz)
+	if not current:
 		return rest_level
-	return rest_level + _height_field.height_at(xz)
+	if not outgoing:
+		return rest_level + _height_field.height_at(xz)
+	# The longest waves change in a transition: unrelated fields, blended to keep their energy.
+	var w := smoothstep(0.0, 1.0, _transition)
+	return rest_level + _height_field.height_at(xz) * sqrt(w) + _outgoing_field.height_at(xz) * sqrt(1.0 - w)
 
 
 func _process(delta: float) -> void:
@@ -327,6 +349,7 @@ func _process(delta: float) -> void:
 		_amplitude = lerpf(_amplitude, _height_field.crest_amplitude(), 1.0 - exp(-AMPLITUDE_RESPONSE * delta))
 		material.set_shader_parameter("wave_amplitude", _amplitude)
 	_update_rules(false)
+	_advance_transition(delta)
 	_simulation.update(_time, delta)
 	_drift_foam(delta)
 	var cam := get_viewport().get_camera_3d()
@@ -347,10 +370,80 @@ func _process(delta: float) -> void:
 		_frames_since_readback += 1
 		if _frames_since_readback >= quality.readback_interval:
 			_frames_since_readback = 0
-			for c in range(_simulation.cascade_count):
-				var field := _height_field
-				var cascade := c
-				_simulation.request_displacement(c, func(bytes: PackedByteArray) -> void: field.set_cascade.call_deferred(cascade, bytes))
+			_request_readback(_simulation, _height_field)
+			if _outgoing != null:
+				_request_readback(_outgoing, _outgoing_field)
+
+
+static func _request_readback(simulation: OceanSimulation, field: OceanHeightField) -> void:
+	for c in range(simulation.cascade_count):
+		var cascade := c
+		simulation.request_displacement(c, func(bytes: PackedByteArray) -> void: field.set_cascade.call_deferred(cascade, bytes))
+
+
+## Runs a sea-state change: starts it once a new state with new tiles has settled, runs the old
+## simulation alongside the new one, and ends it when the new one has fully faded in.
+func _advance_transition(delta: float) -> void:
+	if _pending != null:
+		_pending_age += delta
+		if _pending_age >= TRANSITION_SETTLE:
+			_start_transition()
+	if _outgoing == null:
+		return
+	_transition = minf(_transition + delta / maxf(transition_time, 0.001), 1.0)
+	material.set_shader_parameter("transition", _transition)
+	_outgoing.update(_time, delta)
+	if _transition >= 1.0:
+		_end_transition()
+
+
+func _start_transition() -> void:
+	var incoming := _pending
+	_pending = null
+	# A change during a change: the oldest state goes, the one fading in becomes the one fading out.
+	_end_transition()
+	_outgoing = _simulation
+	_outgoing_field = _height_field
+	_simulation = OceanSimulation.new(quality.cascade_count, incoming)
+	_height_field = OceanHeightField.new(OceanSimulation.MAP_SIZE, _simulation.tile_lengths)
+	_height_field.damping_at = _damping_at
+	_bind_maps()
+	material.set_shader_parameter("prev_displacement_maps", _outgoing.displacement)
+	material.set_shader_parameter("prev_slope_maps", _outgoing.slope)
+	material.set_shader_parameter("prev_moment_maps", _outgoing.moments)
+	material.set_shader_parameter("prev_tile_lengths", _tiles_of(_outgoing))
+	material.set_shader_parameter("prev_cascade_count", _outgoing.cascade_count)
+	_transition = 0.0
+	material.set_shader_parameter("transition", _transition)
+	_apply_cascades()
+
+
+## Drops the fading-out simulation, if any: unbinds its maps first, then frees it on the render thread.
+func _end_transition() -> void:
+	_transition = 1.0
+	if material != null:
+		material.set_shader_parameter("transition", _transition)
+		material.set_shader_parameter("prev_cascade_count", 0)
+		material.set_shader_parameter("prev_displacement_maps", null)
+		material.set_shader_parameter("prev_slope_maps", null)
+		material.set_shader_parameter("prev_moment_maps", null)
+	if _outgoing != null:
+		_outgoing.free_resources()
+	_outgoing = null
+	_outgoing_field = null
+
+
+func _bind_maps() -> void:
+	material.set_shader_parameter("displacement_maps", _simulation.displacement)
+	material.set_shader_parameter("slope_maps", _simulation.slope)
+	material.set_shader_parameter("moment_maps", _simulation.moments)
+
+
+static func _tiles_of(simulation: OceanSimulation) -> PackedFloat32Array:
+	var tiles := PackedFloat32Array([1.0, 1.0, 1.0, 1.0])
+	for c in range(simulation.cascade_count):
+		tiles[c] = simulation.tile_lengths[c]
+	return tiles
 
 
 ## How far up the beach the waves run now, and how often, for the ground's swash.
@@ -372,9 +465,7 @@ func _drift_foam(delta: float) -> void:
 
 
 func _apply_cascades() -> void:
-	var tiles := PackedFloat32Array([1.0, 1.0, 1.0, 1.0])
-	for c in range(_simulation.cascade_count):
-		tiles[c] = _simulation.tile_lengths[c]
+	var tiles := _tiles_of(_simulation)
 	material.set_shader_parameter("tile_lengths", tiles)
 	material.set_shader_parameter("cascade_count", _simulation.cascade_count)
 	_underwater.set_waves(_simulation.displacement, _simulation.slope, tiles, _simulation.cascade_count,
@@ -423,10 +514,8 @@ func _apply_state(spectrum_changed: bool) -> void:
 		return
 	if _simulation == null:
 		return
-	if spectrum_changed and _simulation.set_spectrum(_effective):
-		_height_field = OceanHeightField.new(OceanSimulation.MAP_SIZE, _simulation.tile_lengths)
-		_height_field.damping_at = _damping_at
-		_apply_cascades()
+	if spectrum_changed:
+		_change_spectrum()
 	if _height_field.damping_at.is_null():
 		_height_field.damping_at = _damping_at
 	material.set_shader_parameter("sea_level", sea_level)
@@ -449,6 +538,20 @@ func _apply_state(spectrum_changed: bool) -> void:
 		material.set_shader_parameter("local_rule_effect", _local.effects)
 	if _reflection != null:
 		_reflection.set_plane_height(sea_level)
+
+
+## New tiles fade in over transition_time (once the values settle); anything else applies at once.
+func _change_spectrum() -> void:
+	var new_tiles := OceanSimulation.tiles_for(_effective, _simulation.cascade_count) != _simulation.tile_lengths
+	if new_tiles and transition_time > 0.0:
+		_pending = _effective.duplicate() as OceanSpectrum
+		_pending_age = 0.0
+		return
+	_pending = null
+	if _simulation.set_spectrum(_effective):
+		_height_field = OceanHeightField.new(OceanSimulation.MAP_SIZE, _simulation.tile_lengths)
+		_height_field.damping_at = _damping_at
+		_apply_cascades()
 
 
 func _value(parameter: StringName) -> float:

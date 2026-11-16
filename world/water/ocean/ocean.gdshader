@@ -20,6 +20,14 @@ uniform sampler2DArray slope_maps : filter_linear_mipmap_anisotropic, repeat_ena
 uniform sampler2DArray moment_maps : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float tile_lengths[4];
 uniform int cascade_count = 4;
+// While the sea state changes the tiles, the old simulation runs on and fades out (Ocean): its maps,
+// and how far the change is (0: all old, 1: all new).
+uniform sampler2DArray prev_displacement_maps : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2DArray prev_slope_maps : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2DArray prev_moment_maps : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform float prev_tile_lengths[4];
+uniform int prev_cascade_count = 0;
+uniform float transition = 1.0;
 uniform float map_size = 256.0;
 // Angular step of the surface mesh, to estimate vertex spacing for anti-aliased displacement.
 uniform float mesh_angular_step = 0.0123;
@@ -205,6 +213,25 @@ float shore_damping(float depth) {
 	return clamp(max(limited, min_shore_wave * smoothstep(0.0, 0.5, depth)), 0.0, 1.0);
 }
 
+// Share of the new sea state, eased in and out.
+float transition_share() {
+	return smoothstep(0.0, 1.0, transition);
+}
+
+// Amplitude weights (old, new) of cascade i during a sea-state change. A cascade that kept its tile has
+// the same wave phases in both states, so its amplitudes blend linearly. One whose tile changed is an
+// unrelated wave field: square-root weights keep the energy (and so the wave height) steady.
+vec2 transition_weights(int i) {
+	if (transition >= 1.0 || i >= prev_cascade_count) {
+		return vec2(0.0, 1.0);
+	}
+	float w = transition_share();
+	if (abs(prev_tile_lengths[i] - tile_lengths[i]) < 0.001) {
+		return vec2(1.0 - w, w);
+	}
+	return vec2(sqrt(1.0 - w), sqrt(w));
+}
+
 // Scale on horizontal displacement that keeps the jacobian (1 + dDx/dx)(1 + dDz/dz) from folding.
 float fold_limit(vec2 jac) {
 	float k = 1.0;
@@ -239,8 +266,16 @@ void vertex() {
 		// Pick the mip whose texels match the vertex spacing: waves the mesh can't carry average out.
 		float lod = log2(max(spacing * map_size / tile, 1.0));
 		vec3 uv = vec3(p / tile, float(i));
-		d += textureLod(displacement_maps, uv, lod).xyz;
-		jac += textureLod(slope_maps, uv, lod).zw;
+		vec2 tw = transition_weights(i);
+		d += textureLod(displacement_maps, uv, lod).xyz * tw.y;
+		jac += textureLod(slope_maps, uv, lod).zw * tw.y;
+		if (tw.x > 0.0) {
+			float prev_tile = prev_tile_lengths[i];
+			float prev_lod = log2(max(spacing * map_size / prev_tile, 1.0));
+			vec3 prev_uv = vec3(p / prev_tile, float(i));
+			d += textureLod(prev_displacement_maps, prev_uv, prev_lod).xyz * tw.x;
+			jac += textureLod(prev_slope_maps, prev_uv, prev_lod).zw * tw.x;
+		}
 	}
 	v_fold = fold_limit(jac * v_damping);
 	d.xz *= v_damping * v_fold;
@@ -268,11 +303,25 @@ void fragment() {
 		vec3 uv = vec3(v_rest / tile_lengths[i], float(i));
 		vec4 s = texture(slope_maps, uv);
 		vec4 m = texture(moment_maps, uv);
+		vec2 tw = transition_weights(i);
+		vec2 cascade_variance = max(m.xy - s.xy * s.xy, vec2(0.0));
+		s *= tw.y;
+		float cascade_foam = m.z;
+		if (tw.x > 0.0) {
+			// Unresolved slope variance and foam blend by share: (1 - w) old + w new for both weightings.
+			float w = transition_share();
+			vec3 prev_uv = vec3(v_rest / prev_tile_lengths[i], float(i));
+			vec4 ps = texture(prev_slope_maps, prev_uv);
+			vec4 pm = texture(prev_moment_maps, prev_uv);
+			cascade_variance = mix(max(pm.xy - ps.xy * ps.xy, vec2(0.0)), cascade_variance, w);
+			cascade_foam = mix(pm.z, cascade_foam, w);
+			s += ps * tw.x;
+		}
 		float energy = (i == cascade_count - 1 && cascade_count > 1) ? gust : 1.0;
 		slope += s.xy * sqrt(energy);
 		jac += s.zw;
-		variance += max(m.xy - s.xy * s.xy, vec2(0.0)) * energy;
-		foam_cover += m.z * foam_weight;
+		variance += cascade_variance * energy;
+		foam_cover += cascade_foam * foam_weight;
 		foam_weight *= foam_cascade_falloff;
 	}
 	// Close-up ripples: near the camera the capillary roughness is drawn as real ripples carrying the same

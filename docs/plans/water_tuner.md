@@ -114,10 +114,9 @@ Decisions: `docs/decisions/0005-ocean-parameter-catalogue-and-look.md`,
 
 - **Water-type presets**: written in `world/water/ocean/looks/` (absorption from Jerlov's water types);
   their colours still need judging on a desktop GPU.
-- **Blended transitions between sea states.** The longest cascade's tile grows with the longest wave
-  (233 m for a breeze, about 940 m for the storm preset), and a tile change rearranges every long
-  wave at once. Blending the numbers alone would turn one jump into several. Doing it properly means
-  running the old and the new longest cascade side by side and cross-fading them.
+- **Blended transitions between sea states**: done in the water realism pass (`Ocean.transition_time`):
+  a change of tiles waits for the values to settle, then runs the old simulation beside the new one and
+  cross-fades them. Needs a look on a desktop GPU.
 - **Auto values showing how far a manual value is from physical.** The Auto box exists; the
   deviation display from the original design does not.
 - **The steepness and depth links** are still hard-coded in `ocean_tuner_links.gd`.
