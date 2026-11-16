@@ -8,7 +8,7 @@ headless import, the headless tests and the headless smoke test only (nothing is
 godot --headless --import
 for t in water_shaders underwater_view water_ripples water_textures water_types shore_runup water_quality \
     island_terrain ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field \
-    beach_profile river_flow_field; do
+    beach_profile river_flow_field shore_waves water_mask planar_reflection; do
   timeout 120 godot --headless --path . --script res://tests/headless/${t}_test.gd; done
 timeout 200 godot --headless --path . --script res://tests/smoke/ocean_smoke.gd
 ```
@@ -43,8 +43,26 @@ they only show errors on a desktop run.
 11. [x] **Spray** blown off breaking crests in strong wind.
 12. [x] **Sea-state transitions.** Cross-fade the longest cascade when its tile length changes.
 
-Wave refraction towards the shore and curling breakers are out of scope for this pass: both need a
-separate near-shore wave model (see the notes at the end once written).
+Wave refraction towards the shore and curling breakers were out of scope for this pass: both need a
+separate near-shore wave model. The second pass below adds one (decision 0010).
+
+## Second pass (decision 0010)
+
+13. [x] **Shore waves.** A travel-time field over the seabed (eikonal equation, fast marching): crests
+    turn to meet the beach, shorten and grow as the water shallows, lean forward and break at the depth
+    limit, with white water on the front face and a fading foam band behind. Wave for wave the swash's
+    timing and size, so each crest runs up the sand as far as the swash says. CPU twin for buoyancy.
+14. [x] **Dry hulls.** `WaterMask`: an invisible lid over a boat's opening keeps the sea out of the hull.
+15. [x] **Screen-space reflections** on all water, over the mirror or the sky: the river reflects its
+    banks, and a boat on a crest reflects from the real surface, not the flat mirror plane.
+16. [x] **Rough-water Fresnel and the horizon.** Fresnel averaged over the unresolved slopes (Bruneton
+    et al. 2010); mirror samples and reflected rays never cross below the horizon.
+17. [x] **Linear mirror.** The planar reflection renders linear HDR light without the main pass's tone
+    mapping and glow (which it applied a second time before).
+
+Out of scope still: plunging breakers that curl over (a mesh can't fold over itself here), foam left
+lying on the sand after the backwash, and the shore waves in the underwater view's waterline and in
+the caustics (both still read the FFT waves only).
 
 ## Desktop checks
 
@@ -81,3 +99,23 @@ script errors, then check:
 12. **Sea-state changes** (C to cycle presets): the sea fades from one state to the next over about six
     seconds without a jump; floating barrels stay on the surface.
 13. **Cost**: compare frame times with the previous main on High; each feature has a quality value.
+
+Second pass:
+
+14. **Shore waves** (1, 4, 5; C for the storm and calm presets): crests near the island run parallel
+    to the beach all round it, also on the lee side (smaller there), and bend round the headlands; they
+    get shorter and steeper towards the sand, lean forward, and break with white water on the front
+    face and a fading band of foam behind. Each breaker should arrive just as the swash starts its
+    run-up; a big one runs further. No seams or flicker where the shore waves fade in (around 4-8 m deep)
+    or at the texels of the shore field (3 m). Barrels in the surf ride the breakers (CPU twin).
+    If the breakers look too regular, raise `SWASH_PHASE_SPREAD` (now 0.5; the old swash used 1.5).
+15. **Dry hulls** (5, then close to a boat; storm preset): no sea inside the open boats as they roll,
+    and a crest between the camera and a boat still hides the boat. Set the mask's `debug_tint` to see
+    the lid.
+16. **Screen-space reflections**: the river (3) mirrors its banks and trees, with the sky where the rays
+    find nothing; boats and the island reflect in the sea (1, 5) without seams where the march hands
+    over to the mirror (screen edges, about 40-60 m away). Low: none.
+17. **Fresnel and horizon** (5, looking out to sea; storm preset): the rough sea darkens towards the
+    horizon instead of turning into a bright mirror; no bright line along the horizon.
+18. **Linear mirror**: reflections are as bright as the things they reflect, times the Fresnel (they
+    were washed out before), and the glow doesn't bloom twice in them.
