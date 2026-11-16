@@ -54,6 +54,11 @@ func _initialize() -> void:
 		_check(t.height(sea.x, sea.y) < IslandTerrain.SEA_LEVEL, "Sea outside the coast at %d degrees" % (i * 5))
 		_check(t.height(land.x, land.y) < IslandTerrain.BEACH_TOP + 1.5 or _near_river(t, land),
 				"A beach, not a cliff, at %d degrees" % (i * 5))
+	# An island in open sea: deep, blue water a few hundred metres out, all the way round.
+	for i in range(ANGLES):
+		var a := TAU * i / ANGLES
+		var out := Vector2(cos(a), sin(a)) * (t.coast_radius(a) + 300.0)
+		_check(t.height(out.x, out.y) < -50.0, "Deep water 300 m off the coast at %d degrees" % (i * 5))
 	var deep := Vector2(IslandTerrain.COAST_RADIUS + 800.0, 0.0)
 	_check(t.height(deep.x, deep.y) < -50.0, "Deep water past the drop-off")
 	var radii := IslandGround.ring_radii()

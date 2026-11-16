@@ -12,6 +12,20 @@ const COAST_WANDER := 14.0
 const COAST_NOISE_FREQUENCY := 1.4
 ## Lookup table of the coastline radius by angle, so the height function needs no noise for it.
 const COAST_SAMPLES := 2048
+## Under water: an island in open sea falls away quickly. Coarse sand (Dean A = 0.2) gives a short
+## surf zone with a sandbar, a steep slope follows, and from about 180 m out the seabed drops into deep
+## water: about 6 m deep at 100 m offshore, 20 m at 200 m, more than 80 m from 300 m.
+const SAND_DEAN_A := 0.2
+const BEACH_FACE_SLOPE := 0.08
+const BERM_HEIGHT := 2.0
+const BAR_DISTANCE := 35.0
+const BAR_HEIGHT := 0.6
+const BAR_WIDTH := 10.0
+const SHELF_START := 80.0
+const SHELF_SLOPE := 0.08
+const DROP_START := 180.0
+const DROP_WIDTH := 150.0
+const DROP_DEPTH := 60.0
 ## Inland: the ground rises this much over INLAND_RISE_DISTANCE beyond the berm, plus rolling hills.
 const INLAND_RISE := 3.0
 const INLAND_RISE_START := 25.0
@@ -58,17 +72,17 @@ var _river_end_x: float
 
 
 func _init() -> void:
-	beach.dean_a = 0.1
-	beach.beach_slope = 0.07
-	beach.berm_height = 2.0
-	beach.bar_distance = 55.0
-	beach.bar_height = 0.7
-	beach.bar_width = 14.0
-	beach.shelf_start = 220.0
-	beach.shelf_slope = 0.04
-	beach.drop_start = 450.0
-	beach.drop_width = 250.0
-	beach.drop_depth = 100.0
+	beach.dean_a = SAND_DEAN_A
+	beach.beach_slope = BEACH_FACE_SLOPE
+	beach.berm_height = BERM_HEIGHT
+	beach.bar_distance = BAR_DISTANCE
+	beach.bar_height = BAR_HEIGHT
+	beach.bar_width = BAR_WIDTH
+	beach.shelf_start = SHELF_START
+	beach.shelf_slope = SHELF_SLOPE
+	beach.drop_start = DROP_START
+	beach.drop_width = DROP_WIDTH
+	beach.drop_depth = DROP_DEPTH
 	_hills.seed = 3
 	_hills.frequency = HILL_FREQUENCY
 	_hills.fractal_octaves = 3

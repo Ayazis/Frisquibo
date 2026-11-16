@@ -29,6 +29,7 @@ const BANNER_FONT_SIZE := 34
 const BANNER_COLOR := Color(0.55, 0.95, 0.6)
 const SHADOW_DISTANCE := 150.0
 const FOG_DENSITY := 0.0006
+const FOG_AERIAL_PERSPECTIVE := 1.0
 
 
 ## A place to look from: the orbit point, distance and angles.
@@ -130,7 +131,8 @@ func _make_env() -> void:
 	_env.glow_enabled = true
 	_env.fog_enabled = true
 	_env.fog_density = FOG_DENSITY
-	_env.fog_aerial_perspective = 0.5
+	# The fog takes the sky's own colour, so it doesn't paint the sky (and the sea reflecting it) grey.
+	_env.fog_aerial_perspective = FOG_AERIAL_PERSPECTIVE
 	var world_environment := WorldEnvironment.new()
 	world_environment.environment = _env
 	add_child(world_environment)
