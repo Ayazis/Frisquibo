@@ -48,6 +48,8 @@ var _state: int = 1
 ## Editable copy of the active preset; the sliders write into it.
 var _live: OceanSpectrum
 var _panel: OceanTunerPanel
+## -1: the ocean's own look; otherwise an index into WATER_TYPES.
+var _water_type := -1
 
 func _init() -> void:
 	title = "Custom FFT ocean"
@@ -81,6 +83,14 @@ func _ready() -> void:
 		boat.rotation.y = BOAT_HEADING
 		add_child(boat)
 	_update_notes()
+
+func cycle_water_type() -> String:
+	_water_type = (_water_type + 1) % WATER_TYPES.size()
+	ocean.set_look(WATER_TYPES[_water_type].duplicate() as OceanLook)
+	if _panel:
+		_panel.mark_defaults()
+	return WATER_TYPE_NAMES[_water_type]
+
 
 func cycle_sea_state() -> void:
 	set_sea_state(_state + 1)
@@ -122,7 +132,7 @@ func make_controls() -> Control:
 
 func _update_notes() -> void:
 	var mode: String = "FFT" if OceanSimulation.is_supported() else "Gerstner fallback"
-	notes = "%s | %s (edited with sliders) | C: next preset | F: drop objects" % [mode, STATE_NAMES[_state]]
+	notes = "%s | %s (edited with sliders) | C: next preset | L: water type | F: drop objects" % [mode, STATE_NAMES[_state]]
 
 ## Row fraction (0 = far out at sea, 1 = inland edge) to z fraction: dense at the shoreline.
 func _row_spacing(row: float) -> float:

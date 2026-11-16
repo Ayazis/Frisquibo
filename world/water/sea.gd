@@ -20,6 +20,8 @@ const DEFAULT_TIME_ROLLOVER := 3600.0
 @export var underwater_view := true
 ## Waves, wakes and foam from objects in the water, near the camera (WaterRipples).
 @export var interaction_ripples := true
+## Water type (clear, coastal, murky; world/water/ocean/looks/). Null keeps water.gdshader's own values.
+@export var look: OceanLook
 
 var material: ShaderMaterial
 var _underwater: UnderwaterView
@@ -42,6 +44,8 @@ func _ready() -> void:
 	layers = PlanarReflection.water_layer_mask()
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	position.y = level
+	if look != null:
+		set_look(look)
 	if planar_reflection:
 		var reflection := PlanarReflection.new()
 		reflection.plane_height = level
@@ -77,6 +81,13 @@ func _wave_time() -> float:
 		return forced
 	var rollover: float = ProjectSettings.get_setting("rendering/limits/time/time_rollover_secs", DEFAULT_TIME_ROLLOVER)
 	return fposmod(Time.get_ticks_msec() / 1000.0, rollover)
+
+
+## Applies a water type: its colour, clarity and light values go to the uniforms of the same name.
+func set_look(value: OceanLook) -> void:
+	look = value
+	if look != null:
+		OceanLookBinding.apply(look, material, {})
 
 
 ## Same Gerstner displacement as water.gdshader, inverted to find the requested world point.

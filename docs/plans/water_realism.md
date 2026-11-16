@@ -6,7 +6,7 @@ headless import, the headless tests and the headless smoke test only (nothing is
 
 ```
 godot --headless --import
-for t in water_shaders underwater_view water_ripples water_textures ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field \
+for t in water_shaders underwater_view water_ripples water_textures water_types ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field \
     beach_profile river_flow_field; do
   timeout 120 godot --headless --path . --script res://tests/headless/${t}_test.gd; done
 timeout 200 godot --headless --path . --script res://tests/smoke/ocean_smoke.gd
@@ -34,7 +34,7 @@ they only show errors on a desktop run.
 6. [x] **Gust patches.** Large, slow, wind-driven patches of rougher and calmer water ("cat's paws").
 7. [x] **Close-up ripple detail.** Fine scrolling detail normals near the camera, below the smallest
    simulated waves, on the ocean as well.
-8. [ ] **Water types.** `OceanLook` presets for clear ocean, coastal and murky (moat, harbour) water.
+8. [x] **Water types.** `OceanLook` presets for clear ocean, coastal and murky (moat, harbour) water.
 9. [ ] **Floating foam.** Foam drifts with the wind, fresh foam glows turquoise from bubbles below it,
    foam has surface relief.
 10. [ ] **Shoreline.** Wet sand that follows the swash (how far each wave runs up the beach).

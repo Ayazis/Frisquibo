@@ -16,13 +16,15 @@ const ZOOM_STEP := 1.15
 const MIN_DISTANCE := 4.0
 const MAX_DISTANCE := 120.0
 const MIN_PITCH := -1.4
-const MAX_PITCH := -0.05
+## Positive pitch looks up: from under the water towards the surface.
+const MAX_PITCH := 1.2
 const CAMERA_FOV := 60.0
 ## WASD pan speed as a fraction of the orbit distance per second, so it feels the same zoomed in or out.
 const MOVE_SPEED_PER_DISTANCE := 0.8
 const FAST_MULTIPLIER := 3.0
 ## Q/E raise and lower the point the camera orbits, within these bounds (metres from the station's target).
-const MIN_TARGET_HEIGHT := -2.0
+## Low enough to take the camera under water (the underwater view).
+const MIN_TARGET_HEIGHT := -20.0
 const MAX_TARGET_HEIGHT := 30.0
 ## Gap between the station controls panel and the right edge of the screen.
 const CONTROLS_MARGIN := 16.0
@@ -212,6 +214,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			_show_station(number)
 		elif key.physical_keycode == KEY_C and _station is CustomOceanStation:
 			(_station as CustomOceanStation).cycle_sea_state()
+		elif key.physical_keycode == KEY_L:
+			var water_type := _station.cycle_water_type()
+			if water_type != "":
+				print("Water type: ", water_type)
 		elif key.physical_keycode == KEY_T:
 			_toggle_time()
 		elif key.physical_keycode == KEY_F:

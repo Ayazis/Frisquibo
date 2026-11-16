@@ -20,11 +20,12 @@ const SEA_SUBDIVISIONS := 240
 
 var _noise := FastNoiseLite.new()
 var _sea: Sea
+var _water_type := -1
 
 
 func _init() -> void:
 	title = "Lake / moat"
-	notes = "world/water/water.gdshader, calm. Mirror reflections on desktop; sky reflection on web."
+	notes = "world/water/water.gdshader, calm. Mirror reflections on desktop; sky reflection on web. L: water type"
 	camera_distance = 26.0
 
 
@@ -45,6 +46,12 @@ func _ready() -> void:
 	sea.material.set_shader_parameter("detail_strength", CALM_DETAIL)
 	sea.material.set_shader_parameter("shore_foam_strength", 0.35)
 	_scatter_props()
+
+
+func cycle_water_type() -> String:
+	_water_type = (_water_type + 1) % WATER_TYPES.size()
+	_sea.set_look(WATER_TYPES[_water_type])
+	return WATER_TYPE_NAMES[_water_type]
 
 
 ## Trees and rocks around the shore, so reflections have something to show.

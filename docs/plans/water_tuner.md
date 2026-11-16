@@ -112,8 +112,8 @@ Decisions: `docs/decisions/0005-ocean-parameter-catalogue-and-look.md`,
 
 ## Open items that need eyes on a desktop GPU
 
-- **Water-type presets** (clear ocean, coastal, murky) as `OceanLook` `.tres` files. Not written
-  because the colours would be guesses.
+- **Water-type presets**: written in `world/water/ocean/looks/` (absorption from Jerlov's water types);
+  their colours still need judging on a desktop GPU.
 - **Blended transitions between sea states.** The longest cascade's tile grows with the longest wave
   (233 m for a breeze, about 940 m for the storm preset), and a tile change rearranges every long
   wave at once. Blending the numbers alone would turn one jump into several. Doing it properly means

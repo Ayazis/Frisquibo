@@ -25,6 +25,19 @@ func water_height_at(_xz: Vector2) -> float:
 	return 0.0
 
 
+## Water types the L key cycles through (world/water/ocean/looks/), with their names for the HUD.
+const WATER_TYPES: Array[OceanLook] = [
+	preload("res://world/water/ocean/looks/clear_ocean.tres"),
+	preload("res://world/water/ocean/looks/coastal.tres"),
+	preload("res://world/water/ocean/looks/murky.tres")]
+const WATER_TYPE_NAMES: Array[String] = ["Clear ocean", "Coastal", "Murky"]
+
+
+## Next water type (key L), for stations that support it. Returns its name, or "" when not supported.
+func cycle_water_type() -> String:
+	return ""
+
+
 ## Optional extra controls for this station (sliders); shown in the HUD while the station is active.
 func make_controls() -> Control:
 	return null
