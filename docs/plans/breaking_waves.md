@@ -1,6 +1,6 @@
 # Breaking waves plan
 
-Status: phase A in progress; phases B and C not started. Follows decision 0010 (shore waves).
+Status: phase A built (desktop look pending); phases B and C not started. Follows decision 0010 (shore waves).
 
 ## Goal
 
@@ -44,10 +44,13 @@ So the order is:
 3. [x] **Foam left on the sand.** As each wave's swash turns back, a lacy line of foam stays where the
    wave stopped, and a sheet of bubbles drains away behind it. Both fade during the backwash. This is
    drawn by the ground, with the same swash timing, so it lines up with the water's edge.
-4. [ ] **Wave rays and the refraction coefficient.** Rays traced seaward from the waterline over the
-   `ShoreField` give Kr = sqrt(b0 / b) from how far apart neighbouring rays are, against their spacing
-   offshore. The shore waves get bigger on headlands and smaller in bays, which replaces most of the
-   `shore_lee_share` guess. The rays are also the coordinates phase C would need.
+4. [x] **The refraction coefficient.** Kr = sqrt(b0 / b) says how far neighbouring rays are apart (b)
+   against their spacing at the field's offshore edge (b0). It comes from how fast the direction of
+   travel spreads out, d(ln b)/ds = div(d), added up along the rays the fast marching already follows,
+   so no separate ray tracing is needed. The divergence is smoothed over about a wavelength, because
+   real waves diffract, and Kr is clamped to 0.4..2. The shore waves gather on headlands and thin out
+   in bays. `shore_lee_share` stays, for coasts that face away from the waves. Phase C's ribbons will
+   still need explicit ray coordinates: trace them then.
 
 Checks: headless import, tests and both exports for every step, and a person's look on a desktop
 GPU (checks 19-22 in `water_realism.md`).

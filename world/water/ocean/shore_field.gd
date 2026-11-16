@@ -5,6 +5,8 @@ extends RefCounted
 ## the shallows and their crests swing round to meet the beach (refraction) and bunch up (shoaling).
 ## Wave crests are the lines of equal travel time: T solves the eikonal equation |grad T| = 1 / c(h),
 ## here with the fast marching method (Sethian 1996), outwards from the waterline.
+## Along the same rays it measures how they spread or gather (the refraction coefficient): waves
+## heading for a headland bunch their energy up, waves heading into a bay spread it out.
 ## The shore waves (ShoreWaves on the CPU, ocean_shore_waves.gdshaderinc on the GPU) read it.
 
 const GRAVITY := 9.81
@@ -15,13 +17,23 @@ const DEFAULT_CELL := 3.0
 const MAX_DEPTH := 12.0
 ## The wave speed of this depth is used in shallower water, so the travel time stays finite at the waterline.
 const MIN_DEPTH := 0.05
+## Limits of the refraction coefficient. Where rays cross (behind an island, at a sharp headland) ray
+## theory predicts infinite focusing; real waves diffract and spread it out.
+const REFRACTION_MIN := 0.4
+const REFRACTION_MAX := 2.0
+## 3 x 3 smoothing passes over the rays' divergence: real waves diffract, so they don't follow bends of
+## the coast smaller than about a wavelength (several cells); the passes average over about 2 * passes
+## + 1 cells.
+const DIVERGENCE_SMOOTHING := 3
 
 ## RGBA float per texel: travel time to the waterline (s), its gradient along x and z (s/m), and 1
 ## where the field holds (water up to MAX_DEPTH, and land touching it); 0 elsewhere.
 var image: Image
-## RG float per texel: the point on the waterline (world x, z) the wave passing here will reach. Anything
-## that varies along the coast (the timing and size of each wave) is drawn from it, so it stays the same
-## along a wave's path and matches the swash where it lands.
+## RGB float per texel: the point on the waterline (world x, z) the wave passing here will reach, and the
+## refraction coefficient Kr = sqrt(b0 / b) here (b: spacing of neighbouring rays, b0: their spacing at
+## the field's offshore edge). Anything that varies along the coast (the timing and size of each wave) is
+## drawn from the waterline point, so it stays the same along a wave's path and matches the swash where
+## it lands.
 var origins: Image
 var area: Rect2
 var width := 0
@@ -31,6 +43,12 @@ var _depths := PackedFloat32Array()
 var _times := PackedFloat32Array()
 var _ends := PackedVector2Array()
 var _known := PackedByteArray()
+## Per cell, the neighbours the wave came from (-1: none) and the share of the x one.
+var _up_x := PackedInt32Array()
+var _up_z := PackedInt32Array()
+var _up_share := PackedFloat32Array()
+## Water cells in the order the march accepted them (rising travel time).
+var _order := PackedInt32Array()
 
 
 ## Bakes the field over `area`. `depth_at` takes a world (x, z) as a Vector2 and returns the still
@@ -47,6 +65,10 @@ static func bake(depth_at: Callable, bake_area: Rect2, cell: float = DEFAULT_CEL
 	field._times = PackedFloat32Array()
 	field._ends = PackedVector2Array()
 	field._known = PackedByteArray()
+	field._up_x = PackedInt32Array()
+	field._up_z = PackedInt32Array()
+	field._up_share = PackedFloat32Array()
+	field._order = PackedInt32Array()
 	return field
 
 
@@ -67,6 +89,13 @@ func origin(p: Vector2) -> Vector2:
 		return p
 	var c := _filtered(origins, p)
 	return Vector2(c.r, c.g)
+
+
+## Refraction coefficient at `p`, filtered like the GPU texture: 1 outside the area.
+func refraction(p: Vector2) -> float:
+	if origins == null or not area.has_point(p):
+		return 1.0
+	return _filtered(origins, p).b
 
 
 func _filtered(img: Image, p: Vector2) -> Color:
@@ -110,6 +139,11 @@ func _march() -> void:
 	_times.fill(INF)
 	_ends.resize(count)
 	_known.resize(count)
+	_up_x.resize(count)
+	_up_x.fill(-1)
+	_up_z.resize(count)
+	_up_z.fill(-1)
+	_up_share.resize(count)
 	var heap := _MinHeap.new()
 	for i in range(count):
 		if _depths[i] <= 0.0:
@@ -125,6 +159,7 @@ func _march() -> void:
 		if _known[i] == 1:
 			continue
 		_known[i] = 1
+		_order.append(i)
 		if _depths[i] > MAX_DEPTH:
 			continue
 		for j: int in _neighbours(i):
@@ -189,6 +224,7 @@ func _update(i: int) -> bool:
 	var along_z := b + fz * cell.y
 	var t := minf(along_x, along_z)
 	var end := _ends[ix] if along_x <= along_z else _ends[iz]
+	var share := 1.0 if along_x <= along_z else 0.0
 	if ix >= 0 and iz >= 0:
 		var wx := 1.0 / (cell.x * cell.x)
 		var wz := 1.0 / (cell.y * cell.y)
@@ -204,11 +240,15 @@ func _update(i: int) -> bool:
 				# Each neighbour weighs in as much as the wave travels along its axis.
 				var px := (t - a) * wx
 				var pz := (t - b) * wz
-				end = (_ends[ix] * px + _ends[iz] * pz) / maxf(px + pz, 1e-9)
+				share = px / maxf(px + pz, 1e-9)
+				end = _ends[ix] * share + _ends[iz] * (1.0 - share)
 	if t >= _times[i]:
 		return false
 	_times[i] = t
 	_ends[i] = end
+	_up_x[i] = ix if share > 0.0 else -1
+	_up_z[i] = iz if share < 1.0 else -1
+	_up_share[i] = share
 	return true
 
 
@@ -216,18 +256,19 @@ func _update(i: int) -> bool:
 ## neighbours, so the filtered field still holds right up to the waterline.
 func _encode() -> void:
 	image = Image.create(width, height, false, Image.FORMAT_RGBAF)
-	origins = Image.create(width, height, false, Image.FORMAT_RGF)
+	origins = Image.create(width, height, false, Image.FORMAT_RGBF)
 	var cell := _cell_size()
 	var gradients := PackedVector2Array()
 	gradients.resize(width * height)
 	for i in range(width * height):
 		if _solved_water(i):
 			gradients[i] = Vector2(_derivative(i, 1, cell.x), _derivative(i, width, cell.y))
+	var kr := _refraction(gradients)
 	for i in range(width * height):
 		var x := i % width
 		var y := i / width
-		origins.set_pixel(x, y, Color(_ends[i].x, _ends[i].y, 0.0) if _known[i] == 1 or _solved_water(i)
-				else Color(_centre(i).x, _centre(i).y, 0.0))
+		var end := _ends[i] if _known[i] == 1 or _solved_water(i) else _centre(i)
+		origins.set_pixel(x, y, Color(end.x, end.y, kr[i]))
 		if _solved_water(i):
 			image.set_pixel(x, y, Color(_times[i], gradients[i].x, gradients[i].y, 1.0))
 			continue
@@ -241,6 +282,134 @@ func _encode() -> void:
 				wet += 1
 		if wet > 0:
 			image.set_pixel(x, y, Color(0.0, shore.x / wet, shore.y / wet, 1.0))
+
+
+## Refraction coefficient per cell. Rays spread at the rate the wave direction diverges:
+## d(ln b)/ds = div(d), d the unit direction of travel. Integrated seawards along the rays the march
+## followed (ln b, from 0 at the waterline), then the value at each ray's offshore end carried back
+## along it: Kr = sqrt(b0 / b) = exp((ln b0 - ln b) / 2). Land touching the water takes its neighbours'.
+func _refraction(gradients: PackedVector2Array) -> PackedFloat32Array:
+	var count := width * height
+	var divergence := _direction_divergence(gradients)
+	for pass_index in range(DIVERGENCE_SMOOTHING):
+		divergence = _smoothed(divergence)
+	var spread := PackedFloat32Array()
+	spread.resize(count)
+	for i: int in _order:
+		if _depths[i] <= 0.0:
+			continue
+		var share := _up_share[i]
+		var before := _upstream(_up_x[i], share, _up_z[i], spread)
+		var t_before := _upstream(_up_x[i], share, _up_z[i], _times)
+		spread[i] = before + divergence[i] * (_times[i] - t_before) * wave_speed(_depths[i])
+	var end_sum := PackedFloat32Array()
+	end_sum.resize(count)
+	var end_weight := PackedFloat32Array()
+	end_weight.resize(count)
+	var kr := PackedFloat32Array()
+	kr.resize(count)
+	kr.fill(1.0)
+	for k in range(_order.size() - 1, -1, -1):
+		var i := _order[k]
+		if _depths[i] <= 0.0:
+			continue
+		var offshore := end_sum[i] / end_weight[i] if end_weight[i] > 0.0 else spread[i]
+		kr[i] = clampf(exp(0.5 * (offshore - spread[i])), REFRACTION_MIN, REFRACTION_MAX)
+		var share := _up_share[i]
+		if _up_x[i] >= 0 and share > 0.0:
+			end_sum[_up_x[i]] += offshore * share
+			end_weight[_up_x[i]] += share
+		if _up_z[i] >= 0 and share < 1.0:
+			end_sum[_up_z[i]] += offshore * (1.0 - share)
+			end_weight[_up_z[i]] += 1.0 - share
+	for i in range(count):
+		if _depths[i] > 0.0:
+			continue
+		var total := 0.0
+		var wet := 0
+		for j: int in _neighbours(i):
+			if _solved_water(j):
+				total += kr[j]
+				wet += 1
+		if wet > 0:
+			kr[i] = total / wet
+	return kr
+
+
+## Weighted value of the upwind neighbours (0 for land, where rays start).
+func _upstream(ix: int, share: float, iz: int, values: PackedFloat32Array) -> float:
+	var total := 0.0
+	if ix >= 0 and _depths[ix] > 0.0:
+		total += values[ix] * share
+	if iz >= 0 and _depths[iz] > 0.0:
+		total += values[iz] * (1.0 - share)
+	return total
+
+
+## Divergence of the unit direction of travel (seawards), per solved water cell.
+func _direction_divergence(gradients: PackedVector2Array) -> PackedFloat32Array:
+	var count := width * height
+	var cell := _cell_size()
+	var directions := PackedVector2Array()
+	directions.resize(count)
+	for i in range(count):
+		if _solved_water(i):
+			directions[i] = gradients[i].normalized()
+	var divergence := PackedFloat32Array()
+	divergence.resize(count)
+	for i in range(count):
+		if _solved_water(i):
+			divergence[i] = _direction_derivative(i, 1, cell.x, directions, true) \
+					+ _direction_derivative(i, width, cell.y, directions, false)
+	return divergence
+
+
+## Derivative of one component of the directions along one axis, over solved water only.
+func _direction_derivative(i: int, step: int, spacing: float, directions: PackedVector2Array,
+		along_x: bool) -> float:
+	var x := i % width
+	var y := i / width
+	var low_ok := (x > 0 if step == 1 else y > 0) and _solved_water(i - step)
+	var high_ok := (x < width - 1 if step == 1 else y < height - 1) and _solved_water(i + step)
+	var here := directions[i].x if along_x else directions[i].y
+	var low := 0.0
+	var high := 0.0
+	if low_ok:
+		low = directions[i - step].x if along_x else directions[i - step].y
+	if high_ok:
+		high = directions[i + step].x if along_x else directions[i + step].y
+	if low_ok and high_ok:
+		return (high - low) / (2.0 * spacing)
+	if high_ok:
+		return (high - here) / spacing
+	if low_ok:
+		return (here - low) / spacing
+	return 0.0
+
+
+## 3 x 3 average over solved water.
+func _smoothed(values: PackedFloat32Array) -> PackedFloat32Array:
+	var result := PackedFloat32Array()
+	result.resize(values.size())
+	for i in range(values.size()):
+		if not _solved_water(i):
+			continue
+		var x := i % width
+		var y := i / width
+		var total := 0.0
+		var n := 0
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				var nx := x + dx
+				var ny := y + dy
+				if nx < 0 or ny < 0 or nx >= width or ny >= height:
+					continue
+				var j := ny * width + nx
+				if _solved_water(j):
+					total += values[j]
+					n += 1
+		result[i] = total / n
+	return result
 
 
 func _solved_water(i: int) -> bool:

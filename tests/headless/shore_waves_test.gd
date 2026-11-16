@@ -12,6 +12,8 @@ const SPAN_TOLERANCE := 0.04
 ## Island: a cone whose waterline is a circle of this radius, sloping as SLOPE.
 const ISLAND_RADIUS := 60.0
 const ISLAND_AREA := Rect2(-200.0, -200.0, 400.0, 400.0)
+## Bay: water inside a circle of this radius, deepening inwards by SLOPE.
+const BAY_RADIUS := 180.0
 ## The demo island's seabed (1200 m square) must bake fast enough to do at load.
 const MAX_BAKE_MS := 3000
 var _failures: int = 0
@@ -57,6 +59,8 @@ func _check_straight_beach() -> void:
 			"Travel time from 160 m to 40 m out (got %.2f s, expected %.2f s)" % [span, exact_span])
 	_check(field.origin(Vector2(100.0, 17.0)).distance_to(Vector2(0.0, 17.0)) < 3.0,
 			"A wave heads for the waterline straight ahead of it")
+	for x: float in [30.0, 120.0]:
+		_near(field.refraction(Vector2(x, 0.0)), 1.0, 0.08, "Rays stay parallel off a straight beach (%.0f m)" % x)
 	_check(field.sample(Vector2(-10.0, 0.0)).a < 0.5, "Land away from the water has no field")
 	var deep_x := (ShoreField.MAX_DEPTH + 2.0) / SLOPE
 	_check(field.sample(Vector2(deep_x + 10.0, 0.0)).a < 0.5, "Water well past MAX_DEPTH is left out")
@@ -70,6 +74,15 @@ func _check_island() -> void:
 		var f := field.sample(outward * (ISLAND_RADIUS + 50.0))
 		var gradient := Vector2(f.g, f.b).normalized()
 		_check(gradient.dot(outward) > 0.97, "Waves head straight for the island at %.0f degrees" % degrees)
+	# Rays to a round island are radial: spacing grows with the radius, so the energy of the ring at the
+	# field's edge (depth MAX_DEPTH) gathers onto the shorter ring further in: Kr = sqrt(r_edge / r).
+	var edge_radius := ISLAND_RADIUS + ShoreField.MAX_DEPTH / SLOPE
+	var r := 150.0
+	_near(field.refraction(Vector2(r, 0.0)), sqrt(edge_radius / r), 0.12, "A round island gathers wave energy")
+	# A round bay (water inside a ring of land, deepening inwards) spreads it.
+	var bay := ShoreField.bake(func(p: Vector2) -> float: return (BAY_RADIUS - p.length()) * SLOPE, ISLAND_AREA)
+	_check(bay.refraction(Vector2(BAY_RADIUS - 20.0, 0.0)) < 0.9, "A bay spreads wave energy (Kr %.2f)"
+			% bay.refraction(Vector2(BAY_RADIUS - 20.0, 0.0)))
 
 
 func _check_waves() -> void:

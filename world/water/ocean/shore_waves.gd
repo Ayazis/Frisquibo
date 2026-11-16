@@ -4,8 +4,9 @@ extends RefCounted
 ## the waves the screen shows. Keep the two in step: same constants, same order of operations.
 ##
 ## Inside `zone_depth` a share of the open sea's energy turns into waves that follow the ShoreField:
-## crests along the lines of equal travel time (refracted towards the beach), growing as the water
-## shallows (Green's law, H ~ h^-1/4) until the depth limit breaks them (crest <= breaker_ratio * h).
+## crests along the lines of equal travel time (refracted towards the beach), gathered on headlands and
+## spread in bays (the refraction coefficient), growing as the water shallows (Green's law,
+## H ~ h^-1/4) until the depth limit breaks them (crest <= breaker_ratio * h).
 ## Steep waves lean forward: the front gets short and steep, the back long. Their timing and size are
 ## the swash's (swash.gdshaderinc), so each crest runs up the sand as far as the swash says it does.
 
@@ -121,7 +122,11 @@ func displacement(rest: Vector2, depth: float) -> Vector3:
 	var u := phase - wave
 	var size := lerpf(wave_size(end, wave), wave_size(end, wave + 1.0), smoothstep(0.0, 1.0, u))
 	var lee := lerpf(lee_share, 1.0, smoothstep(LEE_FROM, LEE_TO, towards_shore.dot(direction)))
-	var free_crest := amplitude * sqrt(share) * lee * size * pow(_zone() / maxf(depth, ShoreField.MIN_DEPTH), 0.25)
+	# Refraction gathers the energy on headlands and spreads it in bays (Kr); shoaling grows it as the
+	# water shallows (Green's law).
+	var gathered := field.refraction(rest)
+	var free_crest := amplitude * sqrt(share) * lee * size * gathered \
+			* pow(_zone() / maxf(depth, ShoreField.MIN_DEPTH), 0.25)
 	var limit := breaker_ratio * depth
 	var crest := minf(free_crest, limit) * w
 	var ratio := free_crest / maxf(limit, 1e-4)

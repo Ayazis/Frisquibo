@@ -7,7 +7,8 @@
 
 // ShoreField.image: travel time to the waterline (s), its gradient x and z (s/m), validity.
 uniform sampler2D shore_field : filter_linear, repeat_disable, hint_default_transparent;
-// ShoreField.origins: the waterline point (world x, z) each wave is heading for.
+// ShoreField.origins: the waterline point (world x, z) each wave is heading for, and the refraction
+// coefficient Kr.
 uniform sampler2D shore_origin : filter_linear, repeat_disable, hint_default_black;
 uniform float shore_wave_depth = 8.0;
 uniform float shore_wave_share = 0.7;
@@ -99,14 +100,17 @@ ShoreWave shore_wave(vec2 p, float depth) {
 	vec2 towards_shore = -field.yz / slowness;
 	// What varies along the coast is drawn at the waterline point this wave is heading for: the swash's
 	// draw there, unchanged along the wave's way in.
-	vec2 end = textureLod(shore_origin, uv, 0.0).xy;
+	vec3 ray = textureLod(shore_origin, uv, 0.0).xyz;
+	vec2 end = ray.xy;
 	float cycle = max(water_swash_period, 0.1);
 	float phase = (water_wave_time + field.x) / cycle + swash_noise(end / SWASH_ALONGSHORE) * SWASH_PHASE_SPREAD;
 	float wave = floor(phase);
 	float u = phase - wave;
 	float size = mix(shore_wave_size(end, wave), shore_wave_size(end, wave + 1.0), smoothstep(0.0, 1.0, u));
 	float lee = mix(shore_lee_share, 1.0, smoothstep(SHORE_LEE_FROM, SHORE_LEE_TO, dot(towards_shore, shore_wave_direction)));
-	float free_crest = wave_amplitude * sqrt(shore_wave_share) * lee * size * pow(shore_zone() / max(depth, SHORE_MIN_DEPTH), 0.25);
+	// Refraction gathers the energy on headlands and spreads it in bays (ray.z: Kr); shoaling grows it.
+	float free_crest = wave_amplitude * sqrt(shore_wave_share) * lee * size * ray.z
+			* pow(shore_zone() / max(depth, SHORE_MIN_DEPTH), 0.25);
 	float limit = breaker_ratio * depth;
 	float crest = min(free_crest, limit) * w.weight;
 	float ratio = free_crest / max(limit, 1e-4);

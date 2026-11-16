@@ -119,3 +119,19 @@ Second pass:
     horizon instead of turning into a bright mirror; no bright line along the horizon.
 18. **Linear mirror**: reflections are as bright as the things they reflect, times the Fresnel (they
     were washed out before), and the glow doesn't bloom twice in them.
+
+Breaking waves, phase A (`docs/plans/breaking_waves.md`, decision 0011):
+
+19. **Roller** (1, 4; calm and breeze presets): the upper front of each breaking wave carries dense,
+    lumpy white water with a ragged lower edge. It travels with the crest, tumbles slowly down the
+    face, looks different on each wave, and glows turquoise just under it. The face is slightly rounded
+    at the top, with no crease where the bulge starts or at the crest.
+20. **Lace** (1, 4): behind each breaker the foam opens into a lace of cells whose holes grow until
+    thin threads are left, then fades before the next breaker. It never reads as scattered spots or
+    cotton balls, at 10 m or at 60 m. From far away it fades smoothly into an even cover.
+21. **Foam on the sand** (1): as each wave turns back, a lacy line stays where it stopped and a sheet
+    of bubbles drains behind it, both gone before the next wave arrives. It lines up with the water's
+    edge, with no gap and no overlap, and is brighter for bigger seas (they run further).
+22. **Refraction** (5 and around the island): breakers are bigger on the points of the island and
+    smaller in its bays. No stripes or blotches in wave height that follow the 3 m texels or small
+    wiggles of the coast. If points look too violent, lower `ShoreField.REFRACTION_MAX` (2.0).
