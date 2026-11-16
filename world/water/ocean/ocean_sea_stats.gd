@@ -14,6 +14,8 @@ const JONSWAP_ALPHA_POWER := 0.22
 const FULL_SEA_HEIGHT := 0.24
 ## Waves steeper than height / length = 1/7 break (Stokes limit).
 const BREAKING_STEEPNESS := 1.0 / 7.0
+## Real swell is gentle, height / length well below this; anything steeper is still a wind sea.
+const SWELL_MAX_STEEPNESS := 1.0 / 25.0
 ## Above this choppiness the crests fold through themselves (see OceanSpectrum.choppiness).
 const FOLDING_CHOPPINESS := 1.2
 ## Size multipliers within this distance of 1 count as physical.
@@ -44,17 +46,28 @@ static func full_sea_height(sea: OceanSpectrum) -> float:
 	return FULL_SEA_HEIGHT * sea.wind_speed * sea.wind_speed / GRAVITY
 
 
+## Significant height (m) of the main waves (swell), times the artistic height_scale.
+static func swell_wave_height(sea: OceanSpectrum) -> float:
+	return sea.swell_height * sea.height_scale
+
+
+## Significant height (m) of the surface waves the wind builds, in deep water, times height_scale.
+static func surface_wave_height(sea: OceanSpectrum) -> float:
+	return wind_wave_height(sea) * sea.height_scale
+
+
 ## Significant wave height (m) the sea state should show in deep water: wind sea and swell
 ## together (their energies add), times the artistic height_scale.
 static func expected_wave_height(sea: OceanSpectrum) -> float:
-	var wind := wind_wave_height(sea)
-	return sqrt(wind * wind + sea.swell_height * sea.swell_height) * sea.height_scale
+	var wind := surface_wave_height(sea)
+	var swell := swell_wave_height(sea)
+	return sqrt(wind * wind + swell * swell)
 
 
 ## Height over length of the dominant wind waves. `wave_height` is the measured height of the whole
 ## sea; the swell's share is taken out first, because long swell is never steep.
 static func steepness(sea: OceanSpectrum, wave_height: float) -> float:
-	var swell := sea.swell_height * sea.height_scale
+	var swell := swell_wave_height(sea)
 	var wind := sqrt(maxf(wave_height * wave_height - swell * swell, 0.0))
 	return wind / sea.peak_wavelength()
 
@@ -75,11 +88,14 @@ static func warnings(sea: OceanSpectrum, wave_height: float) -> PackedStringArra
 	var result := PackedStringArray()
 	if steepness(sea, wave_height) > BREAKING_STEEPNESS:
 		result.append("Waves are steeper than 1/7: real waves this steep have already broken.")
+	if sea.swell_height > 0.0 and sea.swell_height / sea.swell_wavelength() > SWELL_MAX_STEEPNESS:
+		result.append("Swell steeper than 1/%.0f: real swell this steep is still a wind sea. Use a longer period." % (
+				1.0 / SWELL_MAX_STEEPNESS))
 	if sea.choppiness > FOLDING_CHOPPINESS:
 		result.append("Choppiness above %.1f: crests fold through themselves." % FOLDING_CHOPPINESS)
 	if wind_wave_height(sea) > full_sea_height(sea):
 		result.append("Fetch is longer than this wind can use: the wind sea is higher than wind can build.")
 	if (absf(sea.height_scale - 1.0) > PHYSICAL_SCALE_TOLERANCE
 			or absf(sea.wavelength_scale - 1.0) > PHYSICAL_SCALE_TOLERANCE):
-		result.append("Vertical or horizontal size is not 1: wave size no longer follows from the wind.")
+		result.append("Artistic overrides are not 1: wave size no longer follows from the swell and wind.")
 	return result

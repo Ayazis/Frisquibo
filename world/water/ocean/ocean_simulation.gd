@@ -232,12 +232,12 @@ func _spectrum_push(cascade: int) -> PackedByteArray:
 	if cascade < cascade_count - 1:
 		k_max = TAU / _gpu_tile_lengths[cascade + 1] * BAND_SPLIT
 	var bytes := PackedFloat32Array([tile, _spectrum.wind_speed, deg_to_rad(_spectrum.wind_direction),
-			_spectrum.fetch * 1000.0, _spectrum.depth, _spectrum.swell, _spectrum.spread,
+			_spectrum.fetch * 1000.0, _spectrum.depth, _spectrum.wind_spread,
 			_spectrum.short_wave_cutoff, k_min, k_max]).to_byte_array()
 	bytes.append_array(PackedInt32Array([cascade, _spectrum.seed]).to_byte_array())
 	bytes.append_array(PackedFloat32Array([_spectrum.wavelength_scale, _spectrum.swell_height,
 			_spectrum.swell_wavenumber(), deg_to_rad(_spectrum.swell_direction),
-			deg_to_rad(_spectrum.swell_spread), 0.0, 0.0, 0.0]).to_byte_array())
+			deg_to_rad(_spectrum.swell_spread), 0.0, 0.0, 0.0, 0.0]).to_byte_array())
 	return bytes
 
 

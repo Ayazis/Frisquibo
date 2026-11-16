@@ -16,15 +16,22 @@ swell = 0.25
 spread = 0.3
 """
 var _failures: int = 0
+var _ocean: Ocean
 
 
 func _initialize() -> void:
 	_check_legacy_values()
 	_check_presets()
-	_check_fallback()
 	_check_sections()
+	_start_fallback()
+
+
+## Nodes added during _initialize get _ready() on the first frame, so the fallback is checked there.
+func _process(_delta: float) -> bool:
+	_check_fallback()
 	print("ocean_sea_systems_test: %s" % ("PASS" if _failures == 0 else "%d FAILED" % _failures))
 	quit(1 if _failures > 0 else 0)
+	return true
 
 
 func _check_legacy_values() -> void:
@@ -52,7 +59,7 @@ func _check_presets() -> void:
 				"In the %s preset swell and wind have their own directions" % preset_name)
 
 
-func _check_fallback() -> void:
+func _start_fallback() -> void:
 	if OceanSimulation.is_supported():
 		print("ocean_sea_systems_test: fallback checks need --headless (no RenderingDevice)")
 		return
@@ -62,10 +69,16 @@ func _check_fallback() -> void:
 	sea.swell_height = 2.0
 	sea.swell_period = 12.0
 	sea.swell_direction = -60.0
-	var ocean := Ocean.new()
-	ocean.spectrum = sea
-	ocean.planar_reflection = false
-	root.add_child(ocean)
+	_ocean = Ocean.new()
+	_ocean.spectrum = sea
+	_ocean.planar_reflection = false
+	root.add_child(_ocean)
+
+
+func _check_fallback() -> void:
+	if _ocean == null:
+		return
+	var ocean := _ocean
 	_check(ocean.is_parameter_live(&"swell_height"), "The fallback reacts to the swell")
 	var fallback := _fallback_sea(ocean)
 	_check(fallback != null, "Headless runs the Gerstner fallback")

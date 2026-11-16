@@ -56,7 +56,7 @@ Still odd at the extremes, left as they are:
 Still a matter of taste for the user: `OceanAutoValues` against the new heights, and the jump when
 swell is switched on.
 
-On 2026-11-15 the user allowed checks to be run, including renders, so continue without asking again.
+On 2026-11-15 the user allowed checks to be run, including renders. On 2026-11-16 they limited that: no renders or GPU smoke tests in a cloud container (see below).
 
 ## Main waves and surface waves (2026-11-16, after user feedback)
 
@@ -73,8 +73,11 @@ for the surface waves, since big waves can run one way while the wind blows anot
 - Every preset has swell with its own direction. The Gerstner fallback follows the bigger system.
 - No separate swell choppiness: swell is too gentle for choppiness to sharpen it (see the decision).
 
-Visual check in this container: 1600x900 renders take about 17 minutes per shot on llvmpipe. Local
-copies of the shot lists at 480x270 (in `build/`, not committed) take about 5 minutes per shot.
+Checked with the headless import, all headless tests and the headless smoke test. **Not checked on a
+GPU**: the spectrum shader change (`wind_spread`), the new presets, and how the panel looks.
+
+**The user asked not to run visual checks or the GPU (software Vulkan) smoke tests in a cloud
+container**: 1600x900 renders take about 17 minutes per shot there. Run them on a desktop machine.
 
 ## Done
 
