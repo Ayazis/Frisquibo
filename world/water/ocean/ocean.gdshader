@@ -9,6 +9,7 @@ render_mode blend_mix, depth_draw_always, cull_disabled, world_vertex_coords;
 //    focused by the simulated waves (ocean_caustics)
 //  - subsurface light through thin crests (the Atlas model), persistent whitecaps and shoreline surf
 //  - interaction ripples, wakes and splash foam from objects in the water (WaterRipples)
+//  - wind gusts: drifting patches of rougher and glassier water
 //  - seen from below: Snell's window and total internal reflection
 
 const int MAX_CASCADES = 4;
@@ -36,6 +37,9 @@ uniform float refraction_full_distance = 8.0;                // metres; the offs
 uniform float reflection_distortion = 0.035;
 uniform float reflection_blur = 1.0;                       // 1 = blur by the real unresolved slopes
 uniform float base_slope_variance = 0.0006;                // capillary ripples below the smallest cascade
+uniform float gust_strength = 0.5;                         // 0 = even wind; patches of rougher and glassier water
+uniform float gust_size = 60.0;                            // metres across a gust patch
+uniform sampler2D gust_texture : hint_default_white, filter_linear_mipmap, repeat_enable;
 uniform float sun_specular_strength = 1.0;
 uniform float murk_blur = 3.0;                             // screen mip levels of blur through deep water
 
@@ -106,6 +110,7 @@ uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 #include "res://world/water/water_optics.gdshaderinc"
 #include "res://world/water/water_reflection.gdshaderinc"
 #include "res://world/water/ripples/water_ripples.gdshaderinc"
+#include "res://world/water/water_gusts.gdshaderinc"
 
 varying vec2 v_rest;
 varying vec3 v_world;
@@ -229,7 +234,9 @@ void fragment() {
 	// --- Surface shape from the simulation -----------------------------------------------------------
 	vec2 slope = vec2(0.0);
 	vec2 jac = vec2(0.0);
-	vec2 variance = vec2(base_slope_variance);
+	// Gusts change the energy of the smallest ripples: the capillaries and the shortest cascade.
+	float gust = water_gusts(gust_texture, v_rest, wind, gust_size, gust_strength, TIME);
+	vec2 variance = vec2(base_slope_variance * gust);
 	float foam_cover = 0.0;
 	float foam_weight = 1.0;
 	for (int i = 0; i < MAX_CASCADES; i++) {
@@ -239,9 +246,10 @@ void fragment() {
 		vec3 uv = vec3(v_rest / tile_lengths[i], float(i));
 		vec4 s = texture(slope_maps, uv);
 		vec4 m = texture(moment_maps, uv);
-		slope += s.xy;
+		float energy = (i == cascade_count - 1 && cascade_count > 1) ? gust : 1.0;
+		slope += s.xy * sqrt(energy);
 		jac += s.zw;
-		variance += max(m.xy - s.xy * s.xy, vec2(0.0));
+		variance += max(m.xy - s.xy * s.xy, vec2(0.0)) * energy;
 		foam_cover += m.z * foam_weight;
 		foam_weight *= foam_cascade_falloff;
 	}

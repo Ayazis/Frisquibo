@@ -1,6 +1,7 @@
 class_name WaterTextures
 extends RefCounted
-## Shared, seamless noise textures for water shaders: two detail normal maps, foam and caustics.
+## Shared, seamless noise textures for water shaders: two detail normal maps, foam, caustics and the
+## smooth field that wind gusts follow.
 ## Generated once (in Godot's noise thread) and reused by every water material.
 
 const SIZE := 512
@@ -10,6 +11,7 @@ static var _normal_a: NoiseTexture2D
 static var _normal_b: NoiseTexture2D
 static var _foam: NoiseTexture2D
 static var _caustics: NoiseTexture2D
+static var _gusts: NoiseTexture2D
 
 
 static func apply(mat: ShaderMaterial) -> void:
@@ -19,6 +21,7 @@ static func apply(mat: ShaderMaterial) -> void:
 	mat.set_shader_parameter("normal_map_b", _normal_b)
 	mat.set_shader_parameter("foam_texture", _foam)
 	mat.set_shader_parameter("caustic_texture", _caustics)
+	mat.set_shader_parameter("gust_texture", _gusts)
 
 
 static func foam() -> NoiseTexture2D:
@@ -31,6 +34,12 @@ static func caustics() -> NoiseTexture2D:
 	if _caustics == null:
 		_build()
 	return _caustics
+
+
+static func gusts() -> NoiseTexture2D:
+	if _gusts == null:
+		_build()
+	return _gusts
 
 
 static func _build() -> void:
@@ -48,6 +57,8 @@ static func _build() -> void:
 	cells.fractal_type = FastNoiseLite.FRACTAL_NONE
 	_caustics = _noise_texture(cells, false)
 	_caustics.invert = true
+	# Few octaves: gusts are broad patches, not detail.
+	_gusts = _noise_texture(_simplex(505, 0.006, 2), false)
 
 
 static func _simplex(seed_value: int, frequency: float, octaves: int) -> FastNoiseLite:

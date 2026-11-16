@@ -83,7 +83,10 @@ void fragment() {
 	// Detail fades out in the distance where it would only shimmer; what it loses becomes roughness.
 	float dist = length(CAMERA_POSITION_WORLD - v_world);
 	float fade = mix(1.0, DETAIL_FAR_SHARE, smoothstep(DETAIL_FADE_START, DETAIL_FADE_END, dist));
-	vec2 detail = (na.xy + nb.xy) * detail_strength * fade;
+	// Gusts: the detail ripples carry more energy in some patches than in others.
+	float gust = water_gusts(gust_texture, v_world.xz, wind * gust_wind, gust_size, gust_strength, TIME);
+	float strength = detail_strength * sqrt(gust);
+	vec2 detail = (na.xy + nb.xy) * strength * fade;
 	// Rings, wakes and splashes from objects in the water (WaterRipples): their slope tilts the normal.
 	vec4 ripple = water_ripples(v_world.xz);
 	detail -= ripple.xy;
@@ -96,8 +99,8 @@ void fragment() {
 	vec2 slope = n_world.xz / max(n_world.y, 0.05);
 	float resolved = dot(na.xy, na.xy) + dot(nb.xy, nb.xy);
 	float hidden = water_toksvig_variance(na) + water_toksvig_variance(nb);
-	float lost = detail_strength * detail_strength * ((1.0 - fade * fade) * resolved + hidden);
-	vec2 variance = vec2(base_slope_variance + 0.5 * lost) + water_footprint_variance(dFdx(slope), dFdy(slope));
+	float lost = strength * strength * ((1.0 - fade * fade) * resolved + hidden);
+	vec2 variance = vec2(base_slope_variance * gust + 0.5 * lost) + water_footprint_variance(dFdx(slope), dFdy(slope));
 
 	WaterSurface surface = WaterSurface(n_world, n_view, v_world, VERTEX, variance, max(v_crest_foam, ripple.w), wind * 0.15, from_below);
 	WaterResult r = water_shade(surface, SCREEN_UV, FRAGCOORD.xy, vec2(PROJECTION_MATRIX[0][0], PROJECTION_MATRIX[1][1]),

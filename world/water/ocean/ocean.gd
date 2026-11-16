@@ -108,6 +108,7 @@ func _ready() -> void:
 	material.set_shader_parameter("map_size", float(OceanSimulation.MAP_SIZE))
 	material.set_shader_parameter("mesh_angular_step", TAU / quality.radial_segments)
 	material.set_shader_parameter("foam_texture", WaterTextures.foam())
+	material.set_shader_parameter("gust_texture", WaterTextures.gusts())
 	_surface = MeshInstance3D.new()
 	_surface.mesh = OceanSurfaceMesh.build(quality.radial_segments, quality.inner_radius, quality.far_radius)
 	_surface.material_override = material

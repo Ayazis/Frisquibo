@@ -30,6 +30,9 @@ extends Resource
 ## Roughness from ripples smaller than the simulation resolves.
 @export_range(0.0, 0.01, 0.0001, "or_greater") var base_slope_variance := 0.0006
 @export_range(0.0, 4.0, 0.05, "or_greater") var sun_specular_strength := 1.0
+## Uneven wind: drifting patches of rougher and glassier water. 0 is an even wind.
+@export_range(0.0, 1.0, 0.01) var gust_strength := 0.5
+@export_range(5.0, 500.0, 1.0, "or_greater", "suffix:m") var gust_size := 60.0
 
 @export_group("Foam")
 @export var foam_color := Color(0.86, 0.9, 0.9)

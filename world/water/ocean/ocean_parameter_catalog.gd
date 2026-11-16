@@ -33,6 +33,8 @@ const LABELS: Dictionary[StringName, String] = {
 	&"foam_far_distance": "Foam detail distance",
 	&"min_jacobian": "Fold limit",
 	&"reflection_blur": "Reflection blur",
+	&"gust_strength": "Wind gusts",
+	&"gust_size": "Gust patch size",
 }
 
 ## Shown as the tooltip of a control. Doc comments are not available in an exported game.
@@ -69,6 +71,8 @@ const DESCRIPTIONS: Dictionary[StringName, String] = {
 	&"reflection_blur": "How much ripples too small to see smear the mirrored world into streaks. 1 is physical.",
 	&"base_slope_variance": "Roughness from ripples too small to simulate. Higher: wider, softer sun glitter.",
 	&"sun_specular_strength": "Brightness of the sun's glitter. 1 is physical.",
+	&"gust_strength": "Patches of rougher and glassier water that drift downwind, as real wind is never even.",
+	&"gust_size": "Size of the gust patches.",
 	&"foam_scale": "Size of the foam bubble pattern.",
 	&"foam_softness": "Softness of foam edges.",
 	&"whitecap_strength": "Brightness of whitecaps on breaking crests.",

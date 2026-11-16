@@ -31,7 +31,7 @@ they only show errors on a desktop run.
    foam where `Buoyancy.entered_water` fires.
 5. [x] **Caustics from the waves.** Caustics derived from the simulated slopes (light bunching under
    focusing waves) instead of a drifting noise texture, with slight colour dispersion.
-6. [ ] **Gust patches.** Large, slow, wind-driven patches of rougher and calmer water ("cat's paws").
+6. [x] **Gust patches.** Large, slow, wind-driven patches of rougher and calmer water ("cat's paws").
 7. [ ] **Close-up ripple detail.** Fine scrolling detail normals near the camera, below the smallest
    simulated waves, on the ocean as well.
 8. [ ] **Water types.** `OceanLook` presets for clear ocean, coastal and murky (moat, harbour) water.

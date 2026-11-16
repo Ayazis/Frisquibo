@@ -10,6 +10,7 @@
 #include "res://world/water/water_optics.gdshaderinc"
 #include "res://world/water/water_reflection.gdshaderinc"
 #include "res://world/water/ripples/water_ripples.gdshaderinc"
+#include "res://world/water/water_gusts.gdshaderinc"
 
 uniform vec3 absorption = vec3(0.45, 0.075, 0.05);      // per metre, per channel: red dies first
 uniform vec3 scatter_color : source_color = vec3(0.02, 0.16, 0.18);
@@ -32,6 +33,10 @@ uniform float crest_foam_strength = 0.8;
 // 1 = break foam up with the built-in drifting noise; 0 = the caller supplies foam that is already textured.
 uniform float foam_breakup = 1.0;
 uniform float base_slope_variance = 0.0004;             // capillary ripples below the detail normals
+uniform float gust_strength = 0.6;                      // 0 = even wind; patches of rougher and glassier water
+uniform float gust_size = 40.0;                         // metres across a gust patch
+uniform float gust_wind = 4.0;                          // m/s the gust patches drift with
+uniform sampler2D gust_texture : hint_default_white, filter_linear_mipmap, repeat_enable;
 uniform float sun_specular_strength = 1.0;              // 1 is physical
 uniform float sss_crest_strength = 3.2;                 // light through thin crests, per metre of crest
 uniform float sss_view_strength = 0.25;                 // soft glow in the water towards the viewer
