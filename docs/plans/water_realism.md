@@ -6,7 +6,7 @@ headless import, the headless tests and the headless smoke test only (nothing is
 
 ```
 godot --headless --import
-for t in water_shaders ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field \
+for t in water_shaders underwater_view ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field \
     beach_profile river_flow_field; do
   timeout 120 godot --headless --path . --script res://tests/headless/${t}_test.gd; done
 timeout 200 godot --headless --path . --script res://tests/smoke/ocean_smoke.gd
@@ -24,7 +24,7 @@ they only show errors on a desktop run.
 2. [x] **Shared optics for lake and river.** `water_common.gdshaderinc` moves to the ocean's model:
    Schlick Fresnel, GGX sun glint with a roughness from the detail-normal strength and distance,
    blur through murky water, the rough-reflection blur from step 1, and Snell's window from below.
-3. [ ] **Underwater view.** A full-screen pass when the camera is below the surface: absorption and
+3. [x] **Underwater view.** A full-screen pass when the camera is below the surface: absorption and
    in-scatter over distance, blur, a waterline where the surface crosses the lens, and light shafts.
 4. [ ] **Interaction ripples and wakes.** A camera-centred ripple simulation (wave equation on the GPU)
    that floating and moving objects disturb, added to the water normals and foam; boat wakes; splash

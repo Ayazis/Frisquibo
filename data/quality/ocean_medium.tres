@@ -9,4 +9,5 @@ radial_segments = 320
 far_radius = 4000.0
 reflection_resolution_scale = 0.5
 reflection_blur_samples = 8
+underwater_shaft_steps = 8
 readback_interval = 4

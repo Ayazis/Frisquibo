@@ -32,6 +32,8 @@ const FALLBACK_WAVELENGTH := 9.0
 const FALLBACK_MIN_WIND_RATIO := 0.5
 ## Above this the Gerstner waves loop over themselves.
 const FALLBACK_MAX_STEEPNESS := 0.95
+## Metres above the local wave height where the camera lens can still dip into a crest.
+const UNDERWATER_REACH_MARGIN := 0.5
 
 @export var spectrum: OceanSpectrum
 @export var quality: OceanQuality
@@ -62,6 +64,7 @@ var _seabed_resolution := DEFAULT_SEABED_RESOLUTION
 var _time := 0.0
 var _frames_since_readback := 0
 var _reflection: PlanarReflection
+var _underwater: UnderwaterView
 var _amplitude := DEFAULT_AMPLITUDE
 ## The sea state after the rules: spectrum and ocean values actually simulated and drawn.
 var _effective: OceanSpectrum
@@ -95,6 +98,9 @@ func _ready() -> void:
 	material.set_shader_parameter("displacement_maps", _simulation.displacement)
 	material.set_shader_parameter("slope_maps", _simulation.slope)
 	material.set_shader_parameter("moment_maps", _simulation.moments)
+	_underwater = UnderwaterView.new()
+	_underwater.shaft_steps = quality.underwater_shaft_steps
+	add_child(_underwater)
 	_apply_cascades()
 	material.set_shader_parameter("map_size", float(OceanSimulation.MAP_SIZE))
 	material.set_shader_parameter("mesh_angular_step", TAU / quality.radial_segments)
@@ -122,6 +128,7 @@ func _exit_tree() -> void:
 		material.set_shader_parameter("displacement_maps", null)
 		material.set_shader_parameter("slope_maps", null)
 		material.set_shader_parameter("moment_maps", null)
+		_underwater.set_waves(null, PackedFloat32Array(), 0)
 		# Queued on the render thread right away: a deferred call would never run when the game quits.
 		_simulation.free_resources()
 		_simulation = null
@@ -299,9 +306,14 @@ func _process(delta: float) -> void:
 	if cam != null:
 		var p := cam.global_position
 		_surface.global_position = Vector3(snappedf(p.x, FOLLOW_SNAP), _level(), snappedf(p.z, FOLLOW_SNAP))
+		var xz := Vector2(p.x, p.z)
+		var surface := height_at(xz)
 		# Back faces of the surface mean "seen from below" only when the camera really is under water;
 		# otherwise they are the far side of a steep crest and get drawn like the top.
-		material.set_shader_parameter("camera_underwater", p.y < height_at(Vector2(p.x, p.z)))
+		material.set_shader_parameter("camera_underwater", p.y < surface)
+		_underwater.follow(cam, surface, _level() + _local_lift(xz), _damping_at(xz), wave_height() + UNDERWATER_REACH_MARGIN)
+	else:
+		_underwater.follow(null, 0.0, 0.0, 0.0, 0.0)
 	if quality.readback_interval > 0:
 		_frames_since_readback += 1
 		if _frames_since_readback >= quality.readback_interval:
@@ -318,6 +330,7 @@ func _apply_cascades() -> void:
 		tiles[c] = _simulation.tile_lengths[c]
 	material.set_shader_parameter("tile_lengths", tiles)
 	material.set_shader_parameter("cascade_count", _simulation.cascade_count)
+	_underwater.set_waves(_simulation.displacement, tiles, _simulation.cascade_count)
 
 
 ## Re-applies the rules to the authored state. Without `force`, only pushes what actually changed,
@@ -373,6 +386,7 @@ func _apply_state(spectrum_changed: bool) -> void:
 	material.set_shader_parameter("min_shore_wave", _value(&"min_shore_wave"))
 	material.set_shader_parameter("wave_setup", _value(&"wave_setup"))
 	OceanLookBinding.apply(_authored_look(), material, _values)
+	_underwater.set_optics(OceanLookBinding.absorption(_authored_look(), _values), _authored_look().deep_color)
 	material.set_shader_parameter("local_rule_count", _local.count())
 	if _local.count() > 0:
 		material.set_shader_parameter("local_rule_depth", _local.depth_ranges)

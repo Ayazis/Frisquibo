@@ -12,5 +12,7 @@ extends Resource
 @export_range(0.25, 1.0) var reflection_resolution_scale := 0.75
 ## Taps of the planar reflection's blur on rough water. More taps: smoother streaks.
 @export_range(1, 32) var reflection_blur_samples := 12
+## Ray-march steps of the underwater light shafts; 0 turns them off.
+@export_range(0, 64) var underwater_shaft_steps := 16
 ## Physics frames between GPU readbacks for floating objects; 0 disables the readback.
 @export_range(0, 30) var readback_interval := 3
