@@ -1,8 +1,11 @@
 # Water realism plan
 
 Status: in progress. Each step is committed on its own; the checklist below shows what is done.
-Visual checks are left to a person on a desktop GPU; every step is verified with the headless import,
-the headless tests and the software-Vulkan smoke tests listed in `docs/plans/water_tuner.md`.
+Visual checks are left to a person on a desktop GPU. In the container every step is verified with the
+headless import, the headless tests and the headless smoke test only (nothing is rendered there).
+Headless Godot does not compile spatial or canvas shaders, so **shader errors only show on a desktop
+run**: open the water comparison scene (`prototypes/water_compare/water_compare.tscn`) and check the
+output panel for shader errors before judging the look.
 
 ## Steps, in order
 

@@ -131,7 +131,8 @@ and the software Vulkan driver first (`apt-get update` is needed before the inst
 apt-get update && apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
 ```
 
-Then, from the project root:
+Then, from the project root (the two `xvfb-run` lines render: run them on a desktop only, never in a
+cloud container):
 
 ```
 godot --headless --import
