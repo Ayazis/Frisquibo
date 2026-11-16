@@ -22,6 +22,7 @@ var curl_strength := 1.0
 func at_crest(crest_rest: Vector2, wave: float) -> BreakerState:
 	var state := BreakerState.new()
 	state.crest_rest = crest_rest
+	state.sampled_at = waves.time
 	var field := waves.field
 	if field == null or curl_strength <= 0.0:
 		return state
@@ -98,4 +99,5 @@ func _lip(state: BreakerState, still: float, height: float) -> void:
 	var forwards := crest_speed + reach / maxf(flight_time, 1e-3)
 	var down := 4.0 * crest * flight / maxf(flight_time, 1e-3)
 	state.tip_velocity = along * forwards + Vector3.DOWN * down
+	state.crest_speed = crest_speed
 	state.splash = BreakerProfile.SPLASH_HEIGHT * crest * BreakerProfile.splash(state.stage)

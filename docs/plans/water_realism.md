@@ -8,7 +8,8 @@ headless import, the headless tests and the headless smoke test only (nothing is
 godot --headless --import
 for t in water_shaders underwater_view water_ripples water_textures water_types shore_runup water_quality \
     island_terrain ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field \
-    beach_profile river_flow_field shore_waves water_mask planar_reflection breaker_profile breakers; do
+    beach_profile river_flow_field shore_waves water_mask planar_reflection breaker_profile breakers \
+    swash_edge; do
   timeout 120 godot --headless --path . --script res://tests/headless/${t}_test.gd; done
 timeout 200 godot --headless --path . --script res://tests/smoke/ocean_smoke.gd
 ```
@@ -160,5 +161,10 @@ check the island demo too (K toggles curls there as well).
     beach, the storm spills (surf similarity). On the island the curls appear where its shallows are
     steep enough.
 28. **Cost** (High, island demo, on the beach): frame time with curls on against off (K). The ribbons
-    add about 30-80k vertices. The CPU sampling for spray and mist runs 20 times a second at about
-    2 ms a time; watch for a hitch every third frame.
+    add about 30-80k vertices. The CPU sampling for spray and mist costs about 0.6 ms a frame, up to
+    1.5 ms when new crests come within reach.
+29. **Beach caustics** (1, shallow water off the beach): bright bands on the sand under each shore
+    wave's steep front, moving shorewards with it, on top of the finer FFT caustics.
+30. **Swash for floating things and the lens** (1, drop barrels on the beach with F; Q to lower the
+    camera into the swash): barrels at the waterline ride up the sand and back with the water, and
+    the waterline across the lens follows the shore waves and the swash.

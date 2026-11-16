@@ -74,9 +74,12 @@ func set_waves(displacement: Texture, slopes: Texture, tile_lengths: PackedFloat
 
 
 ## Places the effect on `camera`. surface_height: the water height at the camera, waves included;
-## rest_level: the surface without waves; wave_scale: share of the cascade waves there (shore damping);
-## reach: how far above surface_height the lens can still touch a wave.
-func follow(camera: Camera3D, surface_height: float, rest_level: float, wave_scale: float, reach: float) -> void:
+## rest_level: the surface without the cascade waves (with shore waves and swash, if any); wave_scale:
+## share of the cascade waves there (shore damping); reach: how far above surface_height the lens can
+## still touch a wave; rest_slope: gradient of rest_level at the camera (shore waves, swash), so the
+## waterline crosses the lens at the right tilt.
+func follow(camera: Camera3D, surface_height: float, rest_level: float, wave_scale: float, reach: float,
+		rest_slope: Vector2 = Vector2.ZERO) -> void:
 	if _quad == null:
 		return
 	if camera == null:
@@ -88,6 +91,7 @@ func follow(camera: Camera3D, surface_height: float, rest_level: float, wave_sca
 	_quad.global_position = camera.global_position
 	material.set_shader_parameter("surface_level", rest_level)
 	material.set_shader_parameter("wave_scale", wave_scale)
+	material.set_shader_parameter("surface_slope", rest_slope)
 
 
 ## True while the effect is drawn (the lens is at or below the water).

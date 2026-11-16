@@ -14,9 +14,11 @@ const float OCEAN_SUN_ANGULAR_SIZE = 0.0093;
 const float OCEAN_CAUSTIC_MAX = 12.0;
 
 // Brightness of sunlight on the seabed `depth` metres below the surface at `p`, per colour (1 = flat
-// water). waves: share of the simulated waves present there (shore damping).
-vec3 ocean_caustics(vec2 p, float depth, float waves) {
-	if (depth <= 0.0 || waves <= 0.0) {
+// water). waves: share of the simulated waves present there (shore damping). extra: curvature
+// (hxx, hxz, hzz) of other waves on top, such as the shore waves, whose steep fronts focus the bright
+// bands seen on sand in shallow water.
+vec3 ocean_caustics(vec2 p, float depth, float waves, vec3 extra) {
+	if (depth <= 0.0 || (waves <= 0.0 && extra == vec3(0.0))) {
 		return vec3(1.0);
 	}
 	float blur = depth * OCEAN_SUN_ANGULAR_SIZE;
@@ -37,8 +39,8 @@ vec3 ocean_caustics(vec2 p, float depth, float waves) {
 		dsx += (textureLod(slope_maps, uv + ex, lod).xy - textureLod(slope_maps, uv - ex, lod).xy) / (2.0 * step_m);
 		dsz += (textureLod(slope_maps, uv + ez, lod).xy - textureLod(slope_maps, uv - ez, lod).xy) / (2.0 * step_m);
 	}
-	dsx *= waves;
-	dsz *= waves;
+	dsx = dsx * waves + extra.xy;
+	dsz = dsz * waves + extra.yz;
 	// H = [[hxx, hxz], [hzx, hzz]]; det(I + k H) = 1 + k tr(H) + k^2 det(H).
 	float trace = dsx.x + dsz.y;
 	float det = dsx.x * dsz.y - dsx.y * dsz.x;

@@ -42,6 +42,8 @@ group_uniforms surface;
 // scaled by wave_scale (its shore damping at the camera). Lakes leave cascade_count at 0.
 uniform float surface_level = 0.0;
 uniform float wave_scale = 1.0;
+// Gradient of surface_level at the camera (shore waves, swash), for points of the lens around it.
+uniform vec2 surface_slope = vec2(0.0);
 uniform sampler2DArray displacement_maps : filter_linear, repeat_enable;
 uniform sampler2DArray slope_maps : filter_linear_mipmap, repeat_enable;
 uniform float tile_lengths[4];
@@ -68,7 +70,8 @@ float phase_hg(float cos_theta, float g) {
 	return (1.0 - g * g) / (4.0 * PI * d * sqrt(d));
 }
 
-float surface_height(vec2 p) {
+// camera: the camera's world (x, z), where surface_level and surface_slope hold.
+float surface_height(vec2 p, vec2 camera) {
 	float h = 0.0;
 	for (int i = 0; i < MAX_CASCADES; i++) {
 		if (i >= cascade_count) {
@@ -76,7 +79,7 @@ float surface_height(vec2 p) {
 		}
 		h += textureLod(displacement_maps, vec3(p / tile_lengths[i], float(i)), 0.0).y;
 	}
-	return surface_level + h * wave_scale;
+	return surface_level + dot(surface_slope, p - camera) + h * wave_scale;
 }
 
 // Interleaved gradient noise: offsets the ray-march steps per pixel so few steps don't band.
@@ -102,7 +105,7 @@ void fragment() {
 	float dist = min(length(scene_view) - length(near_view), MAX_DISTANCE);
 
 	// Which part of the lens is under water: the surface over this pixel's point on the near plane.
-	float below = surface_height(near_world.xz) - near_world.y;
+	float below = surface_height(near_world.xz, CAMERA_POSITION_WORLD.xz) - near_world.y;
 	float lens_wet = smoothstep(-meniscus_width, meniscus_width, below);
 	float meniscus = 1.0 - smoothstep(0.0, 2.0 * meniscus_width, abs(below));
 
@@ -116,7 +119,7 @@ void fragment() {
 	// focus what is left into caustics (lakes without cascades get the loss only).
 	float end_depth = surface_level - end.y;
 	if (end_depth > 0.0) {
-		vec3 caustic = ocean_caustics(end.xz, end_depth, wave_scale);
+		vec3 caustic = ocean_caustics(end.xz, end_depth, wave_scale, vec3(0.0));
 		float weight = caustic_strength * exp(-end_depth * caustic_fade);
 		scene *= mix(vec3(1.0), caustic, weight) * mix(vec3(1.0), exp(-absorption * end_depth), seabed_light_loss);
 	}

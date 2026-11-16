@@ -38,6 +38,7 @@ struct ShoreWave {
 	vec3 offset;      // displacement of the water resting here
 	vec2 slope;       // height gradient over the rest position
 	vec2 stretch;     // d(sway)/dx, d(sway)/dz: added to the jacobian, as the FFT's horizontal displacement
+	vec3 curvature;   // second derivatives of the height (hxx, hxz, hzz): the lens the wave makes for caustics
 	float weight;     // how much of the shore waves is present (0 offshore)
 	// White water (ocean_shore_foam.gdshaderinc reads these):
 	float roller;     // the roller on the breaking front: 1 at the crest, 0 where it ends down the face
@@ -83,6 +84,7 @@ ShoreWave shore_wave(vec2 p, float depth) {
 	w.offset = vec3(0.0);
 	w.slope = vec2(0.0);
 	w.stretch = vec2(0.0);
+	w.curvature = vec3(0.0);
 	w.weight = shore_weight(depth);
 	w.roller = 0.0;
 	w.roller_wave = 0.0;
@@ -135,6 +137,7 @@ ShoreWave shore_wave(vec2 p, float depth) {
 	// The cycle (ShoreWaves.shape) and its derivative by u: height, sway.
 	vec2 shape;
 	vec2 shape_du;
+	float height_uu;  // second derivative of the height share by u
 	// The roller's bulge (ShoreWaves.roller_bump) and its derivative by u.
 	float bump = 0.0;
 	float bump_du = 0.0;
@@ -146,12 +149,14 @@ ShoreWave shore_wave(vec2 p, float depth) {
 		float x = u / back;
 		shape = vec2(cos(PI * x), sin(PI * x));
 		shape_du = vec2(-sin(PI * x), cos(PI * x)) * PI / back;
+		height_uu = -cos(PI * x) * (PI / back) * (PI / back);
 		from_crest = u;
 		on_face = 1.0 - smoothstep(0.0, SHORE_ROLLER_BACK, u);
 	} else {
 		float y = (u - back) / front;
 		shape = vec2(-cos(PI * y), -sin(PI * y));
 		shape_du = vec2(sin(PI * y), -cos(PI * y)) * PI / front;
+		height_uu = cos(PI * y) * (PI / front) * (PI / front);
 		from_crest = u - 1.0;
 		float t = (y - (1.0 - SHORE_ROLLER_REACH)) / SHORE_ROLLER_REACH;
 		if (t > 0.0) {
@@ -167,6 +172,7 @@ ShoreWave shore_wave(vec2 p, float depth) {
 	vec2 grad_u = field.yz / cycle;
 	w.slope = crest * (shape_du.x + SHORE_ROLLER_HEIGHT * breaking * bump_du) * grad_u;
 	w.stretch = towards_shore * towards_shore * sway * shape_du.y * dot(grad_u, towards_shore);
+	w.curvature = crest * height_uu * vec3(grad_u.x * grad_u.x, grad_u.x * grad_u.y, grad_u.y * grad_u.y);
 
 	float white = breaking * w.weight;
 	w.roller = white * on_face;

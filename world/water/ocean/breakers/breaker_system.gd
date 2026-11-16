@@ -10,15 +10,11 @@ signal plunged(position: Vector3, height: float)
 
 ## Room above and below the sea level in the breakers' bounds (the ribbons add their own).
 const BOUNDS_HEIGHT := 20.0
-## Updates per second of the spray, mist and landing checks: they sample every crest on the CPU (about
-## 2 ms a time on High), and droplets that start 50 ms late still look right.
-const EFFECTS_RATE := 20.0
 
 var rays: ShoreRays
 var query := ShoreBreakers.new()
 var _ribbons: OceanBreakers
 var _effects: BreakerEffects
-var _effects_wait := 0.0
 var _material: ShaderMaterial
 
 
@@ -61,11 +57,8 @@ func _deepest_break() -> float:
 	return minf(pow(gain * pow(zone, 0.25) / maxf(limit, 1e-3), 0.8), zone)
 
 
-## Lays the ribbons every frame; samples the crests for the effects EFFECTS_RATE times a second.
-func update(camera_xz: Vector2, time: float, period: float, wind: Vector2, delta: float) -> void:
+## Lays the ribbons and updates the effects (which re-sample a share of the crests each frame).
+func update(camera_xz: Vector2, time: float, period: float, wind: Vector2) -> void:
 	_ribbons.update(camera_xz, time, period, _deepest_break())
 	_material.set_shader_parameter("breaker_waves", Vector2(_ribbons.covered))
-	_effects_wait -= delta
-	if _effects_wait <= 0.0:
-		_effects_wait = maxf(_effects_wait + 1.0 / EFFECTS_RATE, 0.0)
-		_effects.update(time, period, wind)
+	_effects.update(time, period, wind)

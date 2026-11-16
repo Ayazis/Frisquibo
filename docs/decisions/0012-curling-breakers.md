@@ -63,14 +63,17 @@ breaking crests near the camera.
 ## Consequences
 
 - Cost on High: up to 16 ribbons of about 220 x 65 vertices, mostly fewer (2 to 6 in use). The ocean
-  fragment shader does a breaker evaluation per pixel near the shore. The CPU samples every crest for
-  spray, mist and landings 20 times a second, at about 2 ms in GDScript; 0.7 ms per frame on average.
+  fragment shader does a breaker evaluation per pixel near the shore. The CPU samples the crests for spray, mist and landings every 6 m. Each frame it re-samples a sixth of
+  them and carries the others' lips on along their velocity: about 0.6 ms per frame, up to 1.5 ms in
+  the frame new crests come within reach.
 - Load time: the waterline and the rays add about 0.5 s to the seabed bake (the demo island: 1,084 rays).
 - About a fifth of the island's rays stop before 15 s of travel time, mostly in the river mouth and in
   bays where rays from two sides meet. Waves there keep spilling, which is right for a river mouth.
 - The CPU noise now really matches the GPU. The previous `hash()` resolved to Godot's global hash(), so
   until this change floating objects in the shore waves rode wave timings and sizes the screen didn't
   show.
-- Not done: the underwater view's waterline and the caustics still ignore the shore waves and the
-  curls. A camera inside a tube sees no tube from inside. The screen copy limitation from decision 6
+- Since then, the shore waves focus caustics on the seabed, and the underwater lens waterline and
+  `Ocean.height_at` include the shore waves and the swash. The curls themselves don't do any of this.
+  Underwater caustics still come from the FFT waves only.
+- Not done: A camera inside a tube sees no tube from inside. The screen copy limitation from decision 6
   stays.

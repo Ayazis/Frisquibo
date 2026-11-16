@@ -486,7 +486,9 @@ void fragment() {
 	vec3 bottom = textureLod(screen_tex, ruv, murk * murk_blur).rgb;
 	float bottom_depth = max(v_world.y - bottom_world.y, 0.0);
 	float caustic_weight = caustic_strength * exp(-bottom_depth * caustic_fade) * smoothstep(0.0, 0.3, bottom_depth);
-	vec3 caustic = ocean_caustics(bottom_world.xz, bottom_depth, v_damping * v_open_sea);
+	// The shore waves over the seabed point focus light too (their own lens, from above that point).
+	ShoreWave over_bottom = shore_wave(bottom_world.xz, ocean_still_depth(bottom_world.xz));
+	vec3 caustic = ocean_caustics(bottom_world.xz, bottom_depth, v_damping * v_open_sea, over_bottom.curvature);
 	vec3 downwelling = mix(vec3(1.0), exp(-absorption * bottom_depth), seabed_light_loss);
 	bottom *= mix(vec3(1.0), caustic, caustic_weight) * downwelling;
 	vec3 refracted = bottom * transmittance;

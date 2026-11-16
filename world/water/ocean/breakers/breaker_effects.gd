@@ -8,7 +8,7 @@ extends Node3D
 signal plunged(position: Vector3, height: float)
 
 ## Metres between samples along a crest.
-const STRIDE := 4.0
+const STRIDE := 6.0
 ## Spray peels off the lip tip between these stages, and splashes up where it lands between these.
 const TIP_STAGES := Vector2(0.25, 1.05)
 const SPLASH_STAGES := Vector2(0.9, 1.5)
@@ -21,6 +21,9 @@ const SPLASH_SIZE := 1.6
 const MIST_STAGES := Vector2(0.9, BreakerProfile.COLLAPSE.y)
 ## A sample counts as plunging (for sound) above this much plunge.
 const PLUNGE_FOR_SOUND := 0.3
+## Each frame re-samples one in this many crest points and reuses the rest, their lips carried on along
+## their velocity meanwhile: the CPU work spreads evenly over frames instead of coming in bursts.
+const SLICES := 6
 
 var _ribbons: OceanBreakers
 var _rays: ShoreRays
@@ -29,6 +32,9 @@ var _spray: BreakerSpray
 var _mist: BreakerMist
 ## Last stage seen per (sample bucket, crest), to notice the moment a lip lands.
 var _stages: Dictionary[Vector2i, float] = {}
+## Latest state per (sample bucket, crest), re-sampled in turn (SLICES).
+var _cache: Dictionary[Vector2i, BreakerState] = {}
+var _frame := 0
 
 
 ## `spray_particles` 0: no spray; `mist` false: no mist.
@@ -55,6 +61,8 @@ func update(time: float, period: float, wind: Vector2) -> void:
 	var heights: Array[PackedFloat32Array] = []
 	var strengths: Array[PackedFloat32Array] = []
 	var seen: Dictionary[Vector2i, float] = {}
+	var kept: Dictionary[Vector2i, BreakerState] = {}
+	_frame += 1
 	for lay: Vector4 in _ribbons.active:
 		var wave := lay.z
 		var line := PackedVector3Array()
@@ -62,16 +70,19 @@ func update(time: float, period: float, wind: Vector2) -> void:
 		var line_strengths := PackedFloat32Array()
 		for k in range(0, int(lay.y), stride):
 			var row := _ribbons.row_after(int(lay.x), k)
-			var crest_rest := _rays.position(row, _ribbons.crest_time(row, wave, time, period))
-			var state := _query.at_crest(crest_rest, wave)
-			_emit(state, positions, rates, velocities, sizes)
-			var key := Vector2i(row / stride, int(wave))
+			var key := Vector2i(floori(float(row) / stride), int(wave))
+			var state: BreakerState = _cache.get(key, null)
+			if state == null or posmod(key.x + key.y, SLICES) == _frame % SLICES:
+				var crest_rest := _rays.position(row, _ribbons.crest_time(row, wave, time, period))
+				state = _query.at_crest(crest_rest, wave)
+			kept[key] = state
+			_emit(state, time, positions, rates, velocities, sizes)
 			seen[key] = state.stage
 			if state.plunge >= PLUNGE_FOR_SOUND and _stages.get(key, -1.0) < 1.0 and state.stage >= 1.0:
-				plunged.emit(state.landing, 2.0 * state.crest)
+				plunged.emit(state.landing_at(time), 2.0 * state.crest)
 			var misty := state.fold > 0.0 and state.stage >= MIST_STAGES.x and state.stage <= MIST_STAGES.y
 			if misty:
-				line.append(state.landing)
+				line.append(state.landing_at(time))
 				line_heights.append(state.crest)
 				line_strengths.append(state.plunge * (1.0 - smoothstep(MIST_STAGES.x, MIST_STAGES.y, state.stage)))
 			elif line.size() > 0:
@@ -86,6 +97,7 @@ func update(time: float, period: float, wind: Vector2) -> void:
 			heights.append(line_heights)
 			strengths.append(line_strengths)
 	_stages = seen
+	_cache = kept
 	if _spray != null:
 		_spray.set_emitters(positions, rates, velocities, sizes)
 		_spray.set_sea_level(_query.level)
@@ -93,18 +105,18 @@ func update(time: float, period: float, wind: Vector2) -> void:
 		_mist.set_lines(lines, heights, strengths, wind)
 
 
-func _emit(state: BreakerState, positions: PackedVector3Array, rates: PackedFloat32Array,
+func _emit(state: BreakerState, time: float, positions: PackedVector3Array, rates: PackedFloat32Array,
 		velocities: PackedVector3Array, sizes: PackedFloat32Array) -> void:
 	if state.fold <= 0.0:
 		return
 	if state.stage >= TIP_STAGES.x and state.stage <= TIP_STAGES.y:
-		positions.append(state.tip)
+		positions.append(state.tip_at(time))
 		rates.append(state.fold * TIP_RATE)
 		velocities.append(state.tip_velocity)
 		sizes.append(1.0)
 	if state.splash > 0.0 and state.stage >= SPLASH_STAGES.x and state.stage <= SPLASH_STAGES.y:
 		var along := Vector3(state.towards.x, 0.0, state.towards.y)
-		positions.append(state.landing)
+		positions.append(state.landing_at(time))
 		rates.append(state.plunge * BreakerProfile.splash(state.stage) * SPLASH_RATE)
 		# Thrown up as high as the splash-up, carried on with the crest.
 		var crest_speed := state.tip_velocity.dot(along) * 0.5

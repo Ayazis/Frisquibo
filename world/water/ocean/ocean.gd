@@ -52,6 +52,9 @@ const WAVE_TIME_PARAM := &"water_wave_time"
 const FOAM_LACE_PARAM := &"water_foam_lace"
 ## Ray-march steps of the screen-space reflections on all water, from the quality tier.
 const SSR_STEPS_PARAM := &"water_ssr_steps"
+## Metres over which the slope of the shore waves and swash at the camera is measured, for the waterline
+## across the lens.
+const LENS_SLOPE_STEP := 0.25
 ## Metres above the local wave height where the camera lens can still dip into a crest.
 const UNDERWATER_REACH_MARGIN := 0.5
 
@@ -103,6 +106,8 @@ var _seabed: Image
 var _seabed_area: Rect2
 var _seabed_resolution := DEFAULT_SEABED_RESOLUTION
 var _shore := ShoreWaves.new()
+## The swash's run-up (m) as last published, for the CPU twin of the swash (SwashEdge).
+var _runup := 0.0
 var _breakers: BreakerSystem
 var _time := 0.0
 var _frames_since_readback := 0
@@ -366,7 +371,7 @@ func set_seabed(height: Callable, area: Rect2, resolution: int = DEFAULT_SEABED_
 func height_at(xz: Vector2) -> float:
 	if _fallback != null:
 		return _fallback.height_at(xz, _time)
-	var rest_level := _level() + _local_lift(xz) + _shore.height_at(xz, _still_depth)
+	var rest_level := _level() + _local_lift(xz) + _near_shore_lift(xz)
 	var current := _height_field != null and _height_field.is_ready()
 	var outgoing := _outgoing_field != null and _outgoing_field.is_ready()
 	if outgoing and not current:
@@ -407,11 +412,15 @@ func _process(delta: float) -> void:
 		# Back faces of the surface mean "seen from below" only when the camera really is under water;
 		# otherwise they are the far side of a steep crest and get drawn like the top.
 		material.set_shader_parameter("camera_underwater", p.y < surface)
-		_underwater.follow(cam, surface, _level() + _local_lift(xz), _damping_at(xz), wave_height() + UNDERWATER_REACH_MARGIN)
+		var near_shore := _near_shore_lift(xz)
+		var slope := Vector2(_near_shore_lift(xz + Vector2(LENS_SLOPE_STEP, 0.0)) - near_shore,
+				_near_shore_lift(xz + Vector2(0.0, LENS_SLOPE_STEP)) - near_shore) / LENS_SLOPE_STEP
+		_underwater.follow(cam, surface, _level() + _local_lift(xz) + near_shore, _damping_at(xz),
+				wave_height() + UNDERWATER_REACH_MARGIN, slope)
 		if _spray != null:
 			_spray.follow(p)
 		if _breakers != null:
-			_breakers.update(xz, _time, _shore.period, _wind(), delta)
+			_breakers.update(xz, _time, _shore.period, _wind())
 	else:
 		_underwater.follow(null, 0.0, 0.0, 0.0, 0.0)
 	if quality.readback_interval > 0:
@@ -499,8 +508,8 @@ func _publish_swash() -> void:
 	var height := wave_height() if _height_field != null and _height_field.is_ready() \
 			else OceanSeaStats.expected_wave_height(_effective)
 	var period := OceanSeaStats.dominant_period(_effective)
-	RenderingServer.global_shader_parameter_set(SWASH_RUNUP_PARAM,
-			ShoreRunup.stockdon(height, period, _value(&"foreshore_slope")))
+	_runup = ShoreRunup.stockdon(height, period, _value(&"foreshore_slope"))
+	RenderingServer.global_shader_parameter_set(SWASH_RUNUP_PARAM, _runup)
 	RenderingServer.global_shader_parameter_set(SWASH_PERIOD_PARAM, period)
 	_shore.period = period
 
@@ -664,6 +673,22 @@ func _damping_at(rest: Vector2) -> float:
 	var limited := _value(&"breaker_ratio") * depth / maxf(_amplitude, 0.01)
 	var shore := clampf(maxf(limited, _value(&"min_shore_wave") * smoothstep(0.0, 0.5, depth)), 0.0, 1.0)
 	return shore * rule.y * _shore.open_sea_share(still)
+
+
+## Height the shore waves and the swash add at world `xz` (m).
+func _near_shore_lift(xz: Vector2) -> float:
+	return _shore.height_at(xz, _still_depth) + _swash_lift(xz)
+
+
+## Same as swash_lift() in ocean.gdshader: near the waterline the sea rises to the swash edge.
+func _swash_lift(p: Vector2) -> float:
+	var depth := _depth_at(p)
+	if depth >= OPEN_SEA_DEPTH:
+		return 0.0
+	var zone := _amplitude / maxf(_value(&"breaker_ratio"), 0.01)
+	var near_shore := 1.0 - smoothstep(0.0, zone, depth)
+	var edge := SwashEdge.state(p, _time, _runup, _shore.period).x
+	return maxf(edge * near_shore - _setup_lift(depth), 0.0)
 
 
 ## Still water depth at rest point `p` with set-up and rule water: what the shore waves see

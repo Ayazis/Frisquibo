@@ -22,8 +22,21 @@ var tip_velocity := Vector3.ZERO
 var landing := Vector3.ZERO
 ## Height of the splash-up where the lip lands (m).
 var splash := 0.0
+## How fast the crest runs towards the shore (m/s), and the wave clock when this state was sampled.
+var crest_speed := 0.0
+var sampled_at := 0.0
 ## For a point query (ShoreBreakers.at()): whether the point is inside the tube, under the flying lip.
 var inside_tube := false
+
+
+## The lip's tip `time` (wave clock) after this state was sampled: carried on along its velocity.
+func tip_at(time: float) -> Vector3:
+	return tip + tip_velocity * (time - sampled_at)
+
+
+## Where the lip comes down, `time` after sampling: carried on with the crest.
+func landing_at(time: float) -> Vector3:
+	return landing + Vector3(towards.x, 0.0, towards.y) * crest_speed * (time - sampled_at)
 
 
 ## True while the lip is in the air or the water it hit is splashing up.
