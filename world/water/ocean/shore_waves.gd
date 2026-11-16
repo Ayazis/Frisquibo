@@ -60,8 +60,9 @@ var share := 0.7
 var lee_share := 0.3
 
 
-## Integer hash of a lattice point in 0..1, bit for bit the swash_hash() of swash.gdshaderinc.
-static func hash(lattice: Vector2) -> float:
+## Integer hash of a lattice point in 0..1, bit for bit the swash_hash() of swash.gdshaderinc. (Not
+## named hash(): inside this class that would call the global hash() instead.)
+static func lattice_hash(lattice: Vector2) -> float:
 	var qx := (int(lattice.x) + SWASH_HASH_OFFSET) & UINT_MASK
 	var qy := (int(lattice.y) + SWASH_HASH_OFFSET) & UINT_MASK
 	var n := _mul32(_mul32(qx, HASH_A) ^ _mul32(qy, HASH_B), HASH_A)
@@ -80,8 +81,8 @@ static func noise(p: Vector2) -> float:
 	var i := p.floor()
 	var f := p - i
 	var u := f * f * (Vector2(3.0, 3.0) - 2.0 * f)
-	var bottom := lerpf(hash(i), hash(i + Vector2(1.0, 0.0)), u.x)
-	var top := lerpf(hash(i + Vector2(0.0, 1.0)), hash(i + Vector2(1.0, 1.0)), u.x)
+	var bottom := lerpf(lattice_hash(i), lattice_hash(i + Vector2(1.0, 0.0)), u.x)
+	var top := lerpf(lattice_hash(i + Vector2(0.0, 1.0)), lattice_hash(i + Vector2(1.0, 1.0)), u.x)
 	return lerpf(bottom, top, u.y)
 
 

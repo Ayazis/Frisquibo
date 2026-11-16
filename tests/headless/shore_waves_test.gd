@@ -33,9 +33,16 @@ func _initialize() -> void:
 ## The CPU hash must be the shader's 32-bit integer hash, bit for bit (values worked out with uint32
 ## arithmetic outside Godot).
 func _check_hash() -> void:
-	_near(ShoreWaves.hash(Vector2(0.0, 0.0)), 0.7255859377, 1e-9, "Hash of (0, 0)")
-	_near(ShoreWaves.hash(Vector2(-7.0, 3.0)), 0.1132742311, 1e-9, "Hash of (-7, 3)")
-	_near(ShoreWaves.hash(Vector2(123.0, -456.0)), 0.7312030857, 1e-9, "Hash of (123, -456)")
+	_near(ShoreWaves.lattice_hash(Vector2(0.0, 0.0)), 0.7255859377, 1e-9, "Hash of (0, 0)")
+	_near(ShoreWaves.lattice_hash(Vector2(-7.0, 3.0)), 0.1132742311, 1e-9, "Hash of (-7, 3)")
+	_near(ShoreWaves.lattice_hash(Vector2(123.0, -456.0)), 0.7312030857, 1e-9, "Hash of (123, -456)")
+	var lowest := INF
+	var highest := -INF
+	for i in range(200):
+		var n := ShoreWaves.noise(Vector2(i * 0.37 - 30.0, i * 0.11 - 7.0))
+		lowest = minf(lowest, n)
+		highest = maxf(highest, n)
+	_check(lowest >= 0.0 and highest <= 1.0, "Noise stays in 0..1 (%.3f..%.3f)" % [lowest, highest])
 
 
 ## A straight beach along z, deepening seawards (+x) by SLOPE. Shallow-water waves take
