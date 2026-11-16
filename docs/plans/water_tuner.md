@@ -1,6 +1,6 @@
 # Plan — water tuner: tweak water behaviour with UI controls
 
-Started: 2026-11-14. Last updated: 2026-11-15 (second session).
+Started: 2026-11-14. Last updated: 2026-11-16 (third session: main waves and surface waves).
 Branch: `ccr-2a9bff4d-nh0kdm` (contains `claude/fft-ocean-wave-behavior-dvqs3n`). No PR yet.
 Status: steps 1 to 3 and the A/B part of step 4 built and pushed; the debug views, step 5 and the open
 items below remain.
@@ -58,6 +58,24 @@ swell is switched on.
 
 On 2026-11-15 the user allowed checks to be run, including renders, so continue without asking again.
 
+## Main waves and surface waves (2026-11-16, after user feedback)
+
+The user found the wind had too much effect and asked for clear sections: one for the main waves, one
+for the surface waves, since big waves can run one way while the wind blows another. Done (decision
+`0007-two-wave-systems-in-the-tuner.md`):
+
+- Panel sections in a fixed order (`OceanTunerPanel.SECTION_ORDER`): sea state, Main waves (swell),
+  Wind and surface waves, Crest shape, Foam, Depth and shore, look sections, Artistic overrides
+  (folded), links, save and load.
+- `wind_spread` replaces `swell` ("Crest alignment") and `spread`; old resources convert on load.
+- Wind speed slider ends at 40 m/s. Readouts show main and surface waves separately; a warning
+  when swell is steeper than real swell.
+- Every preset has swell with its own direction. The Gerstner fallback follows the bigger system.
+- No separate swell choppiness: swell is too gentle for choppiness to sharpen it (see the decision).
+
+Visual check in this container: 1600x900 renders take about 17 minutes per shot on llvmpipe. Local
+copies of the shot lists at 480x270 (in `build/`, not committed) take about 5 minutes per shot.
+
 ## Done
 
 | Step | What | Where |
@@ -114,7 +132,7 @@ Then, from the project root:
 
 ```
 godot --headless --import
-for t in ocean_tuning ocean_parameters ocean_rules ocean_height_field beach_profile river_flow_field; do
+for t in ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field beach_profile river_flow_field; do
   timeout 120 godot --headless --path . --script res://tests/headless/${t}_test.gd; done
 timeout 200 godot --headless --path . --script res://tests/smoke/ocean_smoke.gd
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
