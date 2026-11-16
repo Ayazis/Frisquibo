@@ -35,6 +35,7 @@ const LABELS: Dictionary[StringName, String] = {
 	&"reflection_blur": "Reflection blur",
 	&"capillary_tile": "Close-up ripple size",
 	&"capillary_speed": "Close-up ripple drift",
+	&"bubble_strength": "Bubble glow",
 	&"gust_strength": "Wind gusts",
 	&"gust_size": "Gust patch size",
 }
@@ -84,6 +85,8 @@ const DESCRIPTIONS: Dictionary[StringName, String] = {
 	&"shore_foam_width": "Width of the foam line where water meets land.",
 	&"surf_depth": "Breaking-wave foam thins out in water deeper than this.",
 	&"foam_far_distance": "Beyond this distance foam loses its fine pattern.",
+	&"bubble_strength": "Turquoise glow of bubbles that fresh whitecaps push under the surface.",
+	&"foam_relief": "Lumpiness of thick foam: it catches the light on one side.",
 	&"foam_streaks": "Foam blown into lines along the wind in a gale. Starts at Beaufort 7, full at 10.",
 	&"streak_length": "How many times longer than wide the wind-blown foam streaks are.",
 	&"caustic_strength": "Light the waves focus onto the seabed. 1 is physical; the pattern comes from the waves.",

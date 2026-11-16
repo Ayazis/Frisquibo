@@ -66,6 +66,10 @@ uniform float surf_depth = 1.6;
 uniform float foam_far_distance = 250.0;
 uniform float foam_streaks = 0.35;                         // cover of wind-blown streaks in a full gale
 uniform float streak_length = 24.0;                        // streaks are this many times longer than wide
+uniform float bubble_strength = 0.5;                       // turquoise glow of bubbles under fresh whitecaps
+uniform float foam_relief = 1.0;                           // lumpiness of thick foam (1: a few cm on 20 cm)
+// Metres the foam pattern has drifted downwind (set by Ocean, wrapped so the pattern never jumps).
+uniform vec2 foam_offset = vec2(0.0);
 // Wind over the sea (direction * m/s), set by Ocean from the sea state.
 uniform vec2 wind = vec2(8.16, 3.8);
 uniform sampler2D foam_texture : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -80,6 +84,12 @@ const float STREAK_PATTERN_SCALE = 0.35;
 const float STREAK_PATCH_SCALE = 0.06;
 const vec2 STREAK_PATCH_RANGE = vec2(0.45, 0.75);
 const float STREAK_FAR_COVER = 0.35;
+// Bubbles scatter light like a bright, diffuse version of the crest glow.
+const float BUBBLE_ALBEDO = 0.45;
+// Slope of the foam surface per unit of foam-pattern change across one pattern tile.
+const float FOAM_LUMP = 0.025;
+// Pattern tiles between the two samples of the foam relief gradient.
+const float FOAM_RELIEF_STEP = 0.004;
 group_uniforms caustics;
 uniform float caustic_strength = 1.0;                      // 1 = the light the waves really focus
 uniform float caustic_fade = 0.1;                          // per metre of depth, on top of the sun-disk blur
@@ -340,8 +350,9 @@ void fragment() {
 	vec3 refracted = bottom * transmittance;
 
 	// --- Foam: whitecaps from the simulation, surf on shallow ground, a line where water meets land -----
-	vec2 fuv = v_rest * foam_scale;
-	float tex = texture(foam_texture, fuv).r * 0.65 + texture(foam_texture, fuv * 2.71 + vec2(0.37, 0.11)).r * 0.35;
+	vec2 fuv = (v_rest - foam_offset) * foam_scale;
+	float tex_a = texture(foam_texture, fuv).r;
+	float tex = tex_a * 0.65 + texture(foam_texture, fuv * 2.71 + vec2(0.37, 0.11)).r * 0.35;
 	float whitecap = clamp(foam_cover * whitecap_strength, 0.0, 1.0);
 	// Surf only where the depth limit is actually cutting a wave down (it is breaking), on its crest.
 	float breaking = smoothstep(0.0, 0.6, 1.0 - v_damping) * (1.0 - smoothstep(0.0, surf_depth, v_seabed_depth) * 0.5);
@@ -363,6 +374,14 @@ void fragment() {
 	// Fade foam and reflection where the water is only millimetres thick, so the shore has no seam.
 	float edge = smoothstep(0.0, 0.08, path);
 	foam *= smoothstep(0.0, 0.03, path);
+	// Fresh whitecaps push bubbles under the surface; they scatter light back up as a turquoise glow
+	// around and under the foam.
+	float bubbles = smoothstep(0.15, 0.85, whitecap) * bubble_strength * (1.0 - foam) * edge;
+	vec3 bubble_albedo = sss_color / max(max(sss_color.r, sss_color.g), max(sss_color.b, 1e-3)) * BUBBLE_ALBEDO;
+	// Thick foam is lumpy: tilt the normal by the slope of the foam pattern.
+	vec2 lump = vec2(texture(foam_texture, fuv + vec2(FOAM_RELIEF_STEP, 0.0)).r - tex_a,
+			texture(foam_texture, fuv + vec2(0.0, FOAM_RELIEF_STEP)).r - tex_a) / FOAM_RELIEF_STEP * FOAM_LUMP;
+	vec3 n_foam = normalize(n_world - vec3(lump.x, 0.0, lump.y) * foam_relief * foam);
 
 	// --- Reflection ------------------------------------------------------------------------------------
 	vec3 reflection = vec3(0.0);
@@ -377,7 +396,7 @@ void fragment() {
 	float f = fresnel * edge;
 	if (!from_below) {
 		EMISSION = (refracted * (1.0 - f) + reflection * f) * (1.0 - foam);
-		ALBEDO = mix(scatter_color * murk * (1.0 - f), foam_color, foam);
+		ALBEDO = mix(scatter_color * murk * (1.0 - f), foam_color, foam) + bubble_albedo * bubbles * (1.0 - f);
 		// Only used for the engine's sky reflection, when there is no planar one.
 		SPECULAR = planar ? 0.0 : WATER_ENGINE_SPECULAR * edge * (1.0 - foam);
 	} else {
@@ -387,7 +406,7 @@ void fragment() {
 		SPECULAR = 0.0;
 	}
 	ROUGHNESS = mix(roughness, 0.7, foam);
-	NORMAL = n_view;
+	NORMAL = from_below ? n_view : normalize((VIEW_MATRIX * vec4(n_foam, 0.0)).xyz);
 	v_front = from_below ? 0.0 : 1.0;
 	v_foam = foam;
 	v_fresnel_scale = 1.0 - f;

@@ -51,6 +51,10 @@ extends Resource
 ## Cover of wind-blown foam streaks in a full gale; they start at Beaufort 7 and grow with the wind.
 @export_range(0.0, 1.0, 0.01) var foam_streaks := 0.35
 @export_range(1.0, 60.0, 0.5) var streak_length := 24.0
+## Turquoise glow of bubbles pushed under the surface by fresh whitecaps.
+@export_range(0.0, 2.0, 0.01, "or_greater") var bubble_strength := 0.5
+## Lumpiness of thick foam.
+@export_range(0.0, 3.0, 0.05, "or_greater") var foam_relief := 1.0
 
 @export_group("Caustics")
 ## 1: the light the simulated waves really focus onto the seabed.

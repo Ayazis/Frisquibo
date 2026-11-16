@@ -35,8 +35,9 @@ they only show errors on a desktop run.
 7. [x] **Close-up ripple detail.** Fine scrolling detail normals near the camera, below the smallest
    simulated waves, on the ocean as well.
 8. [x] **Water types.** `OceanLook` presets for clear ocean, coastal and murky (moat, harbour) water.
-9. [ ] **Floating foam.** Foam drifts with the wind, fresh foam glows turquoise from bubbles below it,
-   foam has surface relief.
+9. [x] **Floating foam.** Foam drifts with the wind, fresh foam glows turquoise from bubbles below it,
+   foam has surface relief. (The bubble pattern drifts; the whitecap cover itself stays where the
+   compute shader made it: moving it there would read and write the same image in place.)
 10. [ ] **Shoreline.** Wet sand that follows the swash (how far each wave runs up the beach).
 11. [ ] **Spray** blown off breaking crests in strong wind.
 12. [ ] **Sea-state transitions.** Cross-fade the longest cascade when its tile length changes.

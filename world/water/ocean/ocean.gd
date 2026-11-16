@@ -32,6 +32,11 @@ const FALLBACK_WAVELENGTH := 9.0
 const FALLBACK_MIN_WIND_RATIO := 0.5
 ## Above this the Gerstner waves loop over themselves.
 const FALLBACK_MAX_STEEPNESS := 0.95
+## Foam drifts downwind at about this share of the wind speed (the wind-driven surface current).
+const FOAM_DRIFT_SHARE := 0.03
+## The foam drift wraps after this many foam pattern tiles: whole tiles of both pattern layers
+## (2.71 times apart in ocean.gdshader), so the wrap never shows.
+const FOAM_WRAP_TILES := 100.0
 ## Metres above the local wave height where the camera lens can still dip into a crest.
 const UNDERWATER_REACH_MARGIN := 0.5
 
@@ -67,6 +72,7 @@ var _time := 0.0
 var _frames_since_readback := 0
 var _reflection: PlanarReflection
 var _underwater: UnderwaterView
+var _foam_offset := Vector2.ZERO
 var _amplitude := DEFAULT_AMPLITUDE
 ## The sea state after the rules: spectrum and ocean values actually simulated and drawn.
 var _effective: OceanSpectrum
@@ -308,6 +314,7 @@ func _process(delta: float) -> void:
 		material.set_shader_parameter("wave_amplitude", _amplitude)
 	_update_rules(false)
 	_simulation.update(_time, delta)
+	_drift_foam(delta)
 	var cam := get_viewport().get_camera_3d()
 	if cam != null:
 		var p := cam.global_position
@@ -328,6 +335,14 @@ func _process(delta: float) -> void:
 				var field := _height_field
 				var cascade := c
 				_simulation.request_displacement(c, func(bytes: PackedByteArray) -> void: field.set_cascade.call_deferred(cascade, bytes))
+
+
+func _drift_foam(delta: float) -> void:
+	var angle := deg_to_rad(_effective.wind_direction)
+	var drift := Vector2(cos(angle), sin(angle)) * _effective.wind_speed * FOAM_DRIFT_SHARE * delta
+	var period := FOAM_WRAP_TILES / maxf(_look_value(&"foam_scale"), 0.001)
+	_foam_offset = Vector2(fposmod(_foam_offset.x + drift.x, period), fposmod(_foam_offset.y + drift.y, period))
+	material.set_shader_parameter("foam_offset", _foam_offset)
 
 
 func _apply_cascades() -> void:
