@@ -27,8 +27,8 @@ extends Resource
 ## Ray-march steps of the underwater light shafts; 0 turns them off.
 @export_range(0, 64) var underwater_shaft_steps := 16
 ## Droplets of wind-blown spray around the camera in strong wind; 0 turns spray off.
-@export_range(0, 50000) var spray_particles := 6000
+@export_range(0, 50000) var spray_particles := 12000
 ## Metres per side of the area around the camera that spray is drawn in.
-@export_range(10.0, 500.0, 1.0, "suffix:m") var spray_area := 120.0
+@export_range(10.0, 500.0, 1.0, "suffix:m") var spray_area := 200.0
 ## Physics frames between GPU readbacks for floating objects; 0 disables the readback.
 @export_range(0, 30) var readback_interval := 3

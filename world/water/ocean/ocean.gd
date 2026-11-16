@@ -49,7 +49,6 @@ const SWASH_PERIOD_PARAM := &"water_swash_period"
 ## The wave clock the swash and the shore waves run on, so the CPU heights match what is drawn.
 const WAVE_TIME_PARAM := &"water_wave_time"
 ## Cell texture foam ages into, on the sea and on the sand (foam_lace.gdshaderinc).
-const FOAM_LACE_PARAM := &"water_foam_lace"
 ## Ray-march steps of the screen-space reflections on all water, from the quality tier.
 const SSR_STEPS_PARAM := &"water_ssr_steps"
 ## Metres over which the slope of the shore waves and swash at the camera is measured, for the waterline
@@ -138,8 +137,8 @@ func _ready() -> void:
 	if quality == null:
 		quality = DEFAULT_QUALITY
 	RenderingServer.global_shader_parameter_set(SSR_STEPS_PARAM, quality.reflection_march_steps)
-	# Both renderers: the beach draws the swash's foam from it (terrain_ground).
-	RenderingServer.global_shader_parameter_set(FOAM_LACE_PARAM, WaterTextures.lace())
+	# Both renderers: the beach draws the swash's foam from them too (terrain_ground).
+	WaterTextures.apply_foam_globals()
 	for tunable: Object in _tunables():
 		_limits.merge(OceanRuleEngine.limits(tunable))
 	_effective = spectrum.duplicate() as OceanSpectrum
@@ -579,8 +578,9 @@ func _apply_state(spectrum_changed: bool) -> void:
 	material.set_shader_parameter("sea_level", sea_level)
 	var wind := _wind()
 	material.set_shader_parameter("wind", wind)
+	material.set_shader_parameter("white_water_height", _effective.white_water_height)
 	if _spray != null:
-		_spray.set_sea(wind, sea_level, _look_value(&"foam_cascade_falloff"))
+		_spray.set_sea(wind, sea_level, _look_value(&"foam_cascade_falloff"), _effective.spray_amount)
 	material.set_shader_parameter("breaker_ratio", _value(&"breaker_ratio"))
 	material.set_shader_parameter("min_shore_wave", _value(&"min_shore_wave"))
 	material.set_shader_parameter("wave_setup", _value(&"wave_setup"))

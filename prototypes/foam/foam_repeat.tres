@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="VisualShotList" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot_list.gd" id="1"]
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot.gd" id="2"]
+
+[sub_resource type="Resource" id="high_fill35"]
+script = ExtResource("2")
+name = "high_fill35"
+camera_position = Vector3(0, 40, 35)
+look_at_target = Vector3(0, 0, -15)
+state = {"variant": 6, "overcast": true, "fill": 0.35}
+
+[sub_resource type="Resource" id="high_fill6"]
+script = ExtResource("2")
+name = "high_fill6"
+camera_position = Vector3(0, 40, 35)
+look_at_target = Vector3(0, 0, -15)
+state = {"variant": 6, "overcast": true, "fill": 0.6}
+
+[sub_resource type="Resource" id="low_fill5"]
+script = ExtResource("2")
+name = "low_fill5"
+camera_position = Vector3(0, 4, 12)
+look_at_target = Vector3(0, 0, -6)
+state = {"variant": 6, "overcast": true, "fill": 0.5}
+
+[resource]
+script = ExtResource("1")
+scene_path = "res://prototypes/foam/foam_compare.tscn"
+settle_frames = 30
+shots = Array[ExtResource("2")]([SubResource("high_fill35"), SubResource("high_fill6"), SubResource("low_fill5")])

@@ -1,6 +1,6 @@
 class_name OceanSpray
 extends GPUParticles3D
-## Spray blown off breaking crests in strong wind, around the camera (ocean_spray.gdshader decides where
+## Spray blown off breaking crests in strong wind, droplets and veils of spindrift, around the camera (ocean_spray.gdshader decides where
 ## and when from the FFT ocean's own foam and displacement). Desktop only: the Ocean makes one when its
 ## quality tier asks for spray particles.
 
@@ -41,11 +41,13 @@ func set_waves(displacement: Texture, moments: Texture, tile_lengths: PackedFloa
 	process_shader_material.set_shader_parameter("cascade_count", cascade_count)
 
 
-## Wind (direction * m/s), the sea's rest level, and how fresh foam must be to count as breaking.
-func set_sea(wind: Vector2, sea_level: float, foam_falloff: float) -> void:
+## Wind (direction * m/s), the sea's rest level, how much the smaller waves' breaking counts, and
+## the amount of spray relative to the natural one.
+func set_sea(wind: Vector2, sea_level: float, foam_falloff: float, amount: float) -> void:
 	process_shader_material.set_shader_parameter("wind", wind)
 	process_shader_material.set_shader_parameter("sea_level", sea_level)
 	process_shader_material.set_shader_parameter("foam_falloff", foam_falloff)
+	process_shader_material.set_shader_parameter("spray_amount", amount)
 
 
 ## Centres the spray area on the camera.

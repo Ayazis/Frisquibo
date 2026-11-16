@@ -14,6 +14,9 @@ const REPEAT_PERIOD := 600.0
 const BAND_SPLIT := 6.0
 ## The longest cascade's tile holds at least this many dominant waves, so long swell isn't cut off.
 const PEAK_WAVES_PER_TILE := 4.0
+## Seconds for the white water of a breaking crest to settle to about a third (the foam it leaves
+## behind lasts foam_lifetime). Short: it marks crests that are breaking now.
+const WHITE_WATER_LIFETIME := 1.2
 const GROUP_2D := 16
 const GROUP_MIP := 8
 const BYTES_PER_TEXEL := 8
@@ -115,12 +118,8 @@ func _update_gpu(time: float, delta: float) -> void:
 		var fft := PackedInt32Array([vertical, 0, 0, 0]).to_byte_array()
 		_dispatch(list, &"fft", _sets[&"fft"], fft, Vector3i(MAP_SIZE, cascade_count, 1))
 		_rd.compute_list_add_barrier(list)
-	var decay := exp(-delta / _spectrum.foam_lifetime)
-	var unpack := PackedFloat32Array([_spectrum.height_scale, _spectrum.choppiness, _spectrum.foam_threshold,
-			_spectrum.foam_gain, decay, 0.0, 0.0, 0.0]).to_byte_array()
 	for c in range(cascade_count):
-		unpack.encode_float(20, float(c))
-		_dispatch(list, &"unpack", _unpack_sets[c], unpack, Vector3i(groups, groups, 1))
+		_dispatch(list, &"unpack", _unpack_sets[c], _unpack_push(c, delta), Vector3i(groups, groups, 1))
 	for level in range(1, MIP_LEVELS):
 		_rd.compute_list_add_barrier(list)
 		var size := MAP_SIZE >> level
@@ -239,6 +238,14 @@ func _spectrum_push(cascade: int) -> PackedByteArray:
 			_spectrum.swell_wavenumber(), deg_to_rad(_spectrum.swell_direction),
 			deg_to_rad(_spectrum.swell_spread), 0.0, 0.0, 0.0, 0.0]).to_byte_array())
 	return bytes
+
+
+func _unpack_push(cascade: int, delta: float) -> PackedByteArray:
+	var angle := deg_to_rad(_spectrum.wind_direction)
+	return PackedFloat32Array([_spectrum.height_scale, _spectrum.choppiness, _spectrum.foam_threshold,
+			_spectrum.foam_gain, exp(-delta / _spectrum.foam_lifetime), float(cascade),
+			_spectrum.crest_lean_wind(), exp(-delta / WHITE_WATER_LIFETIME), cos(angle), sin(angle),
+			0.0, 0.0]).to_byte_array()
 
 
 func _keep(rid: RID) -> RID:

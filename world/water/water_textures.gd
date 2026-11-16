@@ -7,6 +7,20 @@ extends RefCounted
 const SIZE := 512
 const NORMAL_BUMP := 6.0
 const LACE_SEED := 606
+## Foam textures (world/water/foam_scans/SOURCE.txt), packed: R, G = normal x, y (OpenGL), B = height.
+## Three per foam density; foam_surface.gdshaderinc picks between them across the sea.
+const FOAM_TEXTURES: Dictionary[StringName, Texture2D] = {
+	&"water_foam_dense_a": preload("res://world/water/foam_scans/tex_foam_photo_engstrom_aerial.png"),
+	&"water_foam_dense_b": preload("res://world/water/foam_scans/tex_foam_photo_morning_seafoam.png"),
+	&"water_foam_dense_c": preload("res://world/water/foam_scans/tex_foam_photo_gischt_stiller.png"),
+	&"water_foam_middle_a": preload("res://world/water/foam_scans/tex_foam_photo_foamy_ocean.png"),
+	&"water_foam_middle_b": preload("res://world/water/foam_scans/tex_foam_photo_anna_popovic.png"),
+	&"water_foam_middle_c": preload("res://world/water/foam_scans/tex_foam_scan_003.png"),
+	&"water_foam_sparse_a": preload("res://world/water/foam_scans/tex_foam_photo_croatia_pasman.png"),
+	&"water_foam_sparse_b": preload("res://world/water/foam_scans/tex_foam_photo_dench_dark_whitecap.png"),
+	&"water_foam_sparse_c": preload("res://world/water/foam_scans/tex_foam_scan_002.png"),
+	&"water_foam_specks": preload("res://world/water/foam_scans/tex_foam_synth_spatter.png"),
+}
 
 static var _normal_a: NoiseTexture2D
 static var _normal_b: NoiseTexture2D
@@ -46,6 +60,16 @@ static func lace() -> NoiseTexture2D:
 	if _lace == null:
 		_build()
 	return _lace
+
+
+## Sets the global shader parameters every foam shader reads (foam_surface.gdshaderinc).
+static func apply_foam_globals() -> void:
+	if _lace == null:
+		_build()
+	RenderingServer.global_shader_parameter_set(&"water_foam_lace", _lace)
+	RenderingServer.global_shader_parameter_set(&"water_foam_noise", _foam)
+	for param: StringName in FOAM_TEXTURES:
+		RenderingServer.global_shader_parameter_set(param, FOAM_TEXTURES[param])
 
 
 static func caustics() -> NoiseTexture2D:

@@ -9,6 +9,7 @@ render_mode blend_mix, depth_draw_always, cull_disabled, world_vertex_coords;
 //    refraction with per-channel absorption, light lost on its way down to the seabed, and caustics
 //    focused by the simulated waves (ocean_caustics)
 //  - subsurface light through thin crests (the Atlas model), persistent whitecaps and shoreline surf
+//  - tumbling white water that makes breaking crests lumpy and torn (ocean_white_water)
 //  - interaction ripples, wakes and splash foam from objects in the water (WaterRipples)
 //  - wind gusts: drifting patches of rougher and glassier water
 //  - shore waves: near the coast crests turn to meet the beach, steepen and break (ocean_shore_waves);
@@ -98,10 +99,16 @@ const vec2 STREAK_PATCH_RANGE = vec2(0.45, 0.75);
 const float STREAK_FAR_COVER = 0.35;
 // Bubbles scatter light like a bright, diffuse version of the crest glow.
 const float BUBBLE_ALBEDO = 0.45;
-// Slope of the foam surface per unit of foam-pattern change across one pattern tile.
-const float FOAM_LUMP = 0.025;
-// Pattern tiles between the two samples of the foam relief gradient.
-const float FOAM_RELIEF_STEP = 0.004;
+// The bubble layer under the foam is seen this deep (metres), shifted along the view; the view's
+// slope is limited to this so grazing views don't throw it far away.
+const float FOAM_SUB_DEPTH = 0.15;
+const float FOAM_SUB_GRAZE = 0.25;
+// How bright the bubbles under the foam glow, relative to bubble_strength.
+const float FOAM_SUB_GLOW = 0.5;
+// Thin foam is this share white over the bubble colour; only thick foam is fully foam_color.
+const float FOAM_THIN_WHITE = 0.5;
+// Strength of the foam scans' relief in the normal.
+const float FOAM_SCAN_RELIEF = 0.6;
 group_uniforms caustics;
 uniform float caustic_strength = 1.0;                      // 1 = the light the waves really focus
 uniform float caustic_fade = 0.1;                          // per metre of depth, on top of the sun-disk blur
@@ -137,6 +144,7 @@ uniform vec4 local_rule_depth[MAX_LOCAL_RULES];
 uniform vec4 local_rule_effect[MAX_LOCAL_RULES];
 
 #include "res://world/water/ocean/ocean_caustics.gdshaderinc"
+#include "res://world/water/ocean/ocean_white_water.gdshaderinc"
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
@@ -163,8 +171,9 @@ varying float v_rule_foam;
 varying float v_fold;
 // Still water depth with set-up and rule water (no swash): what the shore waves see.
 varying float v_still_depth;
-// Amplitude share the FFT waves keep where shore waves took the rest.
-varying float v_open_sea;
+// x: amplitude share the FFT waves keep where shore waves took the rest. y: height of the waves breaking
+// here now (metres), which carry white water. Packed: the shader is at the GPU's limit of 32 varyings.
+varying vec2 v_sea;
 // Plunging breakers (ocean_breakers): how far this water is carried onto the curl, the curl's normal,
 // the part of the folded sheet it is on, and the breaker's stage. v_lip: thin lip, set in fragment()
 // for light().
@@ -311,11 +320,12 @@ void vertex() {
 	v_seabed_depth = depth + lift;
 	v_damping = shore_damping(v_seabed_depth) * rules.y;
 	v_still_depth = depth + setup + rules.z;
-	v_open_sea = shore_open_sea_share(v_still_depth);
+	v_sea.x = shore_open_sea_share(v_still_depth);
 	ShoreWave shore = shore_wave(p, v_still_depth);
 	v_rule_foam = rules.x;
 	vec3 d = vec3(0.0);
 	vec2 jac = vec2(0.0);
+	float breaking = 0.0;
 	for (int i = 0; i < MAX_CASCADES; i++) {
 		if (i >= cascade_count) {
 			break;
@@ -325,21 +335,36 @@ void vertex() {
 		float lod = log2(max(spacing * map_size / tile, 1.0));
 		vec3 uv = vec3(p / tile, float(i));
 		vec2 tw = transition_weights(i);
-		d += textureLod(displacement_maps, uv, lod).xyz * tw.y;
+		vec3 cascade_d = textureLod(displacement_maps, uv, lod).xyz;
+		d += cascade_d * tw.y;
 		jac += textureLod(slope_maps, uv, lod).zw * tw.y;
+		breaking += textureLod(moment_maps, uv, lod).w * max(cascade_d.y, 0.0) * tw.y;
 		if (tw.x > 0.0) {
 			float prev_tile = prev_tile_lengths[i];
 			float prev_lod = log2(max(spacing * map_size / prev_tile, 1.0));
 			vec3 prev_uv = vec3(p / prev_tile, float(i));
-			d += textureLod(prev_displacement_maps, prev_uv, prev_lod).xyz * tw.x;
+			vec3 prev_d = textureLod(prev_displacement_maps, prev_uv, prev_lod).xyz;
+			d += prev_d * tw.x;
 			jac += textureLod(prev_slope_maps, prev_uv, prev_lod).zw * tw.x;
+			breaking += textureLod(prev_moment_maps, prev_uv, prev_lod).w * max(prev_d.y, 0.0) * tw.x;
 		}
 	}
-	float open_sea = v_damping * v_open_sea;
+	float open_sea = v_damping * v_sea.x;
 	v_fold = fold_limit(jac * open_sea + shore.stretch);
 	d.xz = (d.xz * open_sea + shore.offset.xz) * v_fold;
 	d.y = d.y * open_sea + shore.offset.y;
 	VERTEX += d;
+	// White water on breaking crests: lumps raised on the crest and spilling forward down the wind.
+	// Not in OceanHeightField: aerated white water carries little weight, so floating objects ride the
+	// wave under it.
+	v_sea.y = breaking * open_sea * white_water_height;
+	if (v_sea.y > 0.0) {
+		float lump = white_water_lumps(p, spacing, TIME).x * v_sea.y;
+		float wind_strength = length(wind);
+		vec2 downwind = wind_strength > 0.0 ? wind / wind_strength : vec2(0.0);
+		VERTEX.y += lump;
+		VERTEX.xz += downwind * lump * WHITE_WATER_SPILL;
+	}
 	VERTEX.y += lift + water_ripples(VERTEX.xz).z;
 	// A plunging breaker carries the water onto its curl (the ocean surface too, so the two agree where
 	// they overlap; it leaves a hole for the ribbon where the curl is strong).
@@ -414,9 +439,13 @@ void fragment() {
 	slope += (ca.xy + cb.xy) * sqrt(capillary_energy / CAPILLARY_MAP_VARIANCE) * resolved;
 	variance -= vec2(capillary_energy * resolved * resolved);
 
-	float open_sea = v_damping * v_open_sea;
+	float open_sea = v_damping * v_sea.x;
 	slope *= open_sea;
 	variance *= open_sea * open_sea;
+	// The lumps of white water on breaking crests tilt the surface too.
+	if (v_sea.y > 0.0) {
+		slope += white_water_slope(v_rest, length(fwidth(v_rest)), TIME, v_sea.y) * open_sea;
+	}
 	ShoreWave shore = shore_wave(v_rest, v_still_depth);
 	// Where a breaker curls, the ribbon draws it and the ocean surface leaves a hole; they overlap a
 	// little where the curl is weak.
@@ -488,7 +517,7 @@ void fragment() {
 	float caustic_weight = caustic_strength * exp(-bottom_depth * caustic_fade) * smoothstep(0.0, 0.3, bottom_depth);
 	// The shore waves over the seabed point focus light too (their own lens, from above that point).
 	ShoreWave over_bottom = shore_wave(bottom_world.xz, ocean_still_depth(bottom_world.xz));
-	vec3 caustic = ocean_caustics(bottom_world.xz, bottom_depth, v_damping * v_open_sea, over_bottom.curvature);
+	vec3 caustic = ocean_caustics(bottom_world.xz, bottom_depth, v_damping * v_sea.x, over_bottom.curvature);
 	vec3 downwelling = mix(vec3(1.0), exp(-absorption * bottom_depth), seabed_light_loss);
 	bottom *= mix(vec3(1.0), caustic, caustic_weight) * downwelling;
 	vec3 refracted = bottom * transmittance;
@@ -499,20 +528,22 @@ void fragment() {
 	murk = mix(murk, 1.0, in_wave);
 
 	// --- Foam: whitecaps from the simulation, surf on shallow ground, a line where water meets land -----
-	vec2 fuv = (v_rest - foam_offset) * foam_scale;
-	float tex_a = texture(foam_texture, fuv).r;
-	float tex = tex_a * 0.65 + texture(foam_texture, fuv * 2.71 + vec2(0.37, 0.11)).r * 0.35;
 	float whitecap = clamp(foam_cover * whitecap_strength, 0.0, 1.0);
 	// Surf only where the depth limit is actually cutting a wave down (it is breaking), on its crest.
 	float breaking = smoothstep(0.0, 0.6, 1.0 - v_damping) * (1.0 - smoothstep(0.0, surf_depth, v_seabed_depth) * 0.5);
 	float surf = breaking * smoothstep(0.02, 0.3, v_crest);
 	float shore_line = 1.0 - smoothstep(0.0, shore_foam_width, contact);
 	float cover = clamp(max(max(whitecap, ripple.w), max(surf * 0.85, shore_line * 0.9)) + v_rule_foam, 0.0, 1.0);
-	float foam_near = smoothstep(1.0 - cover, 1.0 - cover + foam_softness, tex);
+	float detail = foam_detail(dist);
+	vec2 sub_shift = -v.xz / max(abs(v.y), FOAM_SUB_GRAZE) * FOAM_SUB_DEPTH;
+	FoamSurface fs = foam_surface(v_rest - foam_offset, cover, detail, sub_shift);
+	float foam_near = fs.cover;
 	// Breakers: the roller on the breaking front and the lace it leaves behind (near, far).
 	vec2 white_water = ocean_shore_foam(shore, v_rest, water_wave_time);
 	white_water = max(white_water, ocean_breaker_foam(v_rest, lip, v_curl, v_curl_part, v_curl_stage, shore.roller_wave));
 	foam_near = max(foam_near, white_water.x);
+	// Breaker white water is fresh and thick; the open-sea foam is as thick as its pattern says.
+	float foam_thick = max(fs.thick * fs.cover, white_water.x);
 	// Wind-blown streaks: the foam pattern stretched along the wind, growing with the wind.
 	float wind_speed = length(wind);
 	vec2 wind_dir = wind_speed > 0.0 ? wind / wind_speed : vec2(1.0, 0.0);
@@ -531,12 +562,13 @@ void fragment() {
 	// Fresh whitecaps push bubbles under the surface; they scatter light back up as a turquoise glow
 	// around and under the foam.
 	// The roller of a breaker churns air into the water the same way.
-	float bubbles = smoothstep(0.15, 0.85, max(whitecap, shore.roller)) * bubble_strength * (1.0 - foam) * edge;
+	// Under all foam a blurred, wider layer of bubbles glows through the holes.
+	float bubbles = max(smoothstep(0.15, 0.85, max(whitecap, shore.roller)), fs.sub * cover * FOAM_SUB_GLOW)
+			* bubble_strength * (1.0 - foam) * edge;
 	vec3 bubble_albedo = sss_color / max(max(sss_color.r, sss_color.g), max(sss_color.b, 1e-3)) * BUBBLE_ALBEDO;
-	// Thick foam is lumpy: tilt the normal by the slope of the foam pattern.
-	vec2 lump = vec2(texture(foam_texture, fuv + vec2(FOAM_RELIEF_STEP, 0.0)).r - tex_a,
-			texture(foam_texture, fuv + vec2(0.0, FOAM_RELIEF_STEP)).r - tex_a) / FOAM_RELIEF_STEP * FOAM_LUMP;
-	vec3 n_foam = normalize(n_world - vec3(lump.x, 0.0, lump.y) * foam_relief * foam);
+	vec3 foam_albedo = mix(mix(bubble_albedo, foam_color, FOAM_THIN_WHITE), foam_color, smoothstep(0.0, 1.0, foam_thick));
+	// Foam is lumpy: tilt the normal by the relief of the foam scans.
+	vec3 n_foam = normalize(n_world + fs.normal * FOAM_SCAN_RELIEF * foam_relief);
 
 	// --- Reflection ------------------------------------------------------------------------------------
 	vec3 reflection = vec3(0.0);
@@ -563,7 +595,7 @@ void fragment() {
 		// Inside the tube the lip hides most of the sky.
 		float sky_seen = 1.0 - TUBE_SHADE * tube;
 		EMISSION = (refracted * (1.0 - f) + reflection * f * sky_seen) * (1.0 - foam);
-		ALBEDO = (mix(scatter_color * murk * (1.0 - f), foam_color, foam) + bubble_albedo * bubbles * (1.0 - f)) * sky_seen;
+		ALBEDO = (mix(scatter_color * murk * (1.0 - f), foam_albedo, foam) + bubble_albedo * bubbles * (1.0 - f)) * sky_seen;
 		// Only used for the engine's sky reflection, where neither the mirror nor the march found anything.
 		SPECULAR = planar ? 0.0 : WATER_ENGINE_SPECULAR * edge * (1.0 - foam) * (1.0 - traced.a);
 	} else {
