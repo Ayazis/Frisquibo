@@ -8,10 +8,16 @@ extends Node
 const WATER_LAYER := 20
 ## Terrain shaders discard fragments below this height while the mirror camera (below water) renders.
 const CLIP_PARAM := &"water_reflection_clip_height"
+## Taps water shaders use to blur the reflection by unresolved ripples (water_reflection.gdshaderinc).
+const BLUR_SAMPLES_PARAM := &"water_reflection_blur_samples"
+## Used when no quality tier sets blur_samples (lakes and rivers): the High tier's value.
+const DEFAULT_BLUR_SAMPLES := 12
 
 @export var plane_height := 0.0
 ## Fraction of the main viewport resolution; lower is cheaper and softer.
 @export_range(0.25, 1.0) var resolution_scale := 0.6
+## Taps of the rough-water blur; 1 gives a sharp mirror everywhere.
+@export_range(1, 32) var blur_samples := DEFAULT_BLUR_SAMPLES
 
 var _viewport: SubViewport
 var _camera: Camera3D
@@ -35,6 +41,7 @@ func _ready() -> void:
 	_viewport.add_child(_camera)
 	add_child(_viewport)
 	RenderingServer.global_shader_parameter_set(CLIP_PARAM, plane_height)
+	RenderingServer.global_shader_parameter_set(BLUR_SAMPLES_PARAM, blur_samples)
 	RenderingServer.global_shader_parameter_set(&"water_reflection", _viewport.get_texture())
 	RenderingServer.global_shader_parameter_set(&"water_reflection_enabled", true)
 

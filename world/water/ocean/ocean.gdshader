@@ -4,7 +4,7 @@ render_mode blend_mix, depth_draw_always, cull_disabled, world_vertex_coords;
 //  - normals from the summed slopes of all cascades, sharpened by the horizontal-displacement jacobian
 //  - LEAN mapping: slope variance from the mip chain becomes GGX roughness, so distant waves turn into a
 //    wide, glittering sun path instead of aliasing
-//  - planar (desktop) or sky reflection with Fresnel; refraction with per-channel absorption and caustics
+//  - planar (desktop) or sky reflection with Fresnel, the planar one blurred by the same slope variance; refraction with per-channel absorption and caustics
 //  - subsurface light through thin crests (the Atlas model), persistent whitecaps and shoreline surf
 //  - seen from below: Snell's window and total internal reflection
 
@@ -33,6 +33,7 @@ uniform float sss_view_strength = 0.35;
 uniform float refraction_strength = 0.06;
 uniform float refraction_full_distance = 8.0;                // metres; the offset shrinks beyond this
 uniform float reflection_distortion = 0.035;
+uniform float reflection_blur = 1.0;                       // 1 = blur by the real unresolved slopes
 uniform float base_slope_variance = 0.0006;                // capillary ripples below the smallest cascade
 uniform float sun_specular_strength = 1.0;
 uniform float murk_blur = 3.0;                             // screen mip levels of blur through deep water
@@ -99,8 +100,7 @@ uniform vec4 local_rule_effect[MAX_LOCAL_RULES];
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 
-global uniform sampler2D water_reflection : filter_linear;
-global uniform bool water_reflection_enabled;
+#include "res://world/water/water_reflection.gdshaderinc"
 
 varying vec2 v_rest;
 varying vec3 v_world;
@@ -336,8 +336,10 @@ void fragment() {
 	vec3 reflection = vec3(0.0);
 	bool planar = water_reflection_enabled && !from_below;
 	if (planar) {
-		vec2 puv = vec2(SCREEN_UV.x, 1.0 - SCREEN_UV.y) + n_view.xy * reflection_distortion;
-		reflection = texture(water_reflection, clamp(puv, vec2(0.001), vec2(0.999))).rgb;
+		// Slopes the pixel resolves shift the mirror image; the ones it averages away (LEAN variance) blur it.
+		float slope_sigma = sqrt(0.5 * (variance.x + variance.y)) * reflection_blur;
+		vec2 spread = water_reflection_spread(slope_sigma, ndv, vec2(PROJECTION_MATRIX[0][0], PROJECTION_MATRIX[1][1]));
+		reflection = water_reflection_sample(SCREEN_UV, n_view.xy * reflection_distortion, spread, FRAGCOORD.xy);
 	}
 
 	float f = fresnel * edge;

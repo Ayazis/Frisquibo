@@ -18,7 +18,7 @@ they only show errors on a desktop run.
 
 ## Steps, in order
 
-1. [ ] **Rough reflections.** The planar reflection is sampled sharp everywhere. Rough water (the LEAN
+1. [x] **Rough reflections.** The planar reflection is sampled sharp everywhere. Rough water (the LEAN
    roughness the sun glint already uses) should blur it, stretched vertically the way real wave slopes
    smear reflections into streaks. The reflection viewport gets a mip chain to blur from.
 2. [ ] **Shared optics for lake and river.** `water_common.gdshaderinc` moves to the ocean's model:

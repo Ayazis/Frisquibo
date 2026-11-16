@@ -8,4 +8,5 @@ cascade_count = 4
 radial_segments = 512
 far_radius = 6000.0
 reflection_resolution_scale = 0.75
+reflection_blur_samples = 12
 readback_interval = 3

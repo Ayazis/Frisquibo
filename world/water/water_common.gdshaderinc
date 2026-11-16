@@ -29,8 +29,7 @@ uniform sampler2D caustic_texture : hint_default_black, filter_linear_mipmap, re
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 
-global uniform sampler2D water_reflection : filter_linear;
-global uniform bool water_reflection_enabled;
+#include "res://world/water/water_reflection.gdshaderinc"
 
 struct WaterResult {
 	vec3 albedo;

@@ -110,6 +110,7 @@ func _ready() -> void:
 		_reflection = PlanarReflection.new()
 		_reflection.plane_height = level
 		_reflection.resolution_scale = quality.reflection_resolution_scale
+		_reflection.blur_samples = quality.reflection_blur_samples
 		add_child(_reflection)
 	_update_rules(true)
 

@@ -32,6 +32,7 @@ const LABELS: Dictionary[StringName, String] = {
 	&"surf_depth": "Surf zone depth",
 	&"foam_far_distance": "Foam detail distance",
 	&"min_jacobian": "Fold limit",
+	&"reflection_blur": "Reflection blur",
 }
 
 ## Shown as the tooltip of a control. Doc comments are not available in an exported game.
@@ -65,6 +66,7 @@ const DESCRIPTIONS: Dictionary[StringName, String] = {
 	&"refraction_strength": "How far waves bend the view of what lies under water.",
 	&"refraction_full_distance": "Beyond this distance the bending shrinks, so far water doesn't smear.",
 	&"reflection_distortion": "How far waves bend the mirrored world.",
+	&"reflection_blur": "How much ripples too small to see smear the mirrored world into streaks. 1 is physical.",
 	&"base_slope_variance": "Roughness from ripples too small to simulate. Higher: wider, softer sun glitter.",
 	&"sun_specular_strength": "Brightness of the sun's glitter. 1 is physical.",
 	&"foam_scale": "Size of the foam bubble pattern.",

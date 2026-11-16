@@ -25,6 +25,8 @@ extends Resource
 ## The refraction offset shrinks beyond this distance.
 @export_range(0.5, 50.0, 0.5, "or_greater", "suffix:m") var refraction_full_distance := 8.0
 @export_range(0.0, 0.2, 0.001, "or_greater") var reflection_distortion := 0.035
+## Blur of the mirrored world by ripples too small to see. 1 is physical; 0 is a sharp mirror.
+@export_range(0.0, 3.0, 0.01, "or_greater") var reflection_blur := 1.0
 ## Roughness from ripples smaller than the simulation resolves.
 @export_range(0.0, 0.01, 0.0001, "or_greater") var base_slope_variance := 0.0006
 @export_range(0.0, 4.0, 0.05, "or_greater") var sun_specular_strength := 1.0

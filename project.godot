@@ -61,6 +61,10 @@ water_reflection_enabled={
 "type": "bool",
 "value": false
 }
+water_reflection_blur_samples={
+"type": "int",
+"value": 1
+}
 water_reflection_clip_height={
 "type": "float",
 "value": -10000.0
