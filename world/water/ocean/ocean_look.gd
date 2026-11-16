@@ -30,6 +30,10 @@ extends Resource
 ## Roughness from ripples smaller than the simulation resolves.
 @export_range(0.0, 0.01, 0.0001, "or_greater") var base_slope_variance := 0.0006
 @export_range(0.0, 4.0, 0.05, "or_greater") var sun_specular_strength := 1.0
+## Metres covered by the close-up ripple pattern; its ripples are about a sixth of this.
+@export_range(0.2, 10.0, 0.05, "or_greater", "suffix:m") var capillary_tile := 1.2
+## How fast the close-up ripples drift downwind.
+@export_range(0.0, 2.0, 0.01, "or_greater", "suffix:m/s") var capillary_speed := 0.25
 ## Uneven wind: drifting patches of rougher and glassier water. 0 is an even wind.
 @export_range(0.0, 1.0, 0.01) var gust_strength := 0.5
 @export_range(5.0, 500.0, 1.0, "or_greater", "suffix:m") var gust_size := 60.0

@@ -33,6 +33,8 @@ const LABELS: Dictionary[StringName, String] = {
 	&"foam_far_distance": "Foam detail distance",
 	&"min_jacobian": "Fold limit",
 	&"reflection_blur": "Reflection blur",
+	&"capillary_tile": "Close-up ripple size",
+	&"capillary_speed": "Close-up ripple drift",
 	&"gust_strength": "Wind gusts",
 	&"gust_size": "Gust patch size",
 }
@@ -71,6 +73,8 @@ const DESCRIPTIONS: Dictionary[StringName, String] = {
 	&"reflection_blur": "How much ripples too small to see smear the mirrored world into streaks. 1 is physical.",
 	&"base_slope_variance": "Roughness from ripples too small to simulate. Higher: wider, softer sun glitter.",
 	&"sun_specular_strength": "Brightness of the sun's glitter. 1 is physical.",
+	&"capillary_tile": "Size of the fine ripples drawn close to the camera (the fine-ripple roughness, resolved).",
+	&"capillary_speed": "How fast the fine close-up ripples drift downwind.",
 	&"gust_strength": "Patches of rougher and glassier water that drift downwind, as real wind is never even.",
 	&"gust_size": "Size of the gust patches.",
 	&"foam_scale": "Size of the foam bubble pattern.",

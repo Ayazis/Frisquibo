@@ -24,6 +24,14 @@ static func apply(mat: ShaderMaterial) -> void:
 	mat.set_shader_parameter("gust_texture", _gusts)
 
 
+## Only the two detail normal maps (normal_map_a, normal_map_b).
+static func apply_detail_normals(mat: ShaderMaterial) -> void:
+	if _normal_a == null:
+		_build()
+	mat.set_shader_parameter("normal_map_a", _normal_a)
+	mat.set_shader_parameter("normal_map_b", _normal_b)
+
+
 static func foam() -> NoiseTexture2D:
 	if _foam == null:
 		_build()

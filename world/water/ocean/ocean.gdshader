@@ -37,9 +37,21 @@ uniform float refraction_full_distance = 8.0;                // metres; the offs
 uniform float reflection_distortion = 0.035;
 uniform float reflection_blur = 1.0;                       // 1 = blur by the real unresolved slopes
 uniform float base_slope_variance = 0.0006;                // capillary ripples below the smallest cascade
+uniform float capillary_tile = 1.2;                        // metres covered by the close-up ripple normal maps
+uniform float capillary_speed = 0.25;                      // m/s the close-up ripples drift downwind
 uniform float gust_strength = 0.5;                         // 0 = even wind; patches of rougher and glassier water
 uniform float gust_size = 60.0;                            // metres across a gust patch
 uniform sampler2D gust_texture : hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform sampler2D normal_map_a : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D normal_map_b : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+// Slope variance per axis of the two detail normal maps (WaterTextures) together, measured by
+// tests/headless/water_textures_test.gd.
+const float CAPILLARY_MAP_VARIANCE = 0.0269;
+// Size of a ripple in the detail maps, as a share of capillary_tile.
+const float CAPILLARY_FEATURE = 0.16;
+// The second map is smaller and drifts across the wind, so the two never line up.
+const float CAPILLARY_SECOND_SCALE = 1.7;
+const float CAPILLARY_SECOND_SPEED = 0.7;
 uniform float sun_specular_strength = 1.0;
 uniform float murk_blur = 3.0;                             // screen mip levels of blur through deep water
 
@@ -253,6 +265,21 @@ void fragment() {
 		foam_cover += m.z * foam_weight;
 		foam_weight *= foam_cascade_falloff;
 	}
+	// Close-up ripples: near the camera the capillary roughness is drawn as real ripples carrying the same
+	// energy; where a pixel covers several of them they fade back into roughness.
+	float wind_speed_now = length(wind);
+	vec2 wind_dir_now = wind_speed_now > 0.0 ? wind / wind_speed_now : vec2(1.0, 0.0);
+	vec2 cuv = v_rest / capillary_tile;
+	vec2 drift = wind_dir_now * capillary_speed * TIME / capillary_tile;
+	vec3 ca = texture(normal_map_a, cuv - drift).xyz * 2.0 - 1.0;
+	vec3 cb = texture(normal_map_b, cuv * CAPILLARY_SECOND_SCALE - vec2(-wind_dir_now.y, wind_dir_now.x) * drift * CAPILLARY_SECOND_SPEED).xyz * 2.0 - 1.0;
+	float footprint = length(fwidth(v_rest));
+	float feature = CAPILLARY_FEATURE * capillary_tile;
+	float resolved = 1.0 - smoothstep(0.1 * feature, 0.5 * feature, footprint);
+	float capillary_energy = base_slope_variance * gust;
+	slope += (ca.xy + cb.xy) * sqrt(capillary_energy / CAPILLARY_MAP_VARIANCE) * resolved;
+	variance -= vec2(capillary_energy * resolved * resolved);
+
 	slope *= v_damping;
 	jac *= v_damping * v_fold;
 	variance *= v_damping * v_damping;
