@@ -78,6 +78,7 @@ var _time := 0.0
 var _frames_since_readback := 0
 var _reflection: PlanarReflection
 var _underwater: UnderwaterView
+var _spray: OceanSpray
 var _foam_offset := Vector2.ZERO
 var _amplitude := DEFAULT_AMPLITUDE
 ## The sea state after the rules: spectrum and ocean values actually simulated and drawn.
@@ -116,6 +117,9 @@ func _ready() -> void:
 	_underwater = UnderwaterView.new()
 	_underwater.shaft_steps = quality.underwater_shaft_steps
 	add_child(_underwater)
+	if quality.spray_particles > 0:
+		_spray = OceanSpray.new(quality.spray_particles, quality.spray_area)
+		add_child(_spray)
 	_apply_cascades()
 	material.set_shader_parameter("map_size", float(OceanSimulation.MAP_SIZE))
 	material.set_shader_parameter("mesh_angular_step", TAU / quality.radial_segments)
@@ -148,6 +152,8 @@ func _exit_tree() -> void:
 		material.set_shader_parameter("slope_maps", null)
 		material.set_shader_parameter("moment_maps", null)
 		_underwater.set_waves(null, null, PackedFloat32Array(), 0, OceanSimulation.MAP_SIZE)
+		if _spray != null:
+			_spray.set_waves(null, null, PackedFloat32Array(), 0)
 		# Queued on the render thread right away: a deferred call would never run when the game quits.
 		_simulation.free_resources()
 		_simulation = null
@@ -333,6 +339,8 @@ func _process(delta: float) -> void:
 		# otherwise they are the far side of a steep crest and get drawn like the top.
 		material.set_shader_parameter("camera_underwater", p.y < surface)
 		_underwater.follow(cam, surface, _level() + _local_lift(xz), _damping_at(xz), wave_height() + UNDERWATER_REACH_MARGIN)
+		if _spray != null:
+			_spray.follow(p)
 	else:
 		_underwater.follow(null, 0.0, 0.0, 0.0, 0.0)
 	if quality.readback_interval > 0:
@@ -371,6 +379,8 @@ func _apply_cascades() -> void:
 	material.set_shader_parameter("cascade_count", _simulation.cascade_count)
 	_underwater.set_waves(_simulation.displacement, _simulation.slope, tiles, _simulation.cascade_count,
 			OceanSimulation.MAP_SIZE)
+	if _spray != null:
+		_spray.set_waves(_simulation.displacement, _simulation.moments, tiles, _simulation.cascade_count)
 
 
 ## Re-applies the rules to the authored state. Without `force`, only pushes what actually changed,
@@ -421,7 +431,10 @@ func _apply_state(spectrum_changed: bool) -> void:
 		_height_field.damping_at = _damping_at
 	material.set_shader_parameter("sea_level", sea_level)
 	var wind_angle := deg_to_rad(_effective.wind_direction)
-	material.set_shader_parameter("wind", Vector2(cos(wind_angle), sin(wind_angle)) * _effective.wind_speed)
+	var wind := Vector2(cos(wind_angle), sin(wind_angle)) * _effective.wind_speed
+	material.set_shader_parameter("wind", wind)
+	if _spray != null:
+		_spray.set_sea(wind, sea_level, _look_value(&"foam_cascade_falloff"))
 	material.set_shader_parameter("breaker_ratio", _value(&"breaker_ratio"))
 	material.set_shader_parameter("min_shore_wave", _value(&"min_shore_wave"))
 	material.set_shader_parameter("wave_setup", _value(&"wave_setup"))

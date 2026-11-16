@@ -6,7 +6,7 @@ headless import, the headless tests and the headless smoke test only (nothing is
 
 ```
 godot --headless --import
-for t in water_shaders underwater_view water_ripples water_textures water_types shore_runup ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field \
+for t in water_shaders underwater_view water_ripples water_textures water_types shore_runup water_quality ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field \
     beach_profile river_flow_field; do
   timeout 120 godot --headless --path . --script res://tests/headless/${t}_test.gd; done
 timeout 200 godot --headless --path . --script res://tests/smoke/ocean_smoke.gd
@@ -39,7 +39,7 @@ they only show errors on a desktop run.
    foam has surface relief. (The bubble pattern drifts; the whitecap cover itself stays where the
    compute shader made it: moving it there would read and write the same image in place.)
 10. [x] **Shoreline.** Wet sand that follows the swash (how far each wave runs up the beach).
-11. [ ] **Spray** blown off breaking crests in strong wind.
+11. [x] **Spray** blown off breaking crests in strong wind.
 12. [ ] **Sea-state transitions.** Cross-fade the longest cascade when its tile length changes.
 
 Wave refraction towards the shore and curling breakers are out of scope for this pass: both need a

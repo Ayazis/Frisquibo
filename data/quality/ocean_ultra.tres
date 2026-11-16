@@ -10,4 +10,6 @@ far_radius = 8000.0
 reflection_resolution_scale = 1.0
 reflection_blur_samples = 20
 underwater_shaft_steps = 32
+spray_particles = 16000
+spray_area = 180.0
 readback_interval = 2
