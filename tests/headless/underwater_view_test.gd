@@ -41,6 +41,23 @@ func _run() -> void:
 	for child: Node in sea.get_children():
 		found = found or child is UnderwaterView
 	_check(found, "A lake gets an underwater view")
+
+	# The open sea (the ocean's web / Compatibility fallback) follows the camera out to the horizon.
+	var open_sea := Sea.new()
+	open_sea.follow_camera = true
+	open_sea.far_radius = 3000.0
+	open_sea.radial_segments = 64
+	open_sea.planar_reflection = false
+	root.add_child(open_sea)
+	cam.make_current()
+	cam.global_position = Vector3(1234.3, 10.0, -987.6)
+	# process_frame fires before the nodes' _process: wait for one full frame after it.
+	await process_frame
+	await process_frame
+	_check(Vector2(open_sea.global_position.x, open_sea.global_position.z).distance_to(Vector2(1234.3, -987.6)) < Sea.FOLLOW_SNAP,
+			"The open sea moves with the camera")
+	_check(open_sea.covers(Vector2(-5000.0, 5000.0)), "The open sea covers everywhere")
+	_check(open_sea.mesh.get_aabb().size.x >= 2.0 * open_sea.far_radius - 1.0, "It reaches the horizon")
 	print("Underwater view: ", "PASS" if _failures == 0 else "FAIL", " (", _failures, " failures)")
 	quit(_failures)
 

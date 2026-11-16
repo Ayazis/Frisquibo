@@ -10,11 +10,21 @@ const DEFAULT_ABSORPTION := Vector3(0.45, 0.075, 0.05)
 const DEFAULT_DEEP_COLOR := Color(0.006, 0.035, 0.04)
 ## Shader TIME wraps after this many seconds unless the project overrides it.
 const DEFAULT_TIME_ROLLOVER := 3600.0
+## Camera-following mesh (open sea): its innermost ring, and the steps it moves in so vertices don't
+## swim over the waves.
+const FOLLOW_INNER_RADIUS := 1.5
+const FOLLOW_SNAP := 0.5
 
 @export var size := 400.0
 ## Desktop gets a dense grid for smooth waves; the web build a lighter one.
 @export var subdivisions := 400
 @export var web_subdivisions := 160
+## Open sea: instead of a `size` square, a polar grid centred under the camera reaching far_radius,
+## dense near the camera and coarse towards the horizon (OceanSurfaceMesh, as the FFT ocean uses).
+@export var follow_camera := false
+@export var far_radius := 6000.0
+@export_range(64, 1024) var radial_segments := 512
+@export_range(64, 1024) var web_radial_segments := 256
 @export var level := 0.0
 @export var planar_reflection := true
 ## Which mirror plane this water reflects (PlanarReflection.slot): 0 the sea's level, 1 a second level
@@ -40,12 +50,19 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(size, size)
-	var subdiv := web_subdivisions if OS.has_feature("web") else subdivisions
-	plane.subdivide_width = subdiv
-	plane.subdivide_depth = subdiv
-	mesh = plane
+	if follow_camera:
+		# Web: a lighter grid.
+		var segments := web_radial_segments if OS.has_feature("web") else radial_segments
+		mesh = OceanSurfaceMesh.build(segments, FOLLOW_INNER_RADIUS, far_radius)
+		# Waves shorter than the grid can carry fade out with distance instead of shimmering.
+		material.set_shader_parameter("mesh_angular_step", TAU / segments)
+	else:
+		var plane := PlaneMesh.new()
+		plane.size = Vector2(size, size)
+		var subdiv := web_subdivisions if OS.has_feature("web") else subdivisions
+		plane.subdivide_width = subdiv
+		plane.subdivide_depth = subdiv
+		mesh = plane
 	material_override = material
 	layers = PlanarReflection.water_layer_mask()
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -70,9 +87,12 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
+	var cam := get_viewport().get_camera_3d()
+	if follow_camera and cam != null:
+		global_position = Vector3(snappedf(cam.global_position.x, FOLLOW_SNAP), level,
+				snappedf(cam.global_position.z, FOLLOW_SNAP))
 	if _underwater == null:
 		return
-	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		_underwater.follow(null, 0.0, 0.0, 0.0, 0.0)
 		return
@@ -98,6 +118,8 @@ func surface_height_at(xz: Vector2) -> float:
 
 ## True when `xz` (world) lies over this water's square.
 func covers(xz: Vector2) -> bool:
+	if follow_camera:
+		return true
 	var centre := Vector2(global_position.x, global_position.z)
 	var half := size * 0.5
 	return absf(xz.x - centre.x) <= half and absf(xz.y - centre.y) <= half

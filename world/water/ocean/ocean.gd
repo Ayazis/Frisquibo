@@ -118,6 +118,10 @@ func _ready() -> void:
 		_fallback.level = level
 		_fallback.planar_reflection = planar_reflection
 		_fallback.interaction_ripples = interaction_ripples
+		# Open sea to the horizon, following the camera like the FFT surface.
+		_fallback.follow_camera = true
+		_fallback.far_radius = quality.far_radius
+		_fallback.radial_segments = quality.radial_segments
 		add_child(_fallback)
 		_update_rules(true)
 		return

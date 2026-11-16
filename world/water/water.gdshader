@@ -14,6 +14,9 @@ uniform float wave_speed = 1.0;
 uniform vec2 wind_direction = vec2(1.0, 0.35);
 uniform float wave_spread = 0.6;         // radians of direction spread between wave trains
 uniform int wave_count = 6;
+// Camera-following grid (Sea.follow_camera): angle between its segments, so vertex spacing grows with
+// distance. 0 for a fixed grid. Waves shorter than a few grid cells fade out instead of aliasing.
+uniform float mesh_angular_step = 0.0;
 uniform float detail_strength = 0.35;
 uniform float detail_scale = 0.12;
 uniform float detail_speed = 0.35;
@@ -31,6 +34,8 @@ varying float v_transmitted;
 varying float v_front;
 
 const int MAX_WAVES = 8;
+// A wave fades out between this many and twice this many grid cells per wavelength.
+const float WAVE_MIN_CELLS = 2.0;
 // Detail normals fade from full strength at DETAIL_FADE_START to DETAIL_FAR_SHARE of it at DETAIL_FADE_END (m).
 const float DETAIL_FADE_START = 15.0;
 const float DETAIL_FADE_END = 160.0;
@@ -43,6 +48,7 @@ void vertex() {
 	float jxx = 1.0, jzz = 1.0, jxz = 0.0;
 	float base_angle = atan(wind_direction.y, wind_direction.x);
 	int count = min(wave_count, MAX_WAVES);
+	float spacing = max(length(p - CAMERA_POSITION_WORLD.xz), 1.0) * mesh_angular_step;
 	for (int i = 0; i < MAX_WAVES; i++) {
 		if (i >= count) break;
 		float fi = float(i);
@@ -53,6 +59,8 @@ void vertex() {
 		float a = wave_amplitude * pow(0.66, fi);
 		float c = sqrt(9.81 / k) * wave_speed;
 		float q = wave_steepness / (k * a * float(count));
+		// After q, so the horizontal motion fades with the height.
+		a *= mesh_angular_step > 0.0 ? smoothstep(WAVE_MIN_CELLS * spacing, 2.0 * WAVE_MIN_CELLS * spacing, len) : 1.0;
 		float f = k * (dot(d, p) - c * (wave_time >= 0.0 ? wave_time : TIME)) + fi * 1.7;
 		float cf = cos(f);
 		float sf = sin(f);
