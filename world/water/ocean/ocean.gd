@@ -45,6 +45,8 @@ const SWASH_RUNUP_PARAM := &"water_swash_runup"
 const SWASH_PERIOD_PARAM := &"water_swash_period"
 ## The wave clock the swash and the shore waves run on, so the CPU heights match what is drawn.
 const WAVE_TIME_PARAM := &"water_wave_time"
+## Cell texture foam ages into, on the sea and on the sand (foam_lace.gdshaderinc).
+const FOAM_LACE_PARAM := &"water_foam_lace"
 ## Ray-march steps of the screen-space reflections on all water, from the quality tier.
 const SSR_STEPS_PARAM := &"water_ssr_steps"
 ## Metres above the local wave height where the camera lens can still dip into a crest.
@@ -124,6 +126,8 @@ func _ready() -> void:
 	if quality == null:
 		quality = DEFAULT_QUALITY
 	RenderingServer.global_shader_parameter_set(SSR_STEPS_PARAM, quality.reflection_march_steps)
+	# Both renderers: the beach draws the swash's foam from it (terrain_ground).
+	RenderingServer.global_shader_parameter_set(FOAM_LACE_PARAM, WaterTextures.lace())
 	for tunable: Object in _tunables():
 		_limits.merge(OceanRuleEngine.limits(tunable))
 	_effective = spectrum.duplicate() as OceanSpectrum

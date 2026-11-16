@@ -32,6 +32,12 @@ const LEAN := 0.9
 ## is sheltered, from LEE_TO it faces the waves.
 const LEE_FROM := -0.3
 const LEE_TO := 0.7
+## Breaking starts when the unbroken crest reaches this share of the depth limit.
+const BREAK_ONSET := 0.85
+## The white water of a spilling breaker (the roller) rides this upper share of the front face...
+const ROLLER_REACH := 0.4
+## ...and rounds it out by up to this share of the crest height.
+const ROLLER_HEIGHT := 0.12
 ## Fixed-point steps that find which rest point the sway carried over a spot (as OceanHeightField does).
 const INVERSE_ITERATIONS := 3
 
@@ -118,11 +124,14 @@ func displacement(rest: Vector2, depth: float) -> Vector3:
 	var free_crest := amplitude * sqrt(share) * lee * size * pow(_zone() / maxf(depth, ShoreField.MIN_DEPTH), 0.25)
 	var limit := breaker_ratio * depth
 	var crest := minf(free_crest, limit) * w
-	var skew := smoothstep(SKEW_START, 1.0, free_crest / maxf(limit, 1e-4))
+	var ratio := free_crest / maxf(limit, 1e-4)
+	var skew := smoothstep(SKEW_START, 1.0, ratio)
+	var breaking := smoothstep(BREAK_ONSET, 1.0, ratio)
 	var front := lerpf(0.5, FRONT_SHARE_MIN, skew)
 	var profile := shape(u, front)
 	var sway := crest * LEAN * skew * profile.y
-	return Vector3(towards_shore.x * sway, crest * profile.x, towards_shore.y * sway)
+	var lift := profile.x + ROLLER_HEIGHT * breaking * roller_bump(u, front)
+	return Vector3(towards_shore.x * sway, crest * lift, towards_shore.y * sway)
 
 
 ## Water height above the rest level at world `xz` from the shore waves alone. `depth_at` gives the
@@ -149,6 +158,18 @@ static func shape(u: float, front: float) -> Vector2:
 		return Vector2(cos(PI * x), sin(PI * x))
 	var y := (u - back) / front
 	return Vector2(-cos(PI * y), -sin(PI * y))
+
+
+## The roller's bulge on the upper front face, 0..1: zero with zero slope at both its ends (part way
+## down the face and at the crest), so the surface stays smooth.
+static func roller_bump(u: float, front: float) -> float:
+	var back := 1.0 - front
+	if u < back:
+		return 0.0
+	var t := ((u - back) / front - (1.0 - ROLLER_REACH)) / ROLLER_REACH
+	if t <= 0.0:
+		return 0.0
+	return 16.0 * t * t * (1.0 - t) * (1.0 - t)
 
 
 func _zone() -> float:

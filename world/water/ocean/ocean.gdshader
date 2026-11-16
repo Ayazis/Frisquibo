@@ -147,6 +147,8 @@ uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 #include "res://world/water/water_ssr.gdshaderinc"
 #include "res://world/water/swash.gdshaderinc"
 #include "res://world/water/ocean/ocean_shore_waves.gdshaderinc"
+#include "res://world/water/foam_lace.gdshaderinc"
+#include "res://world/water/ocean/ocean_shore_foam.gdshaderinc"
 
 varying vec2 v_rest;
 varying vec3 v_world;
@@ -436,8 +438,11 @@ void fragment() {
 	float breaking = smoothstep(0.0, 0.6, 1.0 - v_damping) * (1.0 - smoothstep(0.0, surf_depth, v_seabed_depth) * 0.5);
 	float surf = breaking * smoothstep(0.02, 0.3, v_crest);
 	float shore_line = 1.0 - smoothstep(0.0, shore_foam_width, contact);
-	float cover = clamp(max(max(max(whitecap, ripple.w), shore.foam), max(surf * 0.85, shore_line * 0.9)) + v_rule_foam, 0.0, 1.0);
+	float cover = clamp(max(max(whitecap, ripple.w), max(surf * 0.85, shore_line * 0.9)) + v_rule_foam, 0.0, 1.0);
 	float foam_near = smoothstep(1.0 - cover, 1.0 - cover + foam_softness, tex);
+	// Breakers: the roller on the breaking front and the lace it leaves behind (near, far).
+	vec2 white_water = ocean_shore_foam(shore, v_rest, water_wave_time);
+	foam_near = max(foam_near, white_water.x);
 	// Wind-blown streaks: the foam pattern stretched along the wind, growing with the wind.
 	float wind_speed = length(wind);
 	vec2 wind_dir = wind_speed > 0.0 ? wind / wind_speed : vec2(1.0, 0.0);
@@ -448,13 +453,15 @@ void fragment() {
 	float streak = smoothstep(1.0 - streak_cover, 1.0 - streak_cover + foam_softness, streak_tex) * STREAK_OPACITY
 			* smoothstep(STREAK_PATCH_RANGE.x, STREAK_PATCH_RANGE.y, streak_patch);
 	foam_near = max(foam_near, streak);
-	float foam = mix(foam_near, max(cover * 0.6, streak_cover * STREAK_FAR_COVER), smoothstep(foam_far_distance * 0.3, foam_far_distance, dist));
+	float foam_far = max(max(cover * 0.6, streak_cover * STREAK_FAR_COVER), white_water.y);
+	float foam = mix(foam_near, foam_far, smoothstep(foam_far_distance * 0.3, foam_far_distance, dist));
 	// Fade foam and reflection where the water is only millimetres thick, so the shore has no seam.
 	float edge = smoothstep(0.0, 0.08, path);
 	foam *= smoothstep(0.0, 0.03, path);
 	// Fresh whitecaps push bubbles under the surface; they scatter light back up as a turquoise glow
 	// around and under the foam.
-	float bubbles = smoothstep(0.15, 0.85, whitecap) * bubble_strength * (1.0 - foam) * edge;
+	// The roller of a breaker churns air into the water the same way.
+	float bubbles = smoothstep(0.15, 0.85, max(whitecap, shore.roller)) * bubble_strength * (1.0 - foam) * edge;
 	vec3 bubble_albedo = sss_color / max(max(sss_color.r, sss_color.g), max(sss_color.b, 1e-3)) * BUBBLE_ALBEDO;
 	// Thick foam is lumpy: tilt the normal by the slope of the foam pattern.
 	vec2 lump = vec2(texture(foam_texture, fuv + vec2(FOAM_RELIEF_STEP, 0.0)).r - tex_a,

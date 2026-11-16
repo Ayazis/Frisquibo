@@ -41,17 +41,23 @@ float swash_noise(vec2 p) {
 			mix(swash_hash(i + vec2(0.0, 1.0)), swash_hash(i + vec2(1.0, 1.0)), u.x), u.y);
 }
 
-// At world `p` and time `t`: (height of the swash edge now, highest point this wave reaches), both in
-// metres above still water. The edge is 0 between waves, so a new wave starts without a jump.
-vec2 water_swash(vec2 p, float t) {
+// At world `p` and time `t`: (height of the swash edge now, highest point this wave reaches, share of
+// the swash cycle gone by, number of the wave). Heights in metres above still water. The edge is 0
+// between waves, so a new wave starts without a jump.
+vec4 water_swash_state(vec2 p, float t) {
 	float runup = max(water_swash_runup, 0.0);
 	if (runup <= 0.0) {
-		return vec2(0.0);
+		return vec4(0.0);
 	}
 	float phase = t / max(water_swash_period, 0.1) + swash_noise(p / SWASH_ALONGSHORE) * SWASH_PHASE_SPREAD;
 	float cycle = fract(phase);
 	float reach = runup * mix(SWASH_SMALLEST, 1.0, swash_noise(p / SWASH_ALONGSHORE + floor(phase) * SWASH_WAVE_STEP));
 	float rush = cycle < SWASH_UPRUSH_SHARE ? smoothstep(0.0, SWASH_UPRUSH_SHARE, cycle)
 			: 1.0 - smoothstep(SWASH_UPRUSH_SHARE, 1.0, cycle);
-	return vec2(reach * rush, reach);
+	return vec4(reach * rush, reach, cycle, floor(phase));
+}
+
+// (height of the swash edge now, highest point this wave reaches): see water_swash_state.
+vec2 water_swash(vec2 p, float t) {
+	return water_swash_state(p, t).xy;
 }

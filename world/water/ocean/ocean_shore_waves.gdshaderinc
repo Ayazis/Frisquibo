@@ -24,19 +24,27 @@ const float SHORE_SKEW_START = 0.3;
 const float SHORE_LEAN = 0.9;
 const float SHORE_LEE_FROM = -0.3;
 const float SHORE_LEE_TO = 0.7;
-// Breaking starts when the unbroken crest reaches this share of the depth limit.
+// Same as ShoreWaves: BREAK_ONSET, ROLLER_REACH, ROLLER_HEIGHT.
 const float SHORE_BREAK_ONSET = 0.85;
-// Upper share of the front face that is white water on a breaking wave.
-const float SHORE_FACE_FOAM = 0.45;
-// The foam a breaker leaves behind fades to a third over this share of a period.
-const float SHORE_TRAIL = 0.3;
+const float SHORE_ROLLER_REACH = 0.4;
+const float SHORE_ROLLER_HEIGHT = 0.12;
+// The roller's white water reaches this share of a period past the crest, onto the back of the wave.
+const float SHORE_ROLLER_BACK = 0.04;
+// The foam a breaker leaves behind ages into lace and is gone after this share of a period.
+const float SHORE_LACE_LIFE = 0.9;
 
 struct ShoreWave {
-	vec3 offset;   // displacement of the water resting here
-	vec2 slope;    // height gradient over the rest position
-	vec2 stretch;  // d(sway)/dx, d(sway)/dz: added to the jacobian, as the FFT's horizontal displacement
-	float foam;    // white water of breaking waves, 0..1
-	float weight;  // how much of the shore waves is present (0 offshore)
+	vec3 offset;      // displacement of the water resting here
+	vec2 slope;       // height gradient over the rest position
+	vec2 stretch;     // d(sway)/dx, d(sway)/dz: added to the jacobian, as the FFT's horizontal displacement
+	float weight;     // how much of the shore waves is present (0 offshore)
+	// White water (ocean_shore_foam.gdshaderinc reads these):
+	float roller;     // the roller on the breaking front: 1 at the crest, 0 where it ends down the face
+	float roller_wave; // number of the crest the roller belongs to (a different pattern per wave)
+	vec2 crest_frame; // metres from that crest along the travel direction (negative ahead) and along it
+	float lace;       // how much foam the last breaker left here, before ageing
+	float lace_age;   // 0 when its crest has just passed, 1 when the lace is gone
+	float lace_wave;  // number of the crest that left it
 };
 
 float shore_zone() {
@@ -67,8 +75,13 @@ ShoreWave shore_wave(vec2 p, float depth) {
 	w.offset = vec3(0.0);
 	w.slope = vec2(0.0);
 	w.stretch = vec2(0.0);
-	w.foam = 0.0;
 	w.weight = shore_weight(depth);
+	w.roller = 0.0;
+	w.roller_wave = 0.0;
+	w.crest_frame = vec2(0.0);
+	w.lace = 0.0;
+	w.lace_age = 1.0;
+	w.lace_wave = 0.0;
 	if (w.weight <= 0.0) {
 		return w;
 	}
@@ -105,25 +118,47 @@ ShoreWave shore_wave(vec2 p, float depth) {
 	// The cycle (ShoreWaves.shape) and its derivative by u: height, sway.
 	vec2 shape;
 	vec2 shape_du;
-	float face = 0.0;
-	float trail = 0.0;
+	// The roller's bulge (ShoreWaves.roller_bump) and its derivative by u.
+	float bump = 0.0;
+	float bump_du = 0.0;
+	// Where on the face, from the crest (1) down to where the roller ends (0); share of a period from
+	// the crest (negative ahead of it).
+	float on_face = 0.0;
+	float from_crest;
 	if (u < back) {
 		float x = u / back;
 		shape = vec2(cos(PI * x), sin(PI * x));
 		shape_du = vec2(-sin(PI * x), cos(PI * x)) * PI / back;
-		trail = exp(-u / SHORE_TRAIL);
+		from_crest = u;
+		on_face = 1.0 - smoothstep(0.0, SHORE_ROLLER_BACK, u);
 	} else {
 		float y = (u - back) / front;
 		shape = vec2(-cos(PI * y), -sin(PI * y));
 		shape_du = vec2(sin(PI * y), -cos(PI * y)) * PI / front;
-		face = smoothstep(1.0 - SHORE_FACE_FOAM, 1.0, y);
+		from_crest = u - 1.0;
+		float t = (y - (1.0 - SHORE_ROLLER_REACH)) / SHORE_ROLLER_REACH;
+		if (t > 0.0) {
+			bump = 16.0 * t * t * (1.0 - t) * (1.0 - t);
+			bump_du = 32.0 * t * (1.0 - t) * (1.0 - 2.0 * t) / (SHORE_ROLLER_REACH * front);
+			on_face = t;
+		}
 	}
 	float sway = crest * SHORE_LEAN * skew;
-	w.offset = vec3(towards_shore.x * sway * shape.y, crest * shape.x, towards_shore.y * sway * shape.y);
+	float lift = shape.x + SHORE_ROLLER_HEIGHT * breaking * bump;
+	w.offset = vec3(towards_shore.x * sway * shape.y, crest * lift, towards_shore.y * sway * shape.y);
 	// The phase rises along the travel time's gradient: grad u = grad T / period.
 	vec2 grad_u = field.yz / cycle;
-	w.slope = crest * shape_du.x * grad_u;
+	w.slope = crest * (shape_du.x + SHORE_ROLLER_HEIGHT * breaking * bump_du) * grad_u;
 	w.stretch = towards_shore * towards_shore * sway * shape_du.y * dot(grad_u, towards_shore);
-	w.foam = breaking * max(face, trail) * w.weight;
+
+	float white = breaking * w.weight;
+	w.roller = white * on_face;
+	// The crest at u = 0 is wave number `wave`; the face ahead of it (u -> 1) already belongs to the next.
+	w.roller_wave = u < back ? wave : wave + 1.0;
+	// Local wavelength: the period over the slowness.
+	w.crest_frame = vec2(from_crest * cycle / slowness, dot(p, vec2(-towards_shore.y, towards_shore.x)));
+	w.lace = white;
+	w.lace_age = clamp(u / SHORE_LACE_LIFE, 0.0, 1.0);
+	w.lace_wave = wave;
 	return w;
 }

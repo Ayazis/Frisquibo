@@ -84,6 +84,10 @@ water_swash_period={
 "type": "float",
 "value": 8.0
 }
+water_foam_lace={
+"type": "sampler2D",
+"value": ""
+}
 water_wave_time={
 "type": "float",
 "value": 0.0

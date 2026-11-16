@@ -33,15 +33,15 @@ So the order is:
 
 ## Phase A: spilling breakers and shore foam (proven)
 
-1. [ ] **White water on the breaking front (the roller).** A band of dense, lumpy, bright foam rides
+1. [x] **White water on the breaking front (the roller).** A band of dense, lumpy, bright foam rides
    the upper front face of each breaking crest. The pattern is tied to the crest, so it travels with
    the wave and slides slowly down the face, with a different pattern for each wave. A slight bulge in
    the surface gives the roller a rounded top in silhouette. It is foam on the surface, not particles.
-2. [ ] **Foam that ages into lace.** Behind each breaker the foam starts as a solid sheet and opens
+2. [x] **Foam that ages into lace.** Behind each breaker the foam starts as a solid sheet and opens
    into a network of cells whose holes grow, until thin threads are left and those fade too. The cells
    are cellular-noise edges (F2 - F1, two scales), so it looks like lace and never like scattered
    spots. Each wave leaves its own lace.
-3. [ ] **Foam left on the sand.** As each wave's swash turns back, a lacy line of foam stays where the
+3. [x] **Foam left on the sand.** As each wave's swash turns back, a lacy line of foam stays where the
    wave stopped, and a sheet of bubbles drains away behind it. Both fade during the backwash. This is
    drawn by the ground, with the same swash timing, so it lines up with the water's edge.
 4. [ ] **Wave rays and the refraction coefficient.** Rays traced seaward from the waterline over the

@@ -88,9 +88,15 @@ func _check_waves() -> void:
 		waves.time = waves.period * float(i) / steps
 		for x: float in [4.0, 10.0, 30.0, 80.0]:
 			var d := waves.displacement(Vector2(x, 0.0), x * SLOPE)
-			_check(d.y <= waves.breaker_ratio * x * SLOPE + 1e-4, "Crests never exceed the depth limit")
+			_check(d.y <= waves.breaker_ratio * x * SLOPE * (1.0 + ShoreWaves.ROLLER_HEIGHT) + 1e-4,
+					"Crests never exceed the depth limit (plus the roller)")
 			highest = maxf(highest, d.y)
 	_check(highest > 0.05, "Shore waves have height (%.2f m)" % highest)
+	# The roller rounds the upper front face of a breaking wave and nowhere else.
+	_near(ShoreWaves.roller_bump(0.2, 0.3), 0.0, 1e-6, "No roller on the back of the wave")
+	_near(ShoreWaves.roller_bump(0.75, 0.3), 0.0, 1e-6, "No roller low on the face")
+	_near(ShoreWaves.roller_bump(1.0 - 0.3 * 0.2, 0.3), 1.0, 1e-6, "Roller at full height mid-way up its reach")
+	_check(ShoreWaves.roller_bump(0.9999, 0.3) < 0.01, "The roller meets the crest smoothly")
 	# A crest travels shorewards: it passes 36 m out before 32 m out, as late as the travel times say.
 	var outer := _crest_time(waves, 36.0)
 	var inner := _crest_time(waves, 32.0)
