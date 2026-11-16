@@ -23,16 +23,23 @@ const WAVES_GROUP := "Waves"
 const SEA_GROUP := "Sea"
 const LOOK_GROUP := "Look"
 ## The only values the Gerstner fallback (web / Compatibility) reacts to.
-const FALLBACK_PARAMETERS: Array[StringName] = [&"wind_speed", &"wind_direction", &"height_scale",
-		&"wavelength_scale", &"choppiness", &"level"]
+const FALLBACK_PARAMETERS: Array[StringName] = [&"wind_speed", &"wind_direction", &"swell_height",
+		&"swell_period", &"swell_direction", &"height_scale", &"wavelength_scale", &"choppiness", &"level"]
+## Gerstner fallback: wave amplitude and length it gives the default sea (DEFAULT_SPECTRUM's wind sea).
+const FALLBACK_AMPLITUDE := 0.12
+const FALLBACK_WAVELENGTH := 9.0
+## Lightest wind, relative to the default sea's, whose wave length the fallback still shortens.
+const FALLBACK_MIN_WIND_RATIO := 0.5
+## Above this the Gerstner waves loop over themselves.
+const FALLBACK_MAX_STEEPNESS := 0.95
 
 @export var spectrum: OceanSpectrum
 @export var quality: OceanQuality
 ## Colour, clarity, foam and caustics. Null: the shader defaults.
 @export var look: OceanLook
-@export_range(-20.0, 20.0, 0.05, "or_less", "or_greater", "suffix:m") var level := 0.0
 @export var planar_reflection := true
-@export_group("Shore")
+@export_group("Depth and shore")
+@export_range(-20.0, 20.0, 0.05, "or_less", "or_greater", "suffix:m") var level := 0.0
 ## Share of the open-sea wave that still reaches the waterline, so the shore keeps a lapping wave.
 @export_range(0.0, 1.0, 0.01) var min_shore_wave: float = 0.12
 ## Depth-limited waves: crest height <= breaker_ratio * water depth. Real waves break at H = 0.78 d,
@@ -426,12 +433,24 @@ func _damping_at(rest: Vector2) -> float:
 	return shore * rule.y
 
 
+## Approximate sea states on Compatibility; this is not an FFT spectrum reconstruction. The Gerstner
+## sea has one wave train, so it takes the direction and length of the bigger system, swell or wind sea,
+## on the default sea's scale. Heights add like energies; gentle swell sharpens the crests less.
 func _apply_fallback_spectrum() -> void:
-	# Approximate sea states on Compatibility; this is not an FFT spectrum reconstruction.
 	var sea := _effective
 	var wind_ratio: float = sea.wind_speed / DEFAULT_SPECTRUM.wind_speed
-	_fallback.material.set_shader_parameter("wave_amplitude", 0.12 * wind_ratio * wind_ratio * sea.height_scale)
-	_fallback.material.set_shader_parameter("wave_length", 9.0 * maxf(wind_ratio, 0.5) * sea.wavelength_scale)
-	_fallback.material.set_shader_parameter("wave_steepness", minf(sea.choppiness, 0.95))
-	var direction: float = deg_to_rad(sea.wind_direction)
+	var wind_amplitude := FALLBACK_AMPLITUDE * wind_ratio * wind_ratio
+	var swell_amplitude := FALLBACK_AMPLITUDE * sea.swell_height / OceanSeaStats.wind_wave_height(DEFAULT_SPECTRUM)
+	var wavelength := FALLBACK_WAVELENGTH * maxf(wind_ratio, FALLBACK_MIN_WIND_RATIO) * sea.wavelength_scale
+	var heading := sea.wind_direction
+	var steepness := minf(sea.choppiness, FALLBACK_MAX_STEEPNESS)
+	if swell_amplitude > wind_amplitude:
+		wavelength = FALLBACK_WAVELENGTH * sea.swell_wavelength() / DEFAULT_SPECTRUM.peak_wavelength()
+		heading = sea.swell_direction
+		steepness *= wind_amplitude / swell_amplitude
+	var amplitude := sqrt(wind_amplitude * wind_amplitude + swell_amplitude * swell_amplitude) * sea.height_scale
+	_fallback.material.set_shader_parameter("wave_amplitude", amplitude)
+	_fallback.material.set_shader_parameter("wave_length", wavelength)
+	_fallback.material.set_shader_parameter("wave_steepness", steepness)
+	var direction: float = deg_to_rad(heading)
 	_fallback.material.set_shader_parameter("wind_direction", Vector2(cos(direction), sin(direction)))

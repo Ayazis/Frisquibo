@@ -29,7 +29,7 @@ extends Resource
 @export_range(0.0, 0.01, 0.0001, "or_greater") var base_slope_variance := 0.0006
 @export_range(0.0, 4.0, 0.05, "or_greater") var sun_specular_strength := 1.0
 
-@export_group("Foam look")
+@export_group("Foam")
 @export var foam_color := Color(0.86, 0.9, 0.9)
 @export_range(0.02, 2.0, 0.01, "or_greater") var foam_scale := 0.22
 @export_range(0.01, 1.0, 0.01) var foam_softness := 0.18
@@ -48,6 +48,6 @@ extends Resource
 @export_range(0.02, 2.0, 0.01, "or_greater") var caustic_scale := 0.3
 @export_range(0.0, 2.0, 0.01, "or_greater", "suffix:/m") var caustic_fade := 0.35
 
-@export_group("Folding")
+@export_group("Crest shape")
 ## Crests are held back where the surface would compress below this (see choppiness).
 @export_range(0.0, 1.0, 0.01) var min_jacobian := 0.12

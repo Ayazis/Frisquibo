@@ -24,12 +24,12 @@ camera_position = Vector3(0, 25, -1300)
 look_at_target = Vector3(-60, 0, -1500)
 state = {"station": 3, "sea_state": 2, "ocean": {"wind_speed": 40.0, "fetch": 2000.0}}
 
-[sub_resource type="Resource" id="wind_max_open_sea"]
+[sub_resource type="Resource" id="swell_against_wind"]
 script = ExtResource("2")
-name = "wind_max_open_sea"
-camera_position = Vector3(0, 40, -1300)
+name = "swell_against_wind"
+camera_position = Vector3(0, 12, -1300)
 look_at_target = Vector3(-60, 0, -1500)
-state = {"station": 3, "sea_state": 2, "ocean": {"wind_speed": 80.0, "fetch": 2000.0}}
+state = {"station": 3, "sea_state": 1, "ocean": {"swell_height": 4.0, "swell_period": 14.0, "swell_direction": -155.0, "wind_speed": 14.0}}
 
 [sub_resource type="Resource" id="wind_min"]
 script = ExtResource("2")
@@ -133,4 +133,4 @@ state = {"station": 3, "sea_state": 2}
 script = ExtResource("1")
 scene_path = "res://prototypes/water_compare/water_compare.tscn"
 settle_frames = 240
-shots = Array[ExtResource("2")]([SubResource("storm_open_sea"), SubResource("storm_beach_low"), SubResource("hurricane_open_sea"), SubResource("wind_max_open_sea"), SubResource("wind_min"), SubResource("height_x6_chop_x4"), SubResource("wavelength_min"), SubResource("wavelength_max"), SubResource("swell_max"), SubResource("swell_max_beach"), SubResource("smoothness_max"), SubResource("foam_max"), SubResource("breakers_max_beach"), SubResource("level_high_beach"), SubResource("level_low_beach"), SubResource("look_extremes"), SubResource("boat_beach_breeze"), SubResource("boat_storm_close")])
+shots = Array[ExtResource("2")]([SubResource("storm_open_sea"), SubResource("storm_beach_low"), SubResource("hurricane_open_sea"), SubResource("swell_against_wind"), SubResource("wind_min"), SubResource("height_x6_chop_x4"), SubResource("wavelength_min"), SubResource("wavelength_max"), SubResource("swell_max"), SubResource("swell_max_beach"), SubResource("smoothness_max"), SubResource("foam_max"), SubResource("breakers_max_beach"), SubResource("level_high_beach"), SubResource("level_low_beach"), SubResource("look_extremes"), SubResource("boat_beach_breeze"), SubResource("boat_storm_close")])

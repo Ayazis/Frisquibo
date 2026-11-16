@@ -4,10 +4,14 @@
 
 [resource]
 script = ExtResource("1")
+swell_height = 3.0
+swell_period = 14.0
+swell_direction = 15.0
+swell_spread = 12.0
 wind_speed = 24.0
 wind_direction = 35.0
 fetch = 600.0
-swell = 0.1
+wind_spread = 0.85
 choppiness = 1.4
 foam_threshold = 0.85
 foam_lifetime = 9.0

@@ -2,17 +2,26 @@ class_name OceanTunerPanel
 extends VBoxContainer
 ## Live controls for an Ocean, generated from its parameter catalogue: one foldable section per
 ## group, a slider per tunable and a picker per colour, physical readouts on top, links and
-## save / load below.
+## save / load below. Sections run in SECTION_ORDER, whichever object their values live on.
 
 const READOUTS_TITLE := "Sea state"
 const LINKS_TITLE := "Links"
 const STORAGE_TITLE := "Save and load"
+const ARTISTIC_TITLE := "Artistic overrides"
+## Top to bottom, the way a sea is described: the big waves, the wind on top of them, how the crests
+## look and foam, the depth and shore, then the look. Values that leave physics behind come last.
+## Every export group of OceanSpectrum, OceanLook and Ocean must be listed (ocean_parameters_test).
+const SECTION_ORDER: Array[String] = [READOUTS_TITLE, "Main waves (swell)", "Wind and surface waves",
+	"Crest shape", "Foam", "Depth and shore", "Water colour", "Surface light", "Caustics", ARTISTIC_TITLE,
+	LINKS_TITLE, STORAGE_TITLE]
+## Sections that start folded: rarely needed, and they make the sea less physical.
+const FOLDED_SECTIONS: Array[String] = [ARTISTIC_TITLE]
 ## The section each colour of the look belongs to (an export group of OceanLook).
 const COLOR_GROUPS: Dictionary[StringName, String] = {
 	&"scatter_color": "Water colour",
 	&"sss_color": "Water colour",
 	&"deep_color": "Water colour",
-	&"foam_color": "Foam look",
+	&"foam_color": "Foam",
 }
 
 var _ocean: Ocean
@@ -21,6 +30,7 @@ var _rows: Dictionary[StringName, OceanTunerRow] = {}
 var _auto: Array[StringName] = []
 var _colors: Dictionary[StringName, OceanTunerColorRow] = {}
 var _sections: Dictionary[String, VBoxContainer] = {}
+var _folds: Dictionary[String, FoldableContainer] = {}
 var _links: OceanTunerLinks
 var _readouts: OceanTunerReadouts
 
@@ -50,6 +60,7 @@ func _init(ocean: Ocean) -> void:
 	var storage := OceanTunerStorage.new(ocean)
 	storage.applied.connect(_on_applied)
 	_add_section(STORAGE_TITLE).add_child(storage)
+	_order_sections()
 	mark_defaults()
 
 
@@ -69,7 +80,7 @@ func set_link(link: OceanTunerLinks.Link, on: bool) -> void:
 ## The section of a group, made on first use.
 func _section(group: String) -> VBoxContainer:
 	if not _sections.has(group):
-		_sections[group] = _add_section(group)
+		_add_section(group)
 	return _sections[group]
 
 
@@ -77,10 +88,22 @@ func _add_section(title: String) -> VBoxContainer:
 	var section := FoldableContainer.new()
 	section.title = title
 	section.focus_mode = Control.FOCUS_NONE
+	section.folded = FOLDED_SECTIONS.has(title)
 	var content := VBoxContainer.new()
 	section.add_child(content)
 	add_child(section)
+	_sections[title] = content
+	_folds[title] = section
 	return content
+
+
+## Puts the known sections in SECTION_ORDER; any other group follows them in the order it came.
+func _order_sections() -> void:
+	var index := 0
+	for title: String in SECTION_ORDER:
+		if _folds.has(title):
+			move_child(_folds[title], index)
+			index += 1
 
 
 func _on_value_changed(parameter: StringName, value: float) -> void:

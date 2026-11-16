@@ -28,7 +28,8 @@ const SEABED_LAND := 3.0
 const SEABED_RESOLUTION := 256
 const COMBOS: Dictionary[String, Dictionary] = {
 	"hurricane": {&"wind_speed": 40.0, &"fetch": 2000.0},
-	"wind_max_long_fetch": {&"wind_speed": 80.0, &"fetch": 2000.0},
+	"swell_against_wind": {&"swell_height": 4.0, &"swell_period": 14.0, &"swell_direction": -155.0, &"wind_speed": 20.0},
+	"aligned_gale": {&"wind_spread": 0.1, &"wind_speed": 30.0, &"fetch": 1000.0},
 	"tall_and_choppy": {&"height_scale": 6.0, &"choppiness": 4.0},
 	"short_and_tall": {&"wavelength_scale": 0.1, &"height_scale": 6.0},
 	"storm_shallow": {&"wind_speed": 40.0, &"depth": 1.0},

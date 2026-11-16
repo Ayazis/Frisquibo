@@ -27,8 +27,7 @@ layout(push_constant, std430) uniform Params {
 	float wind_angle;
 	float fetch_m;
 	float depth;
-	float swell;
-	float spread;
+	float wind_spread; // OceanSpectrum.wind_spread: width of the spreading relative to Donelan-Banner
 	float short_wave_cutoff;
 	float k_min;
 	float k_max;
@@ -42,6 +41,7 @@ layout(push_constant, std430) uniform Params {
 	float pad0;
 	float pad1;
 	float pad2;
+	float pad3;
 } p;
 
 uint pcg(uint v) {
@@ -99,11 +99,11 @@ float donelan_banner(float theta, float w, float wp) {
 	} else {
 		beta = pow(10.0, -0.4 + 0.8393 * exp(-0.567 * log(ratio * ratio)));
 	}
-	// Swell: long-travelled waves are far more aligned with the wind than a young wind sea.
-	beta *= 1.0 + p.swell * 4.0;
+	// A wider spread is a smaller beta; as beta goes to 0 the spreading becomes uniform by itself.
+	// The normalisation keeps the integral over all directions at 1, so the height doesn't change.
+	beta /= p.wind_spread;
 	float s = 1.0 / cosh(beta * theta);
-	float directional = beta / (2.0 * tanh(beta * PI)) * s * s;
-	return mix(directional, 1.0 / (2.0 * PI), p.spread);
+	return beta / (2.0 * tanh(beta * PI)) * s * s;
 }
 
 // Energy density S(k) of the local wind sea.
