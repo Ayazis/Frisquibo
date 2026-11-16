@@ -10,8 +10,6 @@ render_mode blend_mix, depth_draw_always, cull_disabled, world_vertex_coords;
 
 const int MAX_CASCADES = 4;
 const int MAX_LOCAL_RULES = 8; // must match OceanLocalRules.MAX_RULES
-const float WATER_F0 = 0.02;
-const float WATER_IOR = 1.333;
 
 uniform sampler2DArray displacement_maps : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray slope_maps : filter_linear_mipmap_anisotropic, repeat_enable;
@@ -100,6 +98,7 @@ uniform vec4 local_rule_effect[MAX_LOCAL_RULES];
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 
+#include "res://world/water/water_optics.gdshaderinc"
 #include "res://world/water/water_reflection.gdshaderinc"
 
 varying vec2 v_rest;
@@ -186,15 +185,6 @@ float fold_limit(vec2 jac) {
 	return clamp(k, 0.0, 1.0);
 }
 
-vec3 view_from_depth(vec2 uv, float raw, mat4 inv_proj) {
-	vec4 v = inv_proj * vec4(uv * 2.0 - 1.0, raw, 1.0);
-	return v.xyz / v.w;
-}
-
-float schlick(float cos_theta) {
-	return WATER_F0 + (1.0 - WATER_F0) * pow(1.0 - clamp(cos_theta, 0.0, 1.0), 5.0);
-}
-
 void vertex() {
 	vec2 p = VERTEX.xz;
 	float dist = length(p - CAMERA_POSITION_WORLD.xz);
@@ -260,19 +250,18 @@ void fragment() {
 		n_world = -n_world;
 	}
 	vec3 n_view = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
-	// GGX alpha ~ Beckmann m, m^2 = sigma_x^2 + sigma_z^2; Godot roughness is sqrt(alpha).
-	float roughness = clamp(pow(variance.x + variance.y, 0.25), 0.03, 1.0);
+	float roughness = water_roughness(variance);
 
 	vec3 v = normalize(CAMERA_POSITION_WORLD - v_world);
 	float dist = length(CAMERA_POSITION_WORLD - v_world);
 	float ndv = dot(n_world, v);
-	float fresnel = schlick(ndv);
+	float fresnel = water_schlick(ndv);
 	// Rough, distant water reflects less sharply at grazing angles (masking of wave backs).
 	fresnel *= mix(1.0, 0.75, roughness);
 
 	// --- What lies under the surface ------------------------------------------------------------------
 	float raw = texture(depth_tex, SCREEN_UV).r;
-	vec3 straight_view = view_from_depth(SCREEN_UV, raw, INV_PROJECTION_MATRIX);
+	vec3 straight_view = water_view_from_depth(SCREEN_UV, raw, INV_PROJECTION_MATRIX);
 	float thickness = max(VERTEX.z - straight_view.z, 0.0);
 	// Fade the offset out at the screen edges, where it would sample outside the screen.
 	vec2 to_edge = min(SCREEN_UV, vec2(1.0) - SCREEN_UV);
@@ -283,7 +272,7 @@ void fragment() {
 	float distance_scale = min(1.0, refraction_full_distance / max(-VERTEX.z, 0.001));
 	vec2 ruv = SCREEN_UV + n_view.xy * refraction_strength * clamp(thickness * 0.5, 0.0, 1.0) * edge_fade * distance_scale;
 	ruv = clamp(ruv, vec2(0.0), vec2(1.0));
-	vec3 bottom_view = view_from_depth(ruv, texture(depth_tex, ruv).r, INV_PROJECTION_MATRIX);
+	vec3 bottom_view = water_view_from_depth(ruv, texture(depth_tex, ruv).r, INV_PROJECTION_MATRIX);
 	if (bottom_view.z > VERTEX.z) {
 		// The refracted sample hit something in front of the water: fall back to straight through.
 		ruv = SCREEN_UV;
@@ -346,16 +335,11 @@ void fragment() {
 	if (!from_below) {
 		EMISSION = (refracted * (1.0 - f) + reflection * f) * (1.0 - foam);
 		ALBEDO = mix(scatter_color * murk * (1.0 - f), foam_color, foam);
-		// Godot's F0 is 0.16 * specular^2; 0.354 gives water's 0.02. Only used for sky reflection.
-		SPECULAR = planar ? 0.0 : 0.354 * edge * (1.0 - foam);
+		// Only used for the engine's sky reflection, when there is no planar one.
+		SPECULAR = planar ? 0.0 : WATER_ENGINE_SPECULAR * edge * (1.0 - foam);
 	} else {
-		// Below the surface: inside Snell's window we see the world above, outside it the water mirrors itself.
-		float cos_i = clamp(dot(n_world, v), 0.0, 1.0);
-		float sin_t2 = WATER_IOR * WATER_IOR * (1.0 - cos_i * cos_i);
-		float under_f = sin_t2 >= 1.0 ? 1.0 : schlick(sqrt(1.0 - sin_t2));
 		vec3 above = textureLod(screen_tex, SCREEN_UV + n_view.xy * refraction_strength, 0.0).rgb;
-		vec3 fog = exp(-absorption * dist);
-		EMISSION = mix(above, deep_color, under_f) * fog + deep_color * (1.0 - fog);
+		EMISSION = water_seen_from_below(n_world, v, above, deep_color, absorption, dist);
 		ALBEDO = vec3(0.0);
 		SPECULAR = 0.0;
 	}
@@ -368,30 +352,12 @@ void fragment() {
 
 void light() {
 	if (v_front > 0.5) {
-	vec3 n = NORMAL;
-	vec3 l = LIGHT;
-	vec3 v = VIEW;
-	float ndl = clamp(dot(n, l), 0.0, 1.0);
-	float ndv = clamp(dot(n, v), 1e-4, 1.0);
-	DIFFUSE_LIGHT += ndl * ATTENUATION * LIGHT_COLOR / PI;
-
-	// Sun glint: GGX with the LEAN roughness, height-correlated Smith visibility.
-	vec3 h = normalize(v + l);
-	float ndh = clamp(dot(n, h), 0.0, 1.0);
-	float a = ROUGHNESS * ROUGHNESS;
-	float a2 = a * a;
-	float dd = ndh * ndh * (a2 - 1.0) + 1.0;
-	float distribution = a2 / (PI * dd * dd);
-	float vis = 0.5 / (ndl * sqrt(ndv * ndv * (1.0 - a2) + a2) + ndv * sqrt(ndl * ndl * (1.0 - a2) + a2) + 1e-5);
-	float fres = schlick(dot(v, h));
-	SPECULAR_LIGHT += distribution * vis * fres * ndl * ATTENUATION * LIGHT_COLOR * sun_specular_strength * (1.0 - v_foam);
-
-	// Light scattered inside the water (Atlas, GDC 2019): bright through thin crests facing away from the
-	// sun, plus a soft term towards the viewer.
-	float crest = max(v_crest, 0.0);
-	float k1 = sss_crest_strength * crest * pow(clamp(dot(l, -v), 0.0, 1.0), 4.0) * pow(0.5 - 0.5 * dot(l, n), 3.0);
-	float k2 = sss_view_strength * pow(ndv, 2.0);
-	vec3 scatter = (k1 + k2) * sss_color * LIGHT_COLOR * ATTENUATION / PI;
-	SPECULAR_LIGHT += scatter * v_fresnel_scale * (1.0 - v_foam);
-}
+		float ndl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+		DIFFUSE_LIGHT += ndl * ATTENUATION * LIGHT_COLOR / PI;
+		// Sun glint with the LEAN roughness; light through thin crests (Atlas).
+		float glint = water_ggx_specular(NORMAL, VIEW, LIGHT, ROUGHNESS) * sun_specular_strength;
+		SPECULAR_LIGHT += glint * ATTENUATION * LIGHT_COLOR * (1.0 - v_foam);
+		float scatter = water_scatter(NORMAL, VIEW, LIGHT, v_crest, sss_crest_strength, sss_view_strength);
+		SPECULAR_LIGHT += scatter * sss_color * LIGHT_COLOR * ATTENUATION * v_fresnel_scale * (1.0 - v_foam);
+	}
 }

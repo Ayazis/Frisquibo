@@ -21,7 +21,7 @@ they only show errors on a desktop run.
 1. [x] **Rough reflections.** The planar reflection is sampled sharp everywhere. Rough water (the LEAN
    roughness the sun glint already uses) should blur it, stretched vertically the way real wave slopes
    smear reflections into streaks. The reflection viewport gets a mip chain to blur from.
-2. [ ] **Shared optics for lake and river.** `water_common.gdshaderinc` moves to the ocean's model:
+2. [x] **Shared optics for lake and river.** `water_common.gdshaderinc` moves to the ocean's model:
    Schlick Fresnel, GGX sun glint with a roughness from the detail-normal strength and distance,
    blur through murky water, the rough-reflection blur from step 1, and Snell's window from below.
 3. [ ] **Underwater view.** A full-screen pass when the camera is below the surface: absorption and

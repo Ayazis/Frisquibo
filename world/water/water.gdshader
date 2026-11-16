@@ -1,7 +1,8 @@
 shader_type spatial;
-render_mode blend_mix, depth_draw_always, cull_back, world_vertex_coords;
+render_mode blend_mix, depth_draw_always, cull_disabled, world_vertex_coords;
 // Open water (sea, lake, moat): Gerstner waves with sharp crests and crest foam, two scrolling detail
-// normal maps, and the shared optics from water_common (refraction, absorption, caustics, reflection, foam).
+// normal maps, and the shared optics from water_common (refraction, absorption, caustics, rough
+// reflection, foam, Snell's window from below).
 
 #include "res://world/water/water_common.gdshaderinc"
 
@@ -26,8 +27,14 @@ varying vec3 v_wave_normal;
 varying float v_crest;
 varying float v_crest_foam;
 varying float v_foam;
+varying float v_transmitted;
+varying float v_front;
 
 const int MAX_WAVES = 8;
+// Detail normals fade from full strength at DETAIL_FADE_START to DETAIL_FAR_SHARE of it at DETAIL_FADE_END (m).
+const float DETAIL_FADE_START = 15.0;
+const float DETAIL_FADE_END = 160.0;
+const float DETAIL_FAR_SHARE = 0.25;
 
 void vertex() {
 	vec2 p = VERTEX.xz;
@@ -62,7 +69,7 @@ void vertex() {
 	v_world = VERTEX;
 	v_wave_normal = normalize(n);
 	NORMAL = v_wave_normal;
-	v_crest = clamp(disp.y / max(wave_amplitude, 0.0001) * 0.5 + 0.5, 0.0, 1.0);
+	v_crest = max(disp.y, 0.0);
 	float jacobian = jxx * jzz - jxz * jxz;
 	v_crest_foam = smoothstep(crest_foam_threshold, crest_foam_threshold - 0.35, jacobian);
 }
@@ -72,23 +79,36 @@ void fragment() {
 	vec2 uv = v_world.xz * detail_scale;
 	vec3 na = texture(normal_map_a, uv + wind * TIME * detail_speed * 0.1).xyz * 2.0 - 1.0;
 	vec3 nb = texture(normal_map_b, uv * 1.9 - vec2(-wind.y, wind.x) * TIME * detail_speed * 0.13).xyz * 2.0 - 1.0;
-	vec2 detail = (na.xy + nb.xy) * detail_strength;
-	// Detail fades out in the distance where it would only shimmer.
+	// Detail fades out in the distance where it would only shimmer; what it loses becomes roughness.
 	float dist = length(CAMERA_POSITION_WORLD - v_world);
-	detail *= mix(1.0, 0.25, smoothstep(15.0, 160.0, dist));
+	float fade = mix(1.0, DETAIL_FAR_SHARE, smoothstep(DETAIL_FADE_START, DETAIL_FADE_END, dist));
+	vec2 detail = (na.xy + nb.xy) * detail_strength * fade;
 	vec3 n_world = normalize(v_wave_normal + vec3(detail.x, 0.0, detail.y));
+	bool from_below = !FRONT_FACING;
 	vec3 n_view = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
 
-	WaterResult r = water_shade(n_world, n_view, v_world, VERTEX, SCREEN_UV, INV_PROJECTION_MATRIX,
-			INV_VIEW_MATRIX, CAMERA_POSITION_WORLD, TIME, v_crest_foam, wind * 0.15);
-	NORMAL = n_view;
+	// Slopes this pixel can't show: those that change within it, the detail its mip levels averaged away
+	// (Toksvig) and the detail faded out with distance. They widen the glint and blur the reflection.
+	vec2 slope = n_world.xz / max(n_world.y, 0.05);
+	float resolved = dot(na.xy, na.xy) + dot(nb.xy, nb.xy);
+	float hidden = water_toksvig_variance(na) + water_toksvig_variance(nb);
+	float lost = detail_strength * detail_strength * ((1.0 - fade * fade) * resolved + hidden);
+	vec2 variance = vec2(base_slope_variance + 0.5 * lost) + water_footprint_variance(dFdx(slope), dFdy(slope));
+
+	WaterSurface surface = WaterSurface(n_world, n_view, v_world, VERTEX, variance, v_crest_foam, wind * 0.15, from_below);
+	WaterResult r = water_shade(surface, SCREEN_UV, FRAGCOORD.xy, vec2(PROJECTION_MATRIX[0][0], PROJECTION_MATRIX[1][1]),
+			INV_PROJECTION_MATRIX, INV_VIEW_MATRIX, CAMERA_POSITION_WORLD, TIME);
+	NORMAL = from_below ? -n_view : n_view;
 	ALBEDO = r.albedo;
 	EMISSION = r.emission;
 	ROUGHNESS = r.roughness;
 	SPECULAR = r.specular;
 	v_foam = r.foam;
+	v_transmitted = r.transmitted;
+	v_front = r.front;
 }
 
 void light() {
-	water_light(NORMAL, VIEW, LIGHT, LIGHT_COLOR, ATTENUATION, v_crest, v_foam, DIFFUSE_LIGHT, SPECULAR_LIGHT);
+	water_light(NORMAL, VIEW, LIGHT, LIGHT_COLOR, ATTENUATION, ROUGHNESS, v_crest, v_foam, v_transmitted, v_front,
+			DIFFUSE_LIGHT, SPECULAR_LIGHT);
 }
