@@ -80,3 +80,22 @@ at most the sea's expected wave height (`Ocean` passes it when it bakes the seab
 and the breakers all follow the field, so they keep in step. The field is baked once, so a much rougher
 or calmer sea later keeps the speeds of the sea it was baked for beyond the surf zone; inside it they
 are right for any sea.
+
+## Since then: crests curve smoothly seen from above (2026-11-17)
+
+From above the crests had steps, sharp V corners and straight stretches.
+
+- The steps were where waves broke and didn't in blocks one field cell wide. Whether a crest breaks,
+  carries white water and leans follows its height so closely that the field's refraction coefficient
+  Kr, striped from cell to cell, cut a crest into blocks. Kr is now smoothed along the crests (4 passes,
+  across the travel time's gradient only, so its real change towards the beach stays).
+- The V corners were kinks in the travel time where waves from two directions meet. Real waves diffract
+  and round them off. The travel time is now smoothed (2 passes of 3 x 3), fading in between 0.2 and
+  0.7 m of water: the rays start from the field's clock at the waterline.
+- The waterline point each wave's timing and size are drawn from is smoothed along the crests too
+  (4 passes), and the ribbons take their timing from that field instead of their ray's start.
+- A shore-waves test expected the refraction around a round island from where the water reaches
+  MAX_DEPTH, but its bake area ends sooner; it now takes the nearer of the two.
+- Still there: small peaks in the crests in the last half metre of water, and gaps in the white water
+  where a stretch of crest isn't breaking (smooth dips in its height that the foam's threshold edges
+  sharply).

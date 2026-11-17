@@ -82,8 +82,9 @@ func _check_island() -> void:
 		var gradient := Vector2(f.g, f.b).normalized()
 		_check(gradient.dot(outward) > 0.97, "Waves head straight for the island at %.0f degrees" % degrees)
 	# Rays to a round island are radial: spacing grows with the radius, so the energy of the ring at the
-	# field's edge (depth MAX_DEPTH) gathers onto the shorter ring further in: Kr = sqrt(r_edge / r).
-	var edge_radius := ISLAND_RADIUS + ShoreField.MAX_DEPTH / SLOPE
+	# field's edge gathers onto the shorter ring further in: Kr = sqrt(r_edge / r). The edge is where the
+	# water reaches MAX_DEPTH, or the bake area's border if that comes first (along +x, at its half width).
+	var edge_radius := minf(ISLAND_RADIUS + ShoreField.MAX_DEPTH / SLOPE, ISLAND_AREA.end.x)
 	var r := 150.0
 	_near(field.refraction(Vector2(r, 0.0)), sqrt(edge_radius / r), 0.12, "A round island gathers wave energy")
 	# A round bay (water inside a ring of land, deepening inwards) spreads it.

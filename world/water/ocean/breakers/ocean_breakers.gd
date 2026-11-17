@@ -41,10 +41,9 @@ func _init(rays: ShoreRays, material: ShaderMaterial, reach: float, segments: in
 	_timing.resize(rays.rows)
 	_start_times.resize(rays.rows)
 	for row in range(rays.rows):
-		var start := rays.image.get_pixel(0, row)
-		_starts[row] = Vector2(start.r, start.g)
-		_start_times[row] = start.b
-		_timing[row] = ShoreWaves.noise(_starts[row] / ShoreWaves.SWASH_ALONGSHORE) * ShoreWaves.SWASH_PHASE_SPREAD
+		_starts[row] = rays.shore_points[row]
+		_start_times[row] = rays.start_time(row)
+		_timing[row] = ShoreWaves.noise(rays.origins[row] / ShoreWaves.SWASH_ALONGSHORE) * ShoreWaves.SWASH_PHASE_SPREAD
 	_rows = maxi(_densest(2.0 * (reach + RAY_MARGIN)), 2)
 	var mesh := ribbon_mesh(_rows, segments)
 	var room := bounds.grow(ROOM)

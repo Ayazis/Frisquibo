@@ -28,6 +28,26 @@ const REFRACTION_MAX := 2.0
 ## the coast smaller than about a wavelength (several cells); the passes average over about 2 * passes
 ## + 1 cells.
 const DIVERGENCE_SMOOTHING := 3
+## 3 x 3 smoothing passes over the travel time once marched. Where waves from two directions meet, the
+## fastest arrival makes a sharp kink, and the crests a V; real waves diffract and round it off.
+const TIME_SMOOTHING := 2
+## ...fading in between these depths (m): at the waterline the rays start from the field's own clock and
+## its gradient against the land cells, which smoothing would set apart, and a sudden start would leave a
+## step in the clock itself.
+const TIME_SMOOTHING_DEPTH := Vector2(0.2, 0.7)
+## Smoothing passes along the crests over the waterline point each wave heads for. Its timing and size
+## are drawn there, and the point jumps where waves heading for different stretches of beach meet, which
+## shifted neighbouring stretches of one crest against each other in steps.
+const ORIGIN_SMOOTHING := 4
+## Smoothing passes along the crests over Kr. Carried back along the march's paths from cell to cell it
+## comes out striped, and whether a crest breaks (white water, the lean of its face, the curl) follows its
+## height, so a crest broke and didn't in blocks a cell wide. Along the crests only: its change towards
+## the beach is real.
+const REFRACTION_SMOOTHING := 4
+
+## Steps to a cell's 8 neighbours.
+const _NEIGHBOUR_STEPS: Array[Vector2i] = [Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1), Vector2i(-1, 0),
+		Vector2i(1, 0), Vector2i(-1, 1), Vector2i(0, 1), Vector2i(1, 1)]
 
 ## RGBA float per texel: travel time to the waterline (s), its gradient along x and z (s/m), and 1
 ## where the field holds (water up to MAX_DEPTH, and land touching it); 0 elsewhere.
@@ -70,6 +90,12 @@ static func bake(depth_at: Callable, bake_area: Rect2, cell: float = DEFAULT_CEL
 	field.height = maxi(ceili(bake_area.size.y / cell), 2)
 	field._sample_depths(depth_at)
 	field._march()
+	for pass_index in range(TIME_SMOOTHING):
+		var smoothed := field._smoothed(field._times)
+		for i in range(smoothed.size()):
+			if field._solved_water(i):
+				var share := smoothstep(TIME_SMOOTHING_DEPTH.x, TIME_SMOOTHING_DEPTH.y, field._depths[i])
+				field._times[i] = lerpf(field._times[i], smoothed[i], share)
 	field._encode()
 	field.waterlines = WaterlineTracer.trace(field._depths, field.width, field.height, bake_area)
 	field._depths = PackedFloat32Array()
@@ -283,12 +309,27 @@ func _encode() -> void:
 	for i in range(width * height):
 		if _solved_water(i):
 			gradients[i] = Vector2(_derivative(i, 1, cell.x), _derivative(i, width, cell.y))
+	var along := _crest_weights(gradients)
 	var kr := _refraction(gradients)
+	var end_x := PackedFloat32Array()
+	var end_z := PackedFloat32Array()
+	end_x.resize(width * height)
+	end_z.resize(width * height)
+	for i in range(width * height):
+		var end := _ends[i] if _known[i] == 1 or _solved_water(i) else _centre(i)
+		end_x[i] = end.x
+		end_z[i] = end.y
+	var channels: Array[PackedFloat32Array] = [kr, end_x, end_z]
+	for pass_index in range(maxi(REFRACTION_SMOOTHING, ORIGIN_SMOOTHING)):
+		var passes := PackedInt32Array([REFRACTION_SMOOTHING, ORIGIN_SMOOTHING, ORIGIN_SMOOTHING])
+		channels = _smoothed_along_crests(channels, along, passes, pass_index)
+	kr = channels[0]
+	end_x = channels[1]
+	end_z = channels[2]
 	for i in range(width * height):
 		var x := i % width
 		var y := i / width
-		var end := _ends[i] if _known[i] == 1 or _solved_water(i) else _centre(i)
-		origins.set_pixel(x, y, Color(end.x, end.y, kr[i]))
+		origins.set_pixel(x, y, Color(end_x[i], end_z[i], kr[i]))
 		if _solved_water(i):
 			image.set_pixel(x, y, Color(_times[i], gradients[i].x, gradients[i].y, 1.0))
 			continue
@@ -430,6 +471,64 @@ func _smoothed(values: PackedFloat32Array) -> PackedFloat32Array:
 					n += 1
 		result[i] = total / n
 	return result
+
+
+## Per cell, the weights of its 8 neighbours (in _NEIGHBOUR_STEPS order) for smoothing along the crest
+## through it: how closely each lies across the travel time's gradient. 0 for cells that are not solved
+## water, or neighbours that are not.
+func _crest_weights(gradients: PackedVector2Array) -> PackedFloat32Array:
+	var weights := PackedFloat32Array()
+	weights.resize(width * height * _NEIGHBOUR_STEPS.size())
+	for i in range(width * height):
+		if not _solved_water(i) or gradients[i].length_squared() <= 0.0:
+			continue
+		var crest := gradients[i].orthogonal().normalized()
+		var x := i % width
+		var y := i / width
+		for k in range(_NEIGHBOUR_STEPS.size()):
+			var step := _NEIGHBOUR_STEPS[k]
+			var nx := x + step.x
+			var ny := y + step.y
+			if nx < 0 or ny < 0 or nx >= width or ny >= height or not _solved_water(ny * width + nx):
+				continue
+			weights[i * _NEIGHBOUR_STEPS.size() + k] = pow(crest.dot(Vector2(step).normalized()), 4.0)
+	return weights
+
+
+## One pass of a 3 x 3 average along the crests (`weights` from _crest_weights()) over each of
+## `channels` that is to get more than `done` passes (`passes`, per channel). Cells that are not solved
+## water keep their values.
+func _smoothed_along_crests(channels: Array[PackedFloat32Array], weights: PackedFloat32Array,
+		passes: PackedInt32Array, done: int) -> Array[PackedFloat32Array]:
+	var results: Array[PackedFloat32Array] = []
+	var active: Array[int] = []
+	for c in range(channels.size()):
+		results.append(channels[c].duplicate())
+		if passes[c] > done:
+			active.append(c)
+	var steps := _NEIGHBOUR_STEPS.size()
+	for i in range(width * height):
+		if not _solved_water(i):
+			continue
+		var x := i % width
+		var y := i / width
+		var weight := 1.0
+		var totals := PackedFloat32Array()
+		totals.resize(channels.size())
+		for c: int in active:
+			totals[c] = channels[c][i]
+		for k in range(steps):
+			var w := weights[i * steps + k]
+			if w <= 0.0:
+				continue
+			var step := _NEIGHBOUR_STEPS[k]
+			var j := (y + step.y) * width + x + step.x
+			for c: int in active:
+				totals[c] += channels[c][j] * w
+			weight += w
+		for c: int in active:
+			results[c][i] = totals[c] / weight
+	return results
 
 
 func _solved_water(i: int) -> bool:

@@ -333,7 +333,9 @@ vec2 breaker_ribbon_rest(vec3 grid) {
 	vec3 shore_end = textureLod(shore_rays, vec2(0.5 / shore_rays_size.x, v), 0.0).xyz;
 	// The crest of wave n is where (t + T) / period + timing = n (ocean_shore_waves).
 	float period = max(water_swash_period, 0.1);
-	float timing = swash_noise(shore_end.xy / SWASH_ALONGSHORE) * SWASH_PHASE_SPREAD;
+	// Timing from the waterline point the field says this wave heads for, as the shore waves draw it.
+	vec2 origin = textureLod(shore_origin, (shore_end.xy - seabed_rect.xy) / seabed_rect.zw, 0.0).xy;
+	float timing = swash_noise(origin / SWASH_ALONGSHORE) * SWASH_PHASE_SPREAD;
 	float crest_time = (breaker_span.x - timing) * period - water_wave_time;
 	float time = crest_time + mix(-BREAKER_WINDOW_FRONT, BREAKER_WINDOW_BACK, grid.z) * period;
 	// Column of that travel time, then one step that takes up the ray's clock drift (ShoreRays.column()).

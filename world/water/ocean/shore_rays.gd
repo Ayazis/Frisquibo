@@ -52,6 +52,13 @@ var line_metres := PackedFloat32Array()
 ## for rays traced between a closed line's last and first). A ray traced through a gap takes the middle
 ## of its neighbours'.
 var along := PackedFloat32Array()
+## Per row: the point on the waterline its ray belongs to (a ray traced through a gap: the point between
+## its neighbours'). Smooth along the line, where the ray's own start need not be: a ray traced back
+## from a gap ends a step or so off the waterline.
+var shore_points := PackedVector2Array()
+## Per row: the waterline point (world x, z) the field says the wave at the ray's start heads for. The
+## timing and size of each wave are drawn there (ShoreField.origins), smooth along the shore.
+var origins := PackedVector2Array()
 ## The rows of `image`, for reading on the CPU.
 var _rays: Array[PackedColorArray] = []
 
@@ -69,11 +76,13 @@ static func trace(field: ShoreField, depth_at: Callable) -> ShoreRays:
 		# neighbours' quads back onto the beach. The rays traced through the gaps take their place.
 		var traced: Array[PackedColorArray] = []
 		var metres := PackedFloat32Array()
+		var on_shore := PackedVector2Array()
 		for k in range(points.size()):
 			var ray := rays._trace_ray(field, depth_at, points[k])
 			if _leaves(ray):
 				traced.append(ray)
 				metres.append(k * SPACING)
+				on_shore.append(points[k])
 		if traced.is_empty():
 			continue
 		var length := points.size() * SPACING
@@ -81,18 +90,23 @@ static func trace(field: ShoreField, depth_at: Callable) -> ShoreRays:
 		for k in range(traced.size()):
 			rays._rays.append(traced[k])
 			rays.along.append(metres[k])
+			rays.shore_points.append(on_shore[k])
 			var next := k + 1
 			var next_metres := metres[next] if next < traced.size() else metres[0] + length
 			if next == traced.size():
 				if not closed:
 					break
 				next = 0
-			rays._fill(field, depth_at, traced[k], traced[next], Vector2(metres[k], next_metres), 0)
+			rays._fill(field, depth_at, traced[k], traced[next], Vector2(metres[k], next_metres),
+					PackedVector2Array([on_shore[k], on_shore[next]]), 0)
 		rays.line_starts.append(first)
 		rays.line_lengths.append(rays._rays.size() - first)
 		rays.line_closed.append(closed)
 		rays.line_metres.append(length)
 	rays.rows = rays._rays.size()
+	rays.origins.resize(rays.rows)
+	for row in range(rays.rows):
+		rays.origins[row] = field.origin(Vector2(rays._rays[row][0].r, rays._rays[row][0].g))
 	rays.image = Image.create(rays.columns, maxi(rays.rows, 1), false, Image.FORMAT_RGBAF)
 	for row in range(rays.rows):
 		for j in range(rays.columns):
@@ -266,9 +280,9 @@ static func _velocity(f: Color) -> Vector2:
 
 
 ## Appends the rays traced through the gap between neighbouring rays `a` and `b` (at `metres` along the
-## waterline), in order, until neighbours stay within MAX_GAP.
+## waterline, from the waterline points `shore`), in order, until neighbours stay within MAX_GAP.
 func _fill(field: ShoreField, depth_at: Callable, a: PackedColorArray, b: PackedColorArray, metres: Vector2,
-		splits: int) -> void:
+		shore: PackedVector2Array, splits: int) -> void:
 	if splits >= MAX_SPLITS:
 		return
 	var widest := _widest(a, b)
@@ -278,10 +292,12 @@ func _fill(field: ShoreField, depth_at: Callable, a: PackedColorArray, b: Packed
 	if not _leaves(ray):
 		return
 	var middle := (metres.x + metres.y) * 0.5
-	_fill(field, depth_at, a, ray, Vector2(metres.x, middle), splits + 1)
+	var shore_middle := shore[0].lerp(shore[1], 0.5)
+	_fill(field, depth_at, a, ray, Vector2(metres.x, middle), PackedVector2Array([shore[0], shore_middle]), splits + 1)
 	_rays.append(ray)
 	along.append(middle)
-	_fill(field, depth_at, ray, b, Vector2(middle, metres.y), splits + 1)
+	shore_points.append(shore_middle)
+	_fill(field, depth_at, ray, b, Vector2(middle, metres.y), PackedVector2Array([shore_middle, shore[1]]), splits + 1)
 
 
 ## Whether `ray` gets away from where it starts.
