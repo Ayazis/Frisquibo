@@ -31,8 +31,8 @@ const LIP_GROW := 0.25
 ## ...and over which the tube collapses into a bore after the lip has landed.
 const COLLAPSE := Vector2(1.3, 2.4)
 ## Lip thickness at the crest and at the tip, in crest heights.
-const ROOT_THICKNESS := 0.45
-const TIP_THICKNESS := 0.08
+const ROOT_THICKNESS := 0.6
+const TIP_THICKNESS := 0.25
 ## Where the tube's back wall meets the trough, as a share of the lip's reach.
 const FACE_BASE := 0.3
 ## How far the tube's back wall bulges back under the crest, in crest heights.

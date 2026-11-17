@@ -137,3 +137,19 @@ After the peel fix the curls came as short tubes with a squared-off lip and a da
 - The stage and plunge are averaged over seven points 3 m apart (±9 m, about a third of a wavelength
   either side) instead of five points 2.5 m apart: a curl now runs along a longer stretch of crest. Cost:
   seven breaker samples per pixel near the shore instead of five.
+
+## Fix: thin white lips (2026-11-17)
+
+The lip read as a thin, flat, white sheet with a white plane where it landed.
+
+- The lip is thicker: 0.6 crest heights at its root and 0.25 at its tip (were 0.45 and 0.08).
+- It aerates at its very tip only (the last 0.15 of the outer lip, was 0.6), and the spilling roller's
+  white water stays off a curl until it foams over. The rest of the lip is shaded as a tongue of thin
+  water: its scattered light is turquoise (`LIP_SCATTER` of `sss_color`) instead of the open sea's dark
+  `scatter_color`.
+- The burst where the lip lands covers only the water just ahead of the tube, as torn lace, instead of
+  the whole trough out to the next wave as a solid sheet. The foam-over after the plunge tears open as
+  the curl collapses (its lace ages from fresh to half-open).
+- Still open: after the plunge the lip keeps its smooth shape until the collapse ends (stage 1.3 to
+  2.4), so from a low view the foamed-over lip still reads as a pale plate for that time. Turning the
+  landed lip into a tumbling bore needs geometry, not shading.

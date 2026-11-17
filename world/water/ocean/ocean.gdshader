@@ -300,6 +300,9 @@ float ocean_still_depth(vec2 p) {
 // out of the sky's light.
 const float LIP_GLOW = 2.5;
 const float TUBE_SHADE = 0.55;
+// A lip is a tongue of water thin enough to glow: light scattered inside it comes out turquoise, as
+// this share of sss_color, where the open water shows its dark scatter_color.
+const float LIP_SCATTER = 0.45;
 // Detail ripples keep this share of their slope on a curl.
 const float CURL_DETAIL = 0.5;
 
@@ -543,6 +546,9 @@ void fragment() {
 	float foam_near = fs.cover;
 	// Breakers: the roller on the breaking front and the lace it leaves behind (near, far).
 	vec2 white_water = ocean_shore_foam(shore, surface, water_wave_time, detail);
+	// A plunging curl is clear water until it lands and foams over: the spilling roller's white water
+	// stays off it until then (ocean_breaker_foam whitens its tip and the foam-over).
+	white_water *= 1.0 - v_curl * (1.0 - smoothstep(BREAKER_FOAM_OVER.x, BREAKER_FOAM_OVER.y, v_curl_stage));
 	white_water = max(white_water, ocean_breaker_foam(surface, lip, v_curl, v_curl_part, v_curl_stage, shore.roller_wave));
 	foam_near = max(foam_near, white_water.x);
 	// Breaker white water is fresh and thick; the open-sea foam is as thick as its pattern says.
@@ -606,7 +612,8 @@ void fragment() {
 		// Inside the tube the lip hides most of the sky.
 		float sky_seen = 1.0 - TUBE_SHADE * tube;
 		EMISSION = (refracted * (1.0 - f) + reflection * f * sky_seen * (1.0 - onto_water)) * (1.0 - foam);
-		vec3 water = scatter_color * (murk * (1.0 - f) + f * onto_water);
+		vec3 body = mix(scatter_color, sss_color * LIP_SCATTER, lip);
+		vec3 water = body * (murk * (1.0 - f) + f * onto_water);
 		ALBEDO = (mix(water, foam_albedo, foam) + bubble_albedo * bubbles * (1.0 - f)) * sky_seen;
 		// Only used for the engine's sky reflection, where neither the mirror nor the march found anything.
 		SPECULAR = planar ? 0.0 : WATER_ENGINE_SPECULAR * edge * (1.0 - foam) * (1.0 - traced.a) * (1.0 - onto_water);
