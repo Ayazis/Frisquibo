@@ -69,3 +69,14 @@ again.
   limit.
 - Headless runs can't exercise the FFT path, so the shore waves' GPU half, the march and the mask are
   checked by compiling, by the CPU twin's tests and by reading; the look by the desktop checks.
+
+## Since then: crests run at the speed of high waves (2026-11-17)
+
+The beach waves looked like slow motion. Their crests ran at the small-wave shallow-water speed
+sqrt(g h), but high waves in shallow water run faster, at about sqrt(g (h + H)) (solitary waves and
+bores), and in the surf zone every wave is depth-limited at H = 0.78 h: about a third faster.
+`ShoreField` now bakes the travel time with that speed (`crest_speed()`), H the depth-limited height,
+at most the sea's expected wave height (`Ocean` passes it when it bakes the seabed). The swash, the rays
+and the breakers all follow the field, so they keep in step. The field is baked once, so a much rougher
+or calmer sea later keeps the speeds of the sea it was baked for beyond the surf zone; inside it they
+are right for any sea.

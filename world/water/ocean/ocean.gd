@@ -360,7 +360,9 @@ func set_seabed(height: Callable, area: Rect2, resolution: int = DEFAULT_SEABED_
 	material.set_shader_parameter("seabed_height", ImageTexture.create_from_image(img))
 	material.set_shader_parameter("seabed_rect", Vector4(area.position.x, area.position.y, area.size.x, area.size.y))
 	# The coast at the current level: a tide moves the waterline, but the crests still follow the depths.
-	_shore.field = ShoreField.bake(_depth_at, area)
+	# Crests near the beach run faster the higher the sea's waves are.
+	var sea_height := OceanSeaStats.expected_wave_height(_effective) if _effective != null else 0.0
+	_shore.field = ShoreField.bake(_depth_at, area, ShoreField.DEFAULT_CELL, sea_height)
 	material.set_shader_parameter("shore_field", ImageTexture.create_from_image(_shore.field.image))
 	material.set_shader_parameter("shore_origin", ImageTexture.create_from_image(_shore.field.origins))
 	_make_breakers(area)

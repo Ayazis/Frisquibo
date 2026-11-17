@@ -17,6 +17,9 @@ const DEFAULT_CELL := 3.0
 const MAX_DEPTH := 12.0
 ## The wave speed of this depth is used in shallower water, so the travel time stays finite at the waterline.
 const MIN_DEPTH := 0.05
+## Highest a wave gets in water this many times as deep, before it breaks (2 x the shore waves' default
+## breaker_ratio): in the surf zone every wave is this high, whatever the sea.
+const BREAKING_HEIGHT := 0.78
 ## Limits of the refraction coefficient. Where rays cross (behind an island, at a sharp headland) ray
 ## theory predicts infinite focusing; real waves diffract and spread it out.
 const REFRACTION_MIN := 0.4
@@ -40,6 +43,8 @@ var waterlines: Array[PackedVector2Array] = []
 var area: Rect2
 var width := 0
 var height := 0
+## Height of the sea's waves the crests' speed was baked for (m; 0: small waves).
+var wave_height := 0.0
 # Working state of the bake.
 var _depths := PackedFloat32Array()
 var _times := PackedFloat32Array()
@@ -54,10 +59,13 @@ var _order := PackedInt32Array()
 
 
 ## Bakes the field over `area`. `depth_at` takes a world (x, z) as a Vector2 and returns the still
-## water depth there in metres (negative or zero on land).
-static func bake(depth_at: Callable, bake_area: Rect2, cell: float = DEFAULT_CELL) -> ShoreField:
+## water depth there in metres (negative or zero on land). `sea_wave_height`: the sea's wave height (m),
+## which makes the crests near the beach faster (crest_speed()); 0 for small waves.
+static func bake(depth_at: Callable, bake_area: Rect2, cell: float = DEFAULT_CELL,
+		sea_wave_height: float = 0.0) -> ShoreField:
 	var field := ShoreField.new()
 	field.area = bake_area
+	field.wave_height = maxf(sea_wave_height, 0.0)
 	field.width = maxi(ceili(bake_area.size.x / cell), 2)
 	field.height = maxi(ceili(bake_area.size.y / cell), 2)
 	field._sample_depths(depth_at)
@@ -78,6 +86,15 @@ static func bake(depth_at: Callable, bake_area: Rect2, cell: float = DEFAULT_CEL
 ## Wave speed in water of depth `depth` (shallow-water waves, limited to the field's depth range).
 static func wave_speed(depth: float) -> float:
 	return sqrt(GRAVITY * clampf(depth, MIN_DEPTH, MAX_DEPTH))
+
+
+## Speed of the crests in water of depth `depth`: high waves in shallow water run faster than small ones,
+## at sqrt(g (h + H)) (solitary waves and bores), H the height of the waves there: depth-limited in the
+## surf zone (BREAKING_HEIGHT), the sea's wave_height further out. Near breaking that is about a third
+## faster than the small-wave speed sqrt(g h).
+func crest_speed(depth: float) -> float:
+	var h := clampf(depth, MIN_DEPTH, MAX_DEPTH)
+	return sqrt(GRAVITY * (h + minf(BREAKING_HEIGHT * h, wave_height)))
 
 
 ## The field at world `p`, filtered like the GPU texture (bilinear, texel centres at +0.5, clamped at
@@ -214,15 +231,15 @@ func _upwind(i: int, step: int) -> int:
 ## the time improved.
 func _update(i: int) -> bool:
 	var cell := _cell_size()
-	var here := 1.0 / wave_speed(_depths[i])
+	var here := 1.0 / crest_speed(_depths[i])
 	var ix := _upwind(i, 1)
 	var iz := _upwind(i, width)
 	if ix < 0 and iz < 0:
 		return false
 	var a := INF if ix < 0 else _times[ix]
 	var b := INF if iz < 0 else _times[iz]
-	var fx := INF if ix < 0 else 0.5 * (here + 1.0 / wave_speed(_depths[ix]))
-	var fz := INF if iz < 0 else 0.5 * (here + 1.0 / wave_speed(_depths[iz]))
+	var fx := INF if ix < 0 else 0.5 * (here + 1.0 / crest_speed(_depths[ix]))
+	var fz := INF if iz < 0 else 0.5 * (here + 1.0 / crest_speed(_depths[iz]))
 	var along_x := a + fx * cell.x
 	var along_z := b + fz * cell.y
 	var t := minf(along_x, along_z)
@@ -304,7 +321,7 @@ func _refraction(gradients: PackedVector2Array) -> PackedFloat32Array:
 		var share := _up_share[i]
 		var before := _upstream(_up_x[i], share, _up_z[i], spread)
 		var t_before := _upstream(_up_x[i], share, _up_z[i], _times)
-		spread[i] = before + divergence[i] * (_times[i] - t_before) * wave_speed(_depths[i])
+		spread[i] = before + divergence[i] * (_times[i] - t_before) * crest_speed(_depths[i])
 	var end_sum := PackedFloat32Array()
 	end_sum.resize(count)
 	var end_weight := PackedFloat32Array()
