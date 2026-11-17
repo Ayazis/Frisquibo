@@ -542,7 +542,7 @@ void fragment() {
 	FoamSurface fs = foam_surface(surface - foam_offset, cover, detail, sub_shift);
 	float foam_near = fs.cover;
 	// Breakers: the roller on the breaking front and the lace it leaves behind (near, far).
-	vec2 white_water = ocean_shore_foam(shore, surface, water_wave_time);
+	vec2 white_water = ocean_shore_foam(shore, surface, water_wave_time, detail);
 	white_water = max(white_water, ocean_breaker_foam(surface, lip, v_curl, v_curl_part, v_curl_stage, shore.roller_wave));
 	foam_near = max(foam_near, white_water.x);
 	// Breaker white water is fresh and thick; the open-sea foam is as thick as its pattern says.
