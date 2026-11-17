@@ -71,7 +71,7 @@ const float BREAKER_PEEL_SHORE = 0.3;
 const float BREAKER_REACH_FADE = 0.75;
 // Ribbon window around its crest, in periods: ahead of it (to beyond the trough) and behind it.
 const float BREAKER_WINDOW_FRONT = 0.32;
-const float BREAKER_WINDOW_BACK = 0.04;
+const float BREAKER_WINDOW_BACK = 0.1;
 // The ribbon draws where the curl is at least RIBBON_FROM; the ocean surface where it is at most
 // SURFACE_UNTIL. In between both draw the same water.
 const float BREAKER_RIBBON_FROM = 0.01;
@@ -120,6 +120,33 @@ float breaker_splash(float stage) {
 float breaker_seabed_slope(vec2 p, vec2 towards) {
 	return (seabed_depth(p - towards * BREAKER_SLOPE_STEP) - seabed_depth(p + towards * BREAKER_SLOPE_STEP))
 			/ (2.0 * BREAKER_SLOPE_STEP);
+}
+
+// How hard the shore wave of crest number `wave` breaks at `p`, travelling `towards` (as shore_wave()
+// finds it: smoothstep(SHORE_BREAK_ONSET, 1, ratio)), averaged along the crest like the stage (weights
+// 1 2 3 4 3 2 1, points off the shore waves left out). Its white water fades in and out over metres
+// along the crest with it, where the local ratio switched it on and off within one.
+float breaker_breaking_along(vec2 p, vec2 towards, float wave) {
+	vec2 along = vec2(-towards.y, towards.x);
+	float lee = mix(shore_lee_share, 1.0, smoothstep(SHORE_LEE_FROM, SHORE_LEE_TO, dot(towards, shore_wave_direction)));
+	float total = 0.0;
+	float weights = 0.0;
+	for (int k = 0; k < BREAKER_PEEL_TAPS; k++) {
+		float offset = float(k - BREAKER_PEEL_TAPS / 2);
+		vec2 q = p + along * offset * BREAKER_PEEL_STEP;
+		float depth = ocean_still_depth(q);
+		vec2 uv = (q - seabed_rect.xy) / seabed_rect.zw;
+		if (shore_weight(depth) <= 0.0 || any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
+			continue;
+		}
+		vec3 ray = textureLod(shore_origin, uv, 0.0).xyz;
+		float free_crest = wave_amplitude * sqrt(shore_wave_share) * lee * ray.z * shore_wave_size(ray.xy, wave)
+				* pow(shore_zone() / max(depth, SHORE_MIN_DEPTH), 0.25);
+		float w = float(BREAKER_PEEL_TAPS / 2 + 1) - abs(offset);
+		total += smoothstep(SHORE_BREAK_ONSET, 1.0, free_crest / max(breaker_ratio * depth, 1e-4)) * w;
+		weights += w;
+	}
+	return weights > 0.0 ? total / weights : 0.0;
 }
 
 // Stage and plunge share of the breaker of crest number `wave` whose crest water rests at `crest`,
@@ -180,10 +207,12 @@ Breaker breaker_at(vec2 p, ShoreWave w, float camera_distance) {
 	float free_crest = wave_amplitude * sqrt(shore_wave_share) * lee * ray.z * shore_wave_size(ray.xy, w.roller_wave)
 			* pow(shore_zone() / max(depth, SHORE_MIN_DEPTH), 0.25);
 	b.crest = min(free_crest, breaker_ratio * depth) * weight;
-	// Stage and plunge, averaged along the crest.
+	// Stage, and how far the water folds over, averaged along the crest. The fold is averaged itself, not
+	// taken from the averaged stage: a stretch of crest that curls then fades in and out over metres along
+	// the crest, where the stage alone switched it on and off within one.
 	vec2 along = vec2(-w.towards.y, w.towards.x);
 	float stage = 0.0;
-	float plunge = 0.0;
+	float fold = 0.0;
 	float total = 0.0;
 	for (int k = 0; k < BREAKER_PEEL_TAPS; k++) {
 		float offset = float(k - BREAKER_PEEL_TAPS / 2);
@@ -191,15 +220,15 @@ Breaker breaker_at(vec2 p, ShoreWave w, float camera_distance) {
 		vec3 tap = breaker_stage_plunge(b.crest_rest + along * offset * BREAKER_PEEL_STEP, w.towards, w.roller_wave);
 		tap_weight *= tap.z;
 		stage += tap.x * tap_weight;
-		plunge += tap.y * tap_weight;
+		fold += tap.y * smoothstep(0.0, BREAKER_LIP_GROW, tap.x)
+				* (1.0 - smoothstep(BREAKER_COLLAPSE_START, BREAKER_COLLAPSE_END, tap.x)) * tap_weight;
 		total += tap_weight;
 	}
 	if (total <= 0.0) {
 		return b;
 	}
 	b.stage = stage / total;
-	float fold = plunge / total * smoothstep(0.0, BREAKER_LIP_GROW, b.stage)
-			* (1.0 - smoothstep(BREAKER_COLLAPSE_START, BREAKER_COLLAPSE_END, b.stage));
+	fold /= total;
 	float reach_fade = 1.0 - smoothstep(BREAKER_REACH_FADE * breaker_reach, breaker_reach, camera_distance);
 	b.curl = fold * weight * reach_fade * (1.0 - smoothstep(BREAKER_END_BLEND, 1.0, b.phi));
 	return b;
@@ -324,21 +353,9 @@ BreakerSheet breaker_sheet(float phi, float stage, float crest, float trough_dis
 }
 
 // World position on the wave rays of ribbon vertex `grid` (x: row in the ribbon, z: 0..1 across it).
-vec2 breaker_ribbon_rest(vec3 grid) {
-	float line_start = breaker_ribbon.y;
-	float line_rows = breaker_ribbon.z;
-	float local = breaker_ribbon.x - line_start + min(grid.x, breaker_span.y - 1.0);
-	local = breaker_ribbon.w > 0.5 ? mod(local, line_rows) : clamp(local, 0.0, line_rows - 1.0);
-	float v = (line_start + floor(local) + 0.5) / shore_rays_size.y;
-	vec3 shore_end = textureLod(shore_rays, vec2(0.5 / shore_rays_size.x, v), 0.0).xyz;
-	// The crest of wave n is where (t + T) / period + timing = n (ocean_shore_waves).
-	float period = max(water_swash_period, 0.1);
-	// Timing from the waterline point the field says this wave heads for, as the shore waves draw it.
-	vec2 origin = textureLod(shore_origin, (shore_end.xy - seabed_rect.xy) / seabed_rect.zw, 0.0).xy;
-	float timing = swash_noise(origin / SWASH_ALONGSHORE) * SWASH_PHASE_SPREAD;
-	float crest_time = (breaker_span.x - timing) * period - water_wave_time;
-	float time = crest_time + mix(-BREAKER_WINDOW_FRONT, BREAKER_WINDOW_BACK, grid.z) * period;
-	// Column of that travel time, then one step that takes up the ray's clock drift (ShoreRays.column()).
+// Where on its ray (row `v`, waterline end `shore_end`) the field's travel time is `time`, with one step
+// that takes up the ray's clock drift (ShoreRays.column()).
+vec2 breaker_ray_position(float v, vec3 shore_end, float time) {
 	float last = shore_rays_size.x - 1.0;
 	float column = clamp((time - shore_end.z) / shore_rays_step, 0.0, last);
 	float there = textureLod(shore_rays, vec2((column + 0.5) / shore_rays_size.x, v), 0.0).z;
@@ -346,4 +363,29 @@ vec2 breaker_ribbon_rest(vec3 grid) {
 		column = clamp(column + (time - there) / shore_rays_step, 0.0, last);
 	}
 	return textureLod(shore_rays, vec2((column + 0.5) / shore_rays_size.x, v), 0.0).xy;
+}
+
+// The travel time of this ribbon vertex at `p` on its ray: its crest's time, from the timing the shore
+// waves draw at `p` (the waterline point the field says the wave there heads for), plus the vertex's
+// place in the window around the crest.
+float breaker_ribbon_time(vec2 p, float share_across) {
+	float period = max(water_swash_period, 0.1);
+	vec2 origin = textureLod(shore_origin, (p - seabed_rect.xy) / seabed_rect.zw, 0.0).xy;
+	float timing = swash_noise(origin / SWASH_ALONGSHORE) * SWASH_PHASE_SPREAD;
+	// The crest of wave n is where (t + T) / period + timing = n (ocean_shore_waves).
+	float crest_time = (breaker_span.x - timing) * period - water_wave_time;
+	return crest_time + mix(-BREAKER_WINDOW_FRONT, BREAKER_WINDOW_BACK, share_across) * period;
+}
+
+vec2 breaker_ribbon_rest(vec3 grid) {
+	float line_start = breaker_ribbon.y;
+	float line_rows = breaker_ribbon.z;
+	float local = breaker_ribbon.x - line_start + min(grid.x, breaker_span.y - 1.0);
+	local = breaker_ribbon.w > 0.5 ? mod(local, line_rows) : clamp(local, 0.0, line_rows - 1.0);
+	float v = (line_start + floor(local) + 0.5) / shore_rays_size.y;
+	vec3 shore_end = textureLod(shore_rays, vec2(0.5 / shore_rays_size.x, v), 0.0).xyz;
+	// The timing is drawn where the wave is, and it changes a little along the ray (the field smooths it
+	// along the crests): first the timing at the ray's start, then once more where that puts the vertex.
+	vec2 first = breaker_ray_position(v, shore_end, breaker_ribbon_time(shore_end.xy, grid.z));
+	return breaker_ray_position(v, shore_end, breaker_ribbon_time(first, grid.z));
 }

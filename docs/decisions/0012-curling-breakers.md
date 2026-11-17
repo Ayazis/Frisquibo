@@ -155,3 +155,18 @@ The lip read as a thin, flat, white sheet with a white plane where it landed.
   and over it the curl sinks towards the trough (`COLLAPSE_SINK`: it loses three quarters of its height):
   the lip comes down and the tube closes into a low roll of white water, instead of the lip only fading
   back into the face. The open tube is shorter-lived for it.
+
+## Fix: breaking sections that end abruptly; seabed at a curl's end (2026-11-17)
+
+- **Abrupt ends.** The white water switched on where the local wave height crossed the breaking onset,
+  and the curl's fold followed the averaged stage through two thresholds (lip growth and collapse), so
+  both still ended within a metre. Now the fold itself is averaged along the crest (each of the seven
+  points' own fold, on the GPU and in `ShoreBreakers`), and the roller and lace take how hard the wave
+  breaks averaged over the same points (`breaker_breaking_along()`; the wave's shape keeps its local
+  value). Breaking sections fade in and out over ten metres or so along the crest.
+- **Seabed at a curl's end.** The ribbon took its crest timing from its ray's waterline point, but the
+  ocean surface (and its hole) from the field's smoothed timing at the water itself. Where the two
+  differ, the ribbon's crest sat off the hole's crest, and the seabed showed through the part of the
+  hole the ribbon missed. The ribbon now reads the timing where its vertex is (once at the ray's start,
+  then again where that puts it), and its window reaches a little further behind the crest (0.1 of a
+  period, was 0.04). A thin brown line at the very edge is left in the top-down view.

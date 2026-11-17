@@ -42,6 +42,7 @@ struct ShoreWave {
 	float weight;     // how much of the shore waves is present (0 offshore)
 	// White water (ocean_shore_foam.gdshaderinc reads these):
 	float roller;     // the roller on the breaking front: 1 at the crest, 0 where it ends down the face
+	float face;       // where on the front the roller would be, whether the wave breaks or not (roller / white water)
 	float roller_wave; // number of the crest the roller belongs to (a different pattern per wave)
 	vec2 crest_frame; // metres from that crest along the travel direction (negative ahead) and along it
 	float lace;       // how much foam the last breaker left here, before ageing
@@ -87,6 +88,7 @@ ShoreWave shore_wave(vec2 p, float depth) {
 	w.curvature = vec3(0.0);
 	w.weight = shore_weight(depth);
 	w.roller = 0.0;
+	w.face = 0.0;
 	w.roller_wave = 0.0;
 	w.crest_frame = vec2(0.0);
 	w.lace = 0.0;
@@ -176,6 +178,7 @@ ShoreWave shore_wave(vec2 p, float depth) {
 
 	float white = breaking * w.weight;
 	w.roller = white * on_face;
+	w.face = on_face;
 	// The crest at u = 0 is wave number `wave`; the face ahead of it (u -> 1) already belongs to the next.
 	w.roller_wave = u < back ? wave : wave + 1.0;
 	// Local wavelength: the period over the slowness.

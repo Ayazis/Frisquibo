@@ -392,6 +392,13 @@ void vertex() {
 
 void fragment() {
 	ShoreWave shore = shore_wave(v_rest, v_still_depth);
+	// The roller and the lace it leaves take how hard the wave breaks averaged along the crest, so the
+	// white water fades in and out along it (the wave's own shape keeps the local value).
+	if (shore.weight > 0.0) {
+		float breaking = breaker_breaking_along(v_rest, shore.towards, shore.roller_wave);
+		shore.roller = breaking * shore.weight * shore.face;
+		shore.lace = breaking * shore.weight;
+	}
 	// Where a breaker curls, the ribbon draws it and the ocean surface leaves a hole; they overlap a
 	// little where the curl is weak.
 	Breaker breaker = breaker_at(v_rest, shore, length(v_rest - CAMERA_POSITION_WORLD.xz));
