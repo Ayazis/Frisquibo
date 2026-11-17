@@ -45,10 +45,11 @@ const SPLASH_HEIGHT := 0.8
 const SPLASH_WIDTH := 0.35
 const SPLASH := Vector4(0.9, 1.1, 1.25, 1.9)
 ## A breaker's stage and plunge are averaged along its crest, over PEEL_TAPS points PEEL_STEP metres
-## apart (weights 1 2 3 2 1): the lip peels along the crest instead of jumping ahead where the wave's
-## height, size or depth changes within a few metres.
-const PEEL_STEP := 2.5
-const PEEL_TAPS := 5
+## apart (weights rising to the middle: 1 2 3 4 3 2 1), about a third of a wavelength either side: the
+## lip peels along the crest instead of jumping ahead where the wave's height, size or depth changes
+## within a few metres, and a curl runs along a long stretch of crest.
+const PEEL_STEP := 3.0
+const PEEL_TAPS := 7
 ## Along the crest the stage and plunge change smoothly, also where a point is still unbroken (its stage
 ## is negative, from the same formula, down to PEEL_BEFORE) and where the points reach the beach (they
 ## fade out over the last PEEL_SHORE metres of water).
@@ -168,14 +169,18 @@ class _Shape:
 		var ceiling := Vector2(0.0, crest - ROOT_THICKNESS * crest * sqrt(flight))
 		var base := Vector2(FACE_BASE * reach * flight, -crest)
 		var trough := Vector2(trough_distance, -crest)
-		var lip_handle := HANDLE * top.distance_to(tip)
+		# The lip is the water thrown from the crest, so its outside follows the tip's path: the parabola
+		# from the crest to the tip, one cubic exactly. Its underside is the parabola from the root of the
+		# lip to the inside of the tip, level at the root and along the lip's heading at the tip.
+		var thrown := Vector2(tip.x * 0.5, crest)
+		var under := _corner(ceiling, tip_inside, heading)
 		var wall := BACK_WALL * crest * flight
 		var wall_handle := HANDLE * ceiling.distance_to(base)
 		var run_handle := HANDLE * base.distance_to(trough)
 		points = [
-			PackedVector2Array([top, top + Vector2(lip_handle, 0.0), tip - heading * lip_handle, tip]),
+			PackedVector2Array([top, top.lerp(thrown, 2.0 / 3.0), tip.lerp(thrown, 2.0 / 3.0), tip]),
 			PackedVector2Array([tip, tip.lerp(tip_inside, 1.0 / 3.0), tip.lerp(tip_inside, 2.0 / 3.0), tip_inside]),
-			PackedVector2Array([tip_inside, tip_inside - heading * lip_handle, ceiling + Vector2(lip_handle, 0.0), ceiling]),
+			PackedVector2Array([tip_inside, tip_inside.lerp(under, 2.0 / 3.0), ceiling.lerp(under, 2.0 / 3.0), ceiling]),
 			PackedVector2Array([ceiling, ceiling - Vector2(wall + wall_handle, 0.0), base - Vector2(wall_handle, 0.0), base]),
 			PackedVector2Array([base, base + Vector2(run_handle, 0.0), trough - Vector2(run_handle, 0.0), trough]),
 		]
@@ -186,6 +191,15 @@ class _Shape:
 		_splash_x = reach
 		_splash_height = SPLASH_HEIGHT * crest * BreakerProfile.splash(breaker_stage)
 		_splash_width = maxf(SPLASH_WIDTH * height, 1e-3)
+
+	## Control point of the parabola that leaves `root` level and reaches `end` along `heading`: where
+	## the two tangents meet (half way along when they hardly do).
+	static func _corner(root: Vector2, end: Vector2, heading: Vector2) -> Vector2:
+		var midway := Vector2((root.x + end.x) * 0.5, root.y)
+		if heading.y > -1e-3:
+			return midway
+		var meet := end + heading * ((root.y - end.y) / heading.y)
+		return meet if meet.x >= root.x and meet.x <= end.x else midway
 
 	func at(phi: float) -> Vector3:
 		if total <= 1e-9:

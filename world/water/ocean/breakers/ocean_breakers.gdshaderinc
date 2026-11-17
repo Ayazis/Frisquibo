@@ -58,10 +58,11 @@ const float BREAKER_PART_TROUGH = 4.0;
 // Metres either side of the crest the seabed slope is measured over.
 const float BREAKER_SLOPE_STEP = 2.0;
 // A breaker's stage and plunge are averaged along its crest, over BREAKER_PEEL_TAPS points this many
-// metres apart (weights 1 2 3 2 1), so the lip peels along the crest instead of jumping ahead where
-// the wave's height, size or depth changes within a few metres (same as BreakerProfile.PEEL_STEP).
-const float BREAKER_PEEL_STEP = 2.5;
-const int BREAKER_PEEL_TAPS = 5;
+// metres apart (weights rising to the middle: 1 2 3 4 3 2 1), so the lip peels along a long stretch of
+// crest instead of jumping ahead where the wave's height, size or depth changes within a few metres
+// (same as BreakerProfile.PEEL_STEP and PEEL_TAPS).
+const float BREAKER_PEEL_STEP = 3.0;
+const int BREAKER_PEEL_TAPS = 7;
 // Same as BreakerProfile.PEEL_BEFORE and PEEL_SHORE.
 const float BREAKER_PEEL_BEFORE = -1.0;
 const float BREAKER_PEEL_SHORE = 0.3;
@@ -212,6 +213,17 @@ float breaker_bezier_length(vec2 p0, vec2 p1, vec2 p2, vec2 p3) {
 	return 0.5 * (distance(p0, p3) + distance(p0, p1) + distance(p1, p2) + distance(p2, p3));
 }
 
+// Control point of the parabola that leaves `root` level and reaches `end` along `heading`: where the
+// two tangents meet, half way along when they hardly do (BreakerProfile._Shape._corner()).
+vec2 breaker_corner(vec2 root, vec2 end, vec2 heading) {
+	vec2 midway = vec2((root.x + end.x) * 0.5, root.y);
+	if (heading.y > -1e-3) {
+		return midway;
+	}
+	vec2 meet = end + heading * ((root.y - end.y) / heading.y);
+	return meet.x >= root.x && meet.x <= end.x ? meet : midway;
+}
+
 // The sheet's five curves (control points) and their lengths, for a breaker at `stage` with its crest
 // `crest` metres high and the trough `trough_distance` metres ahead (BreakerProfile.curve()).
 void breaker_sheet_curves(float stage, float crest, float trough_distance, out vec2 c[20], out float lengths[5]) {
@@ -227,13 +239,16 @@ void breaker_sheet_curves(float stage, float crest, float trough_distance, out v
 	vec2 ceiling = vec2(0.0, crest - BREAKER_ROOT_THICKNESS * crest * sqrt(flight));
 	vec2 base = vec2(BREAKER_FACE_BASE * reach * flight, -crest);
 	vec2 trough = vec2(trough_distance, -crest);
-	float lip_handle = BREAKER_HANDLE * distance(top, tip);
+	// The lip's outside follows the tip's ballistic path (a parabola, one cubic exactly); its underside a
+	// parabola from the root of the lip to the inside of the tip.
+	vec2 thrown = vec2(tip.x * 0.5, crest);
+	vec2 under = breaker_corner(ceiling, tip_inside, heading);
 	float wall = BREAKER_BACK_WALL * crest * flight;
 	float wall_handle = BREAKER_HANDLE * distance(ceiling, base);
 	float run_handle = BREAKER_HANDLE * distance(base, trough);
-	c[0] = top; c[1] = top + vec2(lip_handle, 0.0); c[2] = tip - heading * lip_handle; c[3] = tip;
+	c[0] = top; c[1] = mix(top, thrown, 2.0 / 3.0); c[2] = mix(tip, thrown, 2.0 / 3.0); c[3] = tip;
 	c[4] = tip; c[5] = mix(tip, tip_inside, 1.0 / 3.0); c[6] = mix(tip, tip_inside, 2.0 / 3.0); c[7] = tip_inside;
-	c[8] = tip_inside; c[9] = tip_inside - heading * lip_handle; c[10] = ceiling + vec2(lip_handle, 0.0); c[11] = ceiling;
+	c[8] = tip_inside; c[9] = mix(tip_inside, under, 2.0 / 3.0); c[10] = mix(ceiling, under, 2.0 / 3.0); c[11] = ceiling;
 	c[12] = ceiling; c[13] = ceiling - vec2(wall + wall_handle, 0.0); c[14] = base - vec2(wall_handle, 0.0); c[15] = base;
 	c[16] = base; c[17] = base + vec2(run_handle, 0.0); c[18] = trough - vec2(run_handle, 0.0); c[19] = trough;
 	for (int k = 0; k < 5; k++) {

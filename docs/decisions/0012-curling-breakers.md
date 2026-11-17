@@ -124,3 +124,16 @@ With the ribbons following the curl closely, two faults showed that the stretche
   its body colour. The underside reads as the dark inside of the tube.
 - Cost: five breaker samples instead of one per pixel near the shore, and the sheet's length once per
   curling pixel.
+
+## Fix: short, boxy tubes (2026-11-17)
+
+After the peel fix the curls came as short tubes with a squared-off lip and a dark rectangular opening.
+
+- The lip's outside was a cubic with handles of 0.4 times its chord: level from the crest, then nearly
+  straight down to the tip, a box corner. The lip is the water thrown from the crest, so its outside is
+  now the tip's own ballistic path: the parabola from the crest to the tip, which one cubic gives
+  exactly. Its underside is a parabola too, level at the root of the lip and along the lip's heading at
+  the tip. The opening is now rounded.
+- The stage and plunge are averaged over seven points 3 m apart (±9 m, about a third of a wavelength
+  either side) instead of five points 2.5 m apart: a curl now runs along a longer stretch of crest. Cost:
+  seven breaker samples per pixel near the shore instead of five.
