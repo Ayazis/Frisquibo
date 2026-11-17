@@ -150,6 +150,8 @@ The lip read as a thin, flat, white sheet with a white plane where it landed.
 - The burst where the lip lands covers only the water just ahead of the tube, as torn lace, instead of
   the whole trough out to the next wave as a solid sheet. The foam-over after the plunge tears open as
   the curl collapses (its lace ages from fresh to half-open).
-- Still open: after the plunge the lip keeps its smooth shape until the collapse ends (stage 1.3 to
-  2.4), so from a low view the foamed-over lip still reads as a pale plate for that time. Turning the
-  landed lip into a tumbling bore needs geometry, not shading.
+- The landed lip kept its smooth shape until the tube had collapsed (stage 1.3 to 2.4), so the foamed-over
+  lip read as a pale plate. The collapse now starts as the lip lands and ends sooner (stage 1.05 to 1.8),
+  and over it the curl sinks towards the trough (`COLLAPSE_SINK`: it loses three quarters of its height):
+  the lip comes down and the tube closes into a low roll of white water, instead of the lip only fading
+  back into the face. The open tube is shorter-lived for it.

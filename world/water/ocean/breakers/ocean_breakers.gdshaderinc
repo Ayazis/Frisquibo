@@ -37,8 +37,9 @@ const float BREAKER_DEPTH_EXPONENT = 0.8;
 const float BREAKER_LIP_REACH = 0.55;
 const float BREAKER_MAX_REACH_SHARE = 0.8;
 const float BREAKER_LIP_GROW = 0.25;
-const float BREAKER_COLLAPSE_START = 1.3;
-const float BREAKER_COLLAPSE_END = 2.4;
+const float BREAKER_COLLAPSE_START = 1.05;
+const float BREAKER_COLLAPSE_END = 1.8;
+const float BREAKER_COLLAPSE_SINK = 0.75;
 const float BREAKER_ROOT_THICKNESS = 0.6;
 const float BREAKER_TIP_THICKNESS = 0.25;
 const float BREAKER_FACE_BASE = 0.3;
@@ -251,6 +252,11 @@ void breaker_sheet_curves(float stage, float crest, float trough_distance, out v
 	c[8] = tip_inside; c[9] = mix(tip_inside, under, 2.0 / 3.0); c[10] = mix(ceiling, under, 2.0 / 3.0); c[11] = ceiling;
 	c[12] = ceiling; c[13] = ceiling - vec2(wall + wall_handle, 0.0); c[14] = base - vec2(wall_handle, 0.0); c[15] = base;
 	c[16] = base; c[17] = base + vec2(run_handle, 0.0); c[18] = trough - vec2(run_handle, 0.0); c[19] = trough;
+	// As the tube collapses the curl sinks towards the trough: the lip comes down and the tube closes.
+	float sink = 1.0 - BREAKER_COLLAPSE_SINK * smoothstep(BREAKER_COLLAPSE_START, BREAKER_COLLAPSE_END, stage);
+	for (int k = 0; k < 20; k++) {
+		c[k].y = -crest + (c[k].y + crest) * sink;
+	}
 	for (int k = 0; k < 5; k++) {
 		lengths[k] = breaker_bezier_length(c[4 * k], c[4 * k + 1], c[4 * k + 2], c[4 * k + 3]);
 	}

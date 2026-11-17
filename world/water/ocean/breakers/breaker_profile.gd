@@ -29,7 +29,10 @@ const MAX_REACH_SHARE := 0.8
 ## Stage (time since breaking, in lip flight times) over which the fold grows in...
 const LIP_GROW := 0.25
 ## ...and over which the tube collapses into a bore after the lip has landed.
-const COLLAPSE := Vector2(1.3, 2.4)
+const COLLAPSE := Vector2(1.05, 1.8)
+## Share of its height above the trough the curl loses over the collapse: the lip comes down and the tube
+## closes, instead of the lip only fading back into the face.
+const COLLAPSE_SINK := 0.75
 ## Lip thickness at the crest and at the tip, in crest heights.
 const ROOT_THICKNESS := 0.6
 const TIP_THICKNESS := 0.25
@@ -184,6 +187,12 @@ class _Shape:
 			PackedVector2Array([ceiling, ceiling - Vector2(wall + wall_handle, 0.0), base - Vector2(wall_handle, 0.0), base]),
 			PackedVector2Array([base, base + Vector2(run_handle, 0.0), trough - Vector2(run_handle, 0.0), trough]),
 		]
+		var sink := 1.0 - COLLAPSE_SINK * smoothstep(COLLAPSE.x, COLLAPSE.y, breaker_stage)
+		for i in range(points.size()):
+			var sunk := points[i]
+			for k in range(sunk.size()):
+				sunk[k] = Vector2(sunk[k].x, -crest + (sunk[k].y + crest) * sink)
+			points[i] = sunk
 		for part: PackedVector2Array in points:
 			var length := BreakerProfile.bezier_length(part[0], part[1], part[2], part[3])
 			lengths.append(length)
