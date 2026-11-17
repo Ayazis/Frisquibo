@@ -37,7 +37,15 @@ var _start_times := PackedFloat32Array()
 func _init(rays: ShoreRays, material: ShaderMaterial, reach: float, segments: int, bounds: AABB) -> void:
 	_rays = rays
 	_reach = reach
-	_rows = ceili(2.0 * (reach + RAY_MARGIN) / ShoreRays.SPACING) + 1
+	_starts.resize(rays.rows)
+	_timing.resize(rays.rows)
+	_start_times.resize(rays.rows)
+	for row in range(rays.rows):
+		var start := rays.image.get_pixel(0, row)
+		_starts[row] = Vector2(start.r, start.g)
+		_start_times[row] = start.b
+		_timing[row] = ShoreWaves.noise(_starts[row] / ShoreWaves.SWASH_ALONGSHORE) * ShoreWaves.SWASH_PHASE_SPREAD
+	_rows = maxi(_densest(2.0 * (reach + RAY_MARGIN)), 2)
 	var mesh := ribbon_mesh(_rows, segments)
 	var room := bounds.grow(ROOM)
 	for i in range(MAX_RIBBONS):
@@ -50,14 +58,11 @@ func _init(rays: ShoreRays, material: ShaderMaterial, reach: float, segments: in
 		ribbon.visible = false
 		add_child(ribbon)
 		_pool.append(ribbon)
-	_starts.resize(rays.rows)
-	_timing.resize(rays.rows)
-	_start_times.resize(rays.rows)
-	for row in range(rays.rows):
-		var start := rays.image.get_pixel(0, row)
-		_starts[row] = Vector2(start.r, start.g)
-		_start_times[row] = start.b
-		_timing[row] = ShoreWaves.noise(_starts[row] / ShoreWaves.SWASH_ALONGSHORE) * ShoreWaves.SWASH_PHASE_SPREAD
+
+
+## Rows of a ribbon's mesh.
+func rows_per_ribbon() -> int:
+	return _rows
 
 
 ## A grid of `rows` by `segments` quads whose vertices carry (row, 0, share across) for the shader.
@@ -144,7 +149,30 @@ func _row(line: int, index: int) -> int:
 	return _rays.line_starts[line] + local
 
 
+## Most rows any `length` metres of waterline hold: rays are added where neighbours fan apart
+## (ShoreRays), so a stretch of coast can have more rows than metres.
+func _densest(length: float) -> int:
+	var most := 0
+	for line in range(_rays.line_starts.size()):
+		var start := _rays.line_starts[line]
+		var count := _rays.line_lengths[line]
+		# Round a closed line twice, so stretches through its end are counted whole.
+		var span := 2 * count if _rays.line_closed[line] else count
+		var along := PackedFloat32Array()
+		along.resize(span)
+		for i in range(span):
+			along[i] = _rays.along[start + i % count] + (_rays.line_metres[line] if i >= count else 0.0)
+		var from := 0
+		for i in range(span):
+			while along[i] - along[from] > length:
+				from += 1
+			most = maxi(most, mini(i - from + 1, count))
+	return most
+
+
 ## Stretches of waterline near the camera: (line, first index along it, rows), each at most a ribbon long.
+## A stretch longer than a ribbon is split into ribbons that share their end rows, so the water between
+## two rows is never left out.
 func _runs(camera_xz: Vector2) -> Array[Vector3i]:
 	var runs: Array[Vector3i] = []
 	var limit := _reach + RAY_MARGIN
@@ -172,8 +200,10 @@ func _runs(camera_xz: Vector2) -> Array[Vector3i]:
 			stretches[0] = Vector2i(tail.x, tail.y + stretches[0].y)
 		for stretch: Vector2i in stretches:
 			var offset := 0
-			while offset < stretch.y:
+			while true:
 				var count := mini(_rows, stretch.y - offset)
 				runs.append(Vector3i(line, stretch.x + offset, count))
-				offset += count
+				if offset + count >= stretch.y:
+					break
+				offset += count - 1
 	return runs

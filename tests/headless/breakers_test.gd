@@ -71,6 +71,13 @@ func _check_rays() -> void:
 	var at_shore := island.position(10, island.start_time(10))
 	_check(outward.normalized().dot(at_shore.normalized()) > 0.99 and outward.length() > at_shore.length() + 10.0,
 			"Rays leave a round island radially")
+	# Rays fan out from a round island: more are traced between them, so neighbours stay close.
+	_check(island.rows > TAU * ISLAND_RADIUS / ShoreRays.SPACING + 10.0,
+			"Rays are added where they fan apart (%d)" % island.rows)
+	var widest := 0.0
+	for k in range(island.rows):
+		widest = maxf(widest, island.gap(k, (k + 1) % island.rows))
+	_check(widest <= ShoreRays.MAX_GAP, "...so neighbours stay within %.1f m where curls form (%.2f)" % [ShoreRays.MAX_GAP, widest])
 
 
 func _check_ribbons() -> void:
@@ -88,9 +95,18 @@ func _check_ribbons() -> void:
 	_check(not ribbons.active.is_empty(), "Ribbons near the camera")
 	var waves := {}
 	for lay: Vector4 in ribbons.active:
-		_check(lay.y <= ceili(2.0 * (reach + OceanBreakers.RAY_MARGIN)) + 1, "A ribbon is no longer than its mesh")
+		_check(lay.y <= ribbons.rows_per_ribbon(), "A ribbon is no longer than its mesh")
 		waves[int(lay.z)] = true
 	_check(waves.size() >= 2, "Several crests can be breaking at once (%d)" % waves.size())
+	# A stretch longer than a ribbon is split into ribbons that share their end rows.
+	var last_rows: Dictionary[int, int] = {}
+	var shared := true
+	for lay: Vector4 in ribbons.active:
+		var wave := int(lay.z)
+		if last_rows.has(wave) and last_rows[wave] != int(lay.x):
+			shared = false
+		last_rows[wave] = ribbons.row_after(int(lay.x), int(lay.y) - 1)
+	_check(shared, "Ribbons along one crest share their end rows")
 	var far := OceanBreakers.new(rays, material, reach, 16, AABB())
 	far.update(Vector2(500.0, 500.0), 100.0, PERIOD, BREAK_DEPTH)
 	_check(far.active.is_empty(), "No ribbons far from the coast")

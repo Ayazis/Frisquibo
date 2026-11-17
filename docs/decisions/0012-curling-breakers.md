@@ -77,3 +77,24 @@ breaking crests near the camera.
   Underwater caustics still come from the FFT waves only.
 - Not done: A camera inside a tube sees no tube from inside. The screen copy limitation from decision 6
   stays.
+
+## Fix: seabed showing beside the curls (2026-11-17)
+
+At the ends of some curling sections a slanted strip of seabed showed next to a pale patch. The cause
+was the wave rays, not the ocean surface: neighbouring rays often fan far apart (the field's clock is
+coarse at the waterline, so rays leave it in bundles), in the demo island 1 m apart at the beach and
+11 m or more apart at the crest. A ribbon bends its curl only at its rays, so across such a gap one
+quad stretched flat between two curled edges, while the ocean's hole followed the real curl pixel by
+pixel. Where the hole lay outside the stretched quad, nothing drew the water.
+
+- `ShoreRays` now traces another ray wherever two neighbours lie more than 1.5 m apart, at equal travel
+  time, in water 0.3 to 12 m deep. The ray is seeded midway between them where they are furthest apart
+  and traced back to the beach and out to sea, so it lands in the gap however sensitive the start
+  point is. Up to 8 such splits per pair. Rays that die at their first step are dropped (their rows
+  folded the ribbon back onto the beach); the rays traced through the gaps take their place.
+- `OceanBreakers` sizes the ribbon mesh to the densest stretch of rows, and a stretch longer than one
+  ribbon is split into ribbons that share their end row (before, the quad between two ribbons was missing).
+- Cost on the demo island: 3,181 rays instead of 1,084, tracing in about 3.2 s instead of 1.0 s (the
+  tracer itself got faster: each step's end is sampled once); ribbons of 788 rows instead of 221, so the
+  ribbons' vertex work is about 3.5 times what it was. The look is not traded away; if the load time
+  matters, tracing the rays on a thread is the next step.
