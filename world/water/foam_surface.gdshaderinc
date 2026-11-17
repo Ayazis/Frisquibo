@@ -53,6 +53,10 @@ const float FOAM_SPECK_TILE = 1.2;
 const vec2 FOAM_SPECK_LEVEL = vec2(0.55, 0.85);
 const vec2 FOAM_SPECK_FILL = vec2(0.1, 0.6);
 const float FOAM_SPECK_COVER = 0.6;
+// Specks gather in drifts instead of spreading evenly: broad noise (metres per tile) above this range
+// lets them through.
+const float FOAM_SPECK_DRIFT_TILE = 9.0;
+const vec2 FOAM_SPECK_DRIFT = vec2(0.45, 0.75);
 // Which density where: dense textures above, sparse below these fill values; broad noise moves the
 // boundaries (FOAM_MIX_TILE metres, by FOAM_MIX_SPREAD) and sprinkles the middle ones in everywhere.
 const vec2 FOAM_DENSE_RANGE = vec2(0.45, 0.85);
@@ -259,8 +263,14 @@ FoamSurface foam_surface(vec2 p, float fill, float detail, vec2 sub_shift) {
 	float threshold = mix(FOAM_THRESHOLD.x, FOAM_THRESHOLD.y, fill);
 	float soft = mix(FOAM_SOFTNESS.y, FOAM_SOFTNESS.x, detail);
 	f.cover = smoothstep(threshold - soft, threshold + soft, eroded) * present;
-	float speck = smoothstep(FOAM_SPECK_LEVEL.x, FOAM_SPECK_LEVEL.y, texture(water_foam_specks, p / FOAM_SPECK_TILE).b)
-			* (1.0 - smoothstep(FOAM_SPECK_FILL.x, FOAM_SPECK_FILL.y, fill)) * present * detail;
+	float speck = 0.0;
+	if (detail > 0.0 && fill < FOAM_SPECK_FILL.y) {
+		// Hex-tiled like the rest, and only where the drifts are: otherwise the specks form a regular grid.
+		float drift = smoothstep(FOAM_SPECK_DRIFT.x, FOAM_SPECK_DRIFT.y,
+				foam_noise(p / FOAM_SPECK_DRIFT_TILE + vec2(0.29, 0.61)));
+		speck = smoothstep(FOAM_SPECK_LEVEL.x, FOAM_SPECK_LEVEL.y, foam_hex(water_foam_specks, p / FOAM_SPECK_TILE).x)
+				* drift * (1.0 - smoothstep(FOAM_SPECK_FILL.x, FOAM_SPECK_FILL.y, fill)) * present * detail;
+	}
 	f.cover = max(f.cover, speck * FOAM_SPECK_COVER);
 	f.thick = smoothstep(threshold, threshold + FOAM_THICKENING, eroded);
 	float sub_edge = foam_vein_edge(p + sub_shift, FOAM_SUB_BLUR, lift, fray);
