@@ -44,6 +44,16 @@ const HANDLE := 0.4
 const SPLASH_HEIGHT := 0.8
 const SPLASH_WIDTH := 0.35
 const SPLASH := Vector4(0.9, 1.1, 1.25, 1.9)
+## A breaker's stage and plunge are averaged along its crest, over PEEL_TAPS points PEEL_STEP metres
+## apart (weights 1 2 3 2 1): the lip peels along the crest instead of jumping ahead where the wave's
+## height, size or depth changes within a few metres.
+const PEEL_STEP := 2.5
+const PEEL_TAPS := 5
+## Along the crest the stage and plunge change smoothly, also where a point is still unbroken (its stage
+## is negative, from the same formula, down to PEEL_BEFORE) and where the points reach the beach (they
+## fade out over the last PEEL_SHORE metres of water).
+const PEEL_BEFORE := -1.0
+const PEEL_SHORE := 0.3
 ## From this share of the window the curl hands back to the wave's own surface, which it reaches at 1.
 const END_BLEND := 0.85
 ## Parts of the sheet, as curve() reports them.
@@ -65,6 +75,16 @@ static func plunge_share(xi: float, strength: float) -> float:
 ## Depth where a crest, now in water `depth` deep at `ratio` times its depth limit, started to break.
 static func breaking_depth(depth: float, ratio: float) -> float:
 	return depth * pow(maxf(ratio, 1.0), BREAK_DEPTH_EXPONENT)
+
+
+## stage() for averaging along a crest: also before the crest breaks, where it is negative and changes
+## smoothly into the stage after breaking (down to PEEL_BEFORE).
+static func peel_stage(depth: float, ratio: float, slope: float, breaker_ratio: float) -> float:
+	var break_depth := depth * pow(maxf(ratio, 1e-3), BREAK_DEPTH_EXPONENT)
+	var height := maxf(2.0 * breaker_ratio * break_depth, 1e-3)
+	var run := (break_depth - depth) / maxf(slope, MIN_SLOPE)
+	var flight := sqrt(2.0 * height / GRAVITY)
+	return maxf(run / (sqrt(GRAVITY * maxf(break_depth, 1e-3)) * flight), PEEL_BEFORE)
 
 
 ## Time since the crest broke, in lip flight times (sqrt(2 H_b / g)): negative before it breaks.

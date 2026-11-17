@@ -98,3 +98,29 @@ pixel. Where the hole lay outside the stretched quad, nothing drew the water.
   tracer itself got faster: each step's end is sampled once); ribbons of 788 rows instead of 221, so the
   ribbons' vertex work is about 3.5 times what it was. The look is not traded away; if the load time
   matters, tracing the rays on a thread is the next step.
+
+## Fix: spiky lips and paper-flat undersides (2026-11-17)
+
+With the ribbons following the curl closely, two faults showed that the stretched quads had hidden:
+
+- **Spikes.** A breaker's stage follows its unbroken height very closely (a tenth more height and the
+  lip is thrown a whole flight time earlier). Along a crest that height changed within a metre or two:
+  the field's refraction coefficient comes out striped from cell to cell, and the waterline point that
+  sets each wave's size moves fast where rays bunch. The shader also read refraction and size at each
+  pixel's rest point instead of at its crest, so one cross-section mixed several stages. Now the stage
+  and plunge are read at the crest, the same on the GPU and the CPU (`ShoreBreakers`), and averaged over
+  five points 2.5 m apart along the crest (weights 1 2 3 2 1): the lip peels along the crest. Each point
+  changes smoothly so the average has no seams of its own: before breaking its stage comes from the same
+  formula (negative, down to -1), and near the beach it fades out over the last 0.3 m of water. (A first
+  try without that drew thin slivers along the lines where a point crossed the waterline.)
+  Smoothing the refraction coefficient itself was tried and left out. It is far from the ideal even
+  around a round island (0.5 to 1.6 where 1.41 is right), so it needs its own fix, which would change
+  the shore wave heights everywhere.
+- **Paper lips.** Ripples, foam and whitecaps were looked up at the rest position, and the lip is a
+  narrow band of rest positions stretched over metres of sheet, so they were magnified until flat. They
+  are now looked up along the sheet (metres of sheet towards the shore, `breaker_surface_position()`).
+  And the lip's tip and underside reflect downwards, where the mirror and the sky only had sky to give:
+  that part of the reflection now shows the water ahead, its sky by the water's Fresnel and otherwise
+  its body colour. The underside reads as the dark inside of the tube.
+- Cost: five breaker samples instead of one per pixel near the shore, and the sheet's length once per
+  curling pixel.

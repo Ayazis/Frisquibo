@@ -388,6 +388,16 @@ void vertex() {
 }
 
 void fragment() {
+	ShoreWave shore = shore_wave(v_rest, v_still_depth);
+	// Where a breaker curls, the ribbon draws it and the ocean surface leaves a hole; they overlap a
+	// little where the curl is weak.
+	Breaker breaker = breaker_at(v_rest, shore, length(v_rest - CAMERA_POSITION_WORLD.xz));
+	if (!breaker_drawn_here(breaker, shore.roller_wave)) {
+		discard;
+	}
+	// Ripples and foam are looked up along the curl's own sheet, so they keep their size on it.
+	vec2 surface = breaker_surface_position(v_rest, breaker);
+
 	// --- Surface shape from the simulation -----------------------------------------------------------
 	vec2 slope = vec2(0.0);
 	vec2 jac = vec2(0.0);
@@ -400,7 +410,7 @@ void fragment() {
 		if (i >= cascade_count) {
 			break;
 		}
-		vec3 uv = vec3(v_rest / tile_lengths[i], float(i));
+		vec3 uv = vec3(surface / tile_lengths[i], float(i));
 		vec4 s = texture(slope_maps, uv);
 		vec4 m = texture(moment_maps, uv);
 		vec2 tw = transition_weights(i);
@@ -410,7 +420,7 @@ void fragment() {
 		if (tw.x > 0.0) {
 			// Unresolved slope variance and foam blend by share: (1 - w) old + w new for both weightings.
 			float w = transition_share();
-			vec3 prev_uv = vec3(v_rest / prev_tile_lengths[i], float(i));
+			vec3 prev_uv = vec3(surface / prev_tile_lengths[i], float(i));
 			vec4 ps = texture(prev_slope_maps, prev_uv);
 			vec4 pm = texture(prev_moment_maps, prev_uv);
 			cascade_variance = mix(max(pm.xy - ps.xy * ps.xy, vec2(0.0)), cascade_variance, w);
@@ -428,11 +438,11 @@ void fragment() {
 	// energy; where a pixel covers several of them they fade back into roughness.
 	float wind_speed_now = length(wind);
 	vec2 wind_dir_now = wind_speed_now > 0.0 ? wind / wind_speed_now : vec2(1.0, 0.0);
-	vec2 cuv = v_rest / capillary_tile;
+	vec2 cuv = surface / capillary_tile;
 	vec2 drift = wind_dir_now * capillary_speed * TIME / capillary_tile;
 	vec3 ca = texture(normal_map_a, cuv - drift).xyz * 2.0 - 1.0;
 	vec3 cb = texture(normal_map_b, cuv * CAPILLARY_SECOND_SCALE - vec2(-wind_dir_now.y, wind_dir_now.x) * drift * CAPILLARY_SECOND_SPEED).xyz * 2.0 - 1.0;
-	float footprint = length(fwidth(v_rest));
+	float footprint = length(fwidth(surface));
 	float feature = CAPILLARY_FEATURE * capillary_tile;
 	float resolved = 1.0 - smoothstep(0.1 * feature, 0.5 * feature, footprint);
 	float capillary_energy = base_slope_variance * gust;
@@ -444,14 +454,7 @@ void fragment() {
 	variance *= open_sea * open_sea;
 	// The lumps of white water on breaking crests tilt the surface too.
 	if (v_sea.y > 0.0) {
-		slope += white_water_slope(v_rest, length(fwidth(v_rest)), TIME, v_sea.y) * open_sea;
-	}
-	ShoreWave shore = shore_wave(v_rest, v_still_depth);
-	// Where a breaker curls, the ribbon draws it and the ocean surface leaves a hole; they overlap a
-	// little where the curl is weak.
-	Breaker breaker = breaker_at(v_rest, shore, length(v_rest - CAMERA_POSITION_WORLD.xz));
-	if (!breaker_drawn_here(breaker, shore.roller_wave)) {
-		discard;
+		slope += white_water_slope(surface, footprint, TIME, v_sea.y) * open_sea;
 	}
 	// Small ripples ride the curl; the wave's own shape is the curl's.
 	vec2 detail_slope = slope;
@@ -536,18 +539,18 @@ void fragment() {
 	float cover = clamp(max(max(whitecap, ripple.w), max(surf * 0.85, shore_line * 0.9)) + v_rule_foam, 0.0, 1.0);
 	float detail = foam_detail(dist);
 	vec2 sub_shift = -v.xz / max(abs(v.y), FOAM_SUB_GRAZE) * FOAM_SUB_DEPTH;
-	FoamSurface fs = foam_surface(v_rest - foam_offset, cover, detail, sub_shift);
+	FoamSurface fs = foam_surface(surface - foam_offset, cover, detail, sub_shift);
 	float foam_near = fs.cover;
 	// Breakers: the roller on the breaking front and the lace it leaves behind (near, far).
-	vec2 white_water = ocean_shore_foam(shore, v_rest, water_wave_time);
-	white_water = max(white_water, ocean_breaker_foam(v_rest, lip, v_curl, v_curl_part, v_curl_stage, shore.roller_wave));
+	vec2 white_water = ocean_shore_foam(shore, surface, water_wave_time);
+	white_water = max(white_water, ocean_breaker_foam(surface, lip, v_curl, v_curl_part, v_curl_stage, shore.roller_wave));
 	foam_near = max(foam_near, white_water.x);
 	// Breaker white water is fresh and thick; the open-sea foam is as thick as its pattern says.
 	float foam_thick = max(fs.thick * fs.cover, white_water.x);
 	// Wind-blown streaks: the foam pattern stretched along the wind, growing with the wind.
 	float wind_speed = length(wind);
 	vec2 wind_dir = wind_speed > 0.0 ? wind / wind_speed : vec2(1.0, 0.0);
-	vec2 along_wind = vec2(dot(v_rest, wind_dir) / streak_length, dot(v_rest, vec2(-wind_dir.y, wind_dir.x)));
+	vec2 along_wind = vec2(dot(surface, wind_dir) / streak_length, dot(surface, vec2(-wind_dir.y, wind_dir.x)));
 	float streak_cover = foam_streaks * smoothstep(STREAK_WIND_START, STREAK_WIND_FULL, wind_speed);
 	float streak_tex = texture(foam_texture, along_wind * foam_scale * STREAK_PATTERN_SCALE).r;
 	float streak_patch = texture(foam_texture, along_wind * foam_scale * STREAK_PATCH_SCALE + vec2(0.61, 0.23)).r;
@@ -591,13 +594,22 @@ void fragment() {
 	}
 
 	float f = fresnel * edge;
+	// A curl's lip and tube can reflect downwards, onto the water ahead, which the mirror and the sky
+	// know nothing about. That water shows the sky only by its own Fresnel at that angle; the rest of
+	// the reflection is its body colour, lit like the water's own.
+	float onto_water = 0.0;
+	if (v_curl > 0.0 && !from_below) {
+		vec3 bounce = reflect(-v, n_world);
+		onto_water = bounce.y < 0.0 ? 1.0 - water_mean_fresnel(-bounce.y, 0.0) : 0.0;
+	}
 	if (!from_below) {
 		// Inside the tube the lip hides most of the sky.
 		float sky_seen = 1.0 - TUBE_SHADE * tube;
-		EMISSION = (refracted * (1.0 - f) + reflection * f * sky_seen) * (1.0 - foam);
-		ALBEDO = (mix(scatter_color * murk * (1.0 - f), foam_albedo, foam) + bubble_albedo * bubbles * (1.0 - f)) * sky_seen;
+		EMISSION = (refracted * (1.0 - f) + reflection * f * sky_seen * (1.0 - onto_water)) * (1.0 - foam);
+		vec3 water = scatter_color * (murk * (1.0 - f) + f * onto_water);
+		ALBEDO = (mix(water, foam_albedo, foam) + bubble_albedo * bubbles * (1.0 - f)) * sky_seen;
 		// Only used for the engine's sky reflection, where neither the mirror nor the march found anything.
-		SPECULAR = planar ? 0.0 : WATER_ENGINE_SPECULAR * edge * (1.0 - foam) * (1.0 - traced.a);
+		SPECULAR = planar ? 0.0 : WATER_ENGINE_SPECULAR * edge * (1.0 - foam) * (1.0 - traced.a) * (1.0 - onto_water);
 	} else {
 		vec3 above = textureLod(screen_tex, SCREEN_UV + n_view.xy * refraction_strength, 0.0).rgb;
 		EMISSION = water_seen_from_below(n_world, v, above, deep_color, absorption, dist);

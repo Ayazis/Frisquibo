@@ -57,6 +57,14 @@ const float BREAKER_PART_BACK_WALL = 3.0;
 const float BREAKER_PART_TROUGH = 4.0;
 // Metres either side of the crest the seabed slope is measured over.
 const float BREAKER_SLOPE_STEP = 2.0;
+// A breaker's stage and plunge are averaged along its crest, over BREAKER_PEEL_TAPS points this many
+// metres apart (weights 1 2 3 2 1), so the lip peels along the crest instead of jumping ahead where
+// the wave's height, size or depth changes within a few metres (same as BreakerProfile.PEEL_STEP).
+const float BREAKER_PEEL_STEP = 2.5;
+const int BREAKER_PEEL_TAPS = 5;
+// Same as BreakerProfile.PEEL_BEFORE and PEEL_SHORE.
+const float BREAKER_PEEL_BEFORE = -1.0;
+const float BREAKER_PEEL_SHORE = 0.3;
 // Curls fade out between this share of the reach and the reach.
 const float BREAKER_REACH_FADE = 0.75;
 // Ribbon window around its crest, in periods: ahead of it (to beyond the trough) and behind it.
@@ -112,6 +120,35 @@ float breaker_seabed_slope(vec2 p, vec2 towards) {
 			/ (2.0 * BREAKER_SLOPE_STEP);
 }
 
+// Stage and plunge share of the breaker of crest number `wave` whose crest water rests at `crest`,
+// travelling `towards`, for averaging along the crest: (stage, plunge share, weight). Both change
+// smoothly: before breaking the stage is negative, from the same formula (BreakerProfile.peel_stage()),
+// and the weight fades out over the last BREAKER_PEEL_SHORE metres of water (ShoreBreakers._stage_plunge()).
+vec3 breaker_stage_plunge(vec2 crest, vec2 towards, float wave) {
+	float depth = ocean_still_depth(crest);
+	float weight = shore_weight(depth) * smoothstep(0.0, BREAKER_PEEL_SHORE, depth);
+	vec2 uv = (crest - seabed_rect.xy) / seabed_rect.zw;
+	if (weight <= 0.0 || any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
+		return vec3(BREAKER_PEEL_BEFORE, 0.0, 0.0);
+	}
+	// Refraction and the per-wave size at the crest, as the CPU twin reads them.
+	vec3 ray = textureLod(shore_origin, uv, 0.0).xyz;
+	float lee = mix(shore_lee_share, 1.0, smoothstep(SHORE_LEE_FROM, SHORE_LEE_TO, dot(towards, shore_wave_direction)));
+	float gain = wave_amplitude * sqrt(shore_wave_share) * lee * ray.z;
+	float free_crest = gain * shore_wave_size(ray.xy, wave) * pow(shore_zone() / max(depth, SHORE_MIN_DEPTH), 0.25);
+	float ratio = free_crest / max(breaker_ratio * depth, 1e-4);
+	float slope = max(breaker_seabed_slope(crest, towards), BREAKER_MIN_SLOPE);
+	float break_depth = depth * pow(max(ratio, 1e-3), BREAKER_DEPTH_EXPONENT);
+	float height = max(2.0 * breaker_ratio * break_depth, 1e-3);
+	float run = (break_depth - depth) / slope;
+	float flight = sqrt(2.0 * height / BREAKER_GRAVITY);
+	float stage = max(run / (sqrt(BREAKER_GRAVITY * max(break_depth, 1e-3)) * flight), BREAKER_PEEL_BEFORE);
+	float period = max(water_swash_period, 0.1);
+	float deep_wavelength = BREAKER_GRAVITY * period * period / TAU;
+	float xi = slope / sqrt(height / deep_wavelength);
+	return vec3(stage, breaker_plunge_share(xi), weight);
+}
+
 // The breaker the water resting at `p` belongs to (BreakerProfile.stage(), fold(), plunge_share()).
 Breaker breaker_at(vec2 p, ShoreWave w, float camera_distance) {
 	Breaker b;
@@ -135,24 +172,31 @@ Breaker breaker_at(vec2 p, ShoreWave w, float camera_distance) {
 	if (weight <= 0.0) {
 		return b;
 	}
-	float size = shore_wave_size(w.end, w.roller_wave);
-	float free_crest = w.gain * size * pow(shore_zone() / max(depth, SHORE_MIN_DEPTH), 0.25);
-	float limit = breaker_ratio * depth;
-	float ratio = free_crest / max(limit, 1e-4);
-	b.crest = min(free_crest, limit) * weight;
-	if (ratio <= 1.0) {
+	vec2 uv = (b.crest_rest - seabed_rect.xy) / seabed_rect.zw;
+	vec3 ray = textureLod(shore_origin, clamp(uv, vec2(0.0), vec2(1.0)), 0.0).xyz;
+	float lee = mix(shore_lee_share, 1.0, smoothstep(SHORE_LEE_FROM, SHORE_LEE_TO, dot(w.towards, shore_wave_direction)));
+	float free_crest = wave_amplitude * sqrt(shore_wave_share) * lee * ray.z * shore_wave_size(ray.xy, w.roller_wave)
+			* pow(shore_zone() / max(depth, SHORE_MIN_DEPTH), 0.25);
+	b.crest = min(free_crest, breaker_ratio * depth) * weight;
+	// Stage and plunge, averaged along the crest.
+	vec2 along = vec2(-w.towards.y, w.towards.x);
+	float stage = 0.0;
+	float plunge = 0.0;
+	float total = 0.0;
+	for (int k = 0; k < BREAKER_PEEL_TAPS; k++) {
+		float offset = float(k - BREAKER_PEEL_TAPS / 2);
+		float tap_weight = float(BREAKER_PEEL_TAPS / 2 + 1) - abs(offset);
+		vec3 tap = breaker_stage_plunge(b.crest_rest + along * offset * BREAKER_PEEL_STEP, w.towards, w.roller_wave);
+		tap_weight *= tap.z;
+		stage += tap.x * tap_weight;
+		plunge += tap.y * tap_weight;
+		total += tap_weight;
+	}
+	if (total <= 0.0) {
 		return b;
 	}
-	float slope = max(breaker_seabed_slope(b.crest_rest, w.towards), BREAKER_MIN_SLOPE);
-	float break_depth = depth * pow(ratio, BREAKER_DEPTH_EXPONENT);
-	float height = 2.0 * breaker_ratio * break_depth;
-	float run = (break_depth - depth) / slope;
-	float flight = sqrt(2.0 * height / BREAKER_GRAVITY);
-	b.stage = run / (sqrt(BREAKER_GRAVITY * break_depth) * flight);
-	float period = max(water_swash_period, 0.1);
-	float deep_wavelength = BREAKER_GRAVITY * period * period / TAU;
-	float xi = slope / sqrt(max(height, 1e-4) / deep_wavelength);
-	float fold = breaker_plunge_share(xi) * smoothstep(0.0, BREAKER_LIP_GROW, b.stage)
+	b.stage = stage / total;
+	float fold = plunge / total * smoothstep(0.0, BREAKER_LIP_GROW, b.stage)
 			* (1.0 - smoothstep(BREAKER_COLLAPSE_START, BREAKER_COLLAPSE_END, b.stage));
 	float reach_fade = 1.0 - smoothstep(BREAKER_REACH_FADE * breaker_reach, breaker_reach, camera_distance);
 	b.curl = fold * weight * reach_fade * (1.0 - smoothstep(BREAKER_END_BLEND, 1.0, b.phi));
@@ -168,8 +212,9 @@ float breaker_bezier_length(vec2 p0, vec2 p1, vec2 p2, vec2 p3) {
 	return 0.5 * (distance(p0, p3) + distance(p0, p1) + distance(p1, p2) + distance(p2, p3));
 }
 
-// The sheet at `phi` (BreakerProfile.curve() and normal()).
-BreakerSheet breaker_sheet(float phi, float stage, float crest, float trough_distance) {
+// The sheet's five curves (control points) and their lengths, for a breaker at `stage` with its crest
+// `crest` metres high and the trough `trough_distance` metres ahead (BreakerProfile.curve()).
+void breaker_sheet_curves(float stage, float crest, float trough_distance, out vec2 c[20], out float lengths[5]) {
 	float flight = clamp(stage, 0.0, 1.0);
 	float height = 2.0 * crest;
 	float reach = min(BREAKER_LIP_REACH * height, BREAKER_MAX_REACH_SHARE * trough_distance);
@@ -186,18 +231,44 @@ BreakerSheet breaker_sheet(float phi, float stage, float crest, float trough_dis
 	float wall = BREAKER_BACK_WALL * crest * flight;
 	float wall_handle = BREAKER_HANDLE * distance(ceiling, base);
 	float run_handle = BREAKER_HANDLE * distance(base, trough);
-	vec2 c[20];
 	c[0] = top; c[1] = top + vec2(lip_handle, 0.0); c[2] = tip - heading * lip_handle; c[3] = tip;
 	c[4] = tip; c[5] = mix(tip, tip_inside, 1.0 / 3.0); c[6] = mix(tip, tip_inside, 2.0 / 3.0); c[7] = tip_inside;
 	c[8] = tip_inside; c[9] = tip_inside - heading * lip_handle; c[10] = ceiling + vec2(lip_handle, 0.0); c[11] = ceiling;
 	c[12] = ceiling; c[13] = ceiling - vec2(wall + wall_handle, 0.0); c[14] = base - vec2(wall_handle, 0.0); c[15] = base;
 	c[16] = base; c[17] = base + vec2(run_handle, 0.0); c[18] = trough - vec2(run_handle, 0.0); c[19] = trough;
-	float lengths[5];
-	float total = 0.0;
 	for (int k = 0; k < 5; k++) {
 		lengths[k] = breaker_bezier_length(c[4 * k], c[4 * k + 1], c[4 * k + 2], c[4 * k + 3]);
-		total += lengths[k];
 	}
+}
+
+// Metres of sheet from the crest to the trough ahead (the flat water there spans trough_distance).
+float breaker_sheet_length(float stage, float crest, float trough_distance) {
+	vec2 c[20];
+	float lengths[5];
+	breaker_sheet_curves(stage, crest, trough_distance, c, lengths);
+	return lengths[0] + lengths[1] + lengths[2] + lengths[3] + lengths[4];
+}
+
+// Where water resting at `rest` lies along the folded sheet, as a rest-like position: along the crest as
+// it rests, towards the shore by metres of sheet instead of metres of flat water. Ripples and foam looked
+// up here keep their size on the curl, where the rest position would draw a narrow band of them out over
+// the whole lip.
+vec2 breaker_surface_position(vec2 rest, Breaker b) {
+	if (b.curl <= 0.0) {
+		return rest;
+	}
+	float sheet = breaker_sheet_length(b.stage, b.crest, b.distance);
+	return mix(rest, b.crest_rest + b.towards * b.phi * sheet, b.curl);
+}
+
+// The sheet at `phi` (BreakerProfile.curve() and normal()).
+BreakerSheet breaker_sheet(float phi, float stage, float crest, float trough_distance) {
+	float height = 2.0 * crest;
+	float reach = min(BREAKER_LIP_REACH * height, BREAKER_MAX_REACH_SHARE * trough_distance);
+	vec2 c[20];
+	float lengths[5];
+	breaker_sheet_curves(stage, crest, trough_distance, c, lengths);
+	float total = lengths[0] + lengths[1] + lengths[2] + lengths[3] + lengths[4];
 	float splash_height = BREAKER_SPLASH_HEIGHT * crest * breaker_splash(stage);
 	float splash_width = max(BREAKER_SPLASH_WIDTH * height, 1e-3);
 	// At phi, and either side of it for the tangent.
@@ -205,7 +276,7 @@ BreakerSheet breaker_sheet(float phi, float stage, float crest, float trough_dis
 	float part = 0.0;
 	for (int n = 0; n < 3; n++) {
 		float along = clamp(phi + float(n - 1) * BREAKER_NORMAL_STEP, 0.0, 1.0) * total;
-		at[n] = top;
+		at[n] = c[0];
 		for (int k = 0; k < 5; k++) {
 			if (along <= lengths[k] || k == 4) {
 				float t = clamp(along / max(lengths[k], 1e-9), 0.0, 1.0);
