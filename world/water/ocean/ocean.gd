@@ -26,13 +26,13 @@ const WAVES_GROUP := "Waves"
 const SEA_GROUP := "Sea"
 const LOOK_GROUP := "Look"
 ## The only values the Gerstner fallback (web / Compatibility) reacts to.
-const FALLBACK_PARAMETERS: Array[StringName] = [&"wind_speed", &"wind_direction", &"swell_height",
-		&"swell_period", &"swell_direction", &"height_scale", &"wavelength_scale", &"choppiness", &"level"]
-## Gerstner fallback: wave amplitude and length it gives the default sea (DEFAULT_SPECTRUM's wind sea).
+const FALLBACK_PARAMETERS: Array[StringName] = [&"surface_height", &"surface_length", &"surface_direction",
+		&"swell_height", &"swell_period", &"swell_direction", &"choppiness", &"level"]
+## Gerstner fallback: wave amplitude and length it gives the default sea (DEFAULT_SPECTRUM's surface waves).
 const FALLBACK_AMPLITUDE := 0.12
 const FALLBACK_WAVELENGTH := 9.0
-## Lightest wind, relative to the default sea's, whose wave length the fallback still shortens.
-const FALLBACK_MIN_WIND_RATIO := 0.5
+## Shortest surface waves, relative to the default sea's, the fallback still shortens its waves for.
+const FALLBACK_MIN_LENGTH_RATIO := 0.25
 ## Above this the Gerstner waves loop over themselves.
 const FALLBACK_MAX_STEEPNESS := 0.95
 ## Foam drifts downwind at about this share of the wind speed (the wind-driven surface current).
@@ -64,8 +64,9 @@ const UNDERWATER_REACH_MARGIN := 0.5
 @export var planar_reflection := true
 ## Waves, wakes and foam from objects in the water, near the camera (WaterRipples).
 @export var interaction_ripples := true
-@export_group("Depth and shore")
+@export_group("Water depth")
 @export_range(-20.0, 20.0, 0.05, "or_less", "or_greater", "suffix:m") var level := 0.0
+@export_group("Shore waves")
 ## Share of the open-sea wave that still reaches the waterline, so the shore keeps a lapping wave.
 @export_range(0.0, 1.0, 0.01) var min_shore_wave: float = 0.12
 ## Depth-limited waves: crest height <= breaker_ratio * water depth. Real waves break at H = 0.78 d,
@@ -74,9 +75,6 @@ const UNDERWATER_REACH_MARGIN := 0.5
 ## Extra water level at the waterline from breaking waves, as a fraction of the crest height
 ## (real set-up is about 0.2 of the breaking wave height). Higher seas reach further up the beach.
 @export_range(0.0, 2.0) var wave_setup := 0.3
-## Slope of the beach face at the waterline (rise over run): with the waves it sets how far the swash
-## runs up the sand (ShoreRunup). 0.08 is a medium-sand beach, as BeachProfile builds by default.
-@export_range(0.01, 0.3, 0.005) var foreshore_slope := 0.08
 ## Water shallower than this (m) turns the waves towards the beach, where they steepen and break
 ## (ShoreWaves). Real waves feel the bottom deeper still; the shore waves take over where it shows.
 @export_range(1.0, 12.0, 0.5, "suffix:m") var shore_wave_depth := 8.0
@@ -89,6 +87,10 @@ const UNDERWATER_REACH_MARGIN := 0.5
 ## How hard breakers plunge where the beach makes them (BreakerProfile): 1 is physical, 0 makes every
 ## breaker spill. Curls are drawn near the camera only, as far as the quality tier's breaker_reach.
 @export_range(0.0, 2.0, 0.01) var curl_strength := 1.0
+@export_group("Beach")
+## Slope of the beach face at the waterline (rise over run): with the waves it sets how far the swash
+## runs up the sand (ShoreRunup). 0.08 is a medium-sand beach, as BeachProfile builds by default.
+@export_range(0.01, 0.3, 0.005) var foreshore_slope := 0.08
 @export_group("Sea state changes")
 ## Seconds a new sea state takes to fade in when it changes the longest waves' tile (a preset, a big
 ## wind change). 0 switches at once and rearranges every long wave in one frame.
@@ -735,9 +737,9 @@ func _make_breakers(area: Rect2) -> void:
 	add_child(_breakers)
 
 
-## Direction the bigger wave system travels in: the swell when it is higher than the wind sea.
+## Direction the bigger wave system travels in: the swell when it is higher than the surface waves.
 func _main_wave_direction() -> Vector2:
-	var heading := _effective.wind_direction
+	var heading := _effective.surface_direction
 	if OceanSeaStats.swell_wave_height(_effective) > OceanSeaStats.surface_wave_height(_effective):
 		heading = _effective.swell_direction
 	var angle := deg_to_rad(heading)
@@ -745,21 +747,22 @@ func _main_wave_direction() -> Vector2:
 
 
 ## Approximate sea states on Compatibility; this is not an FFT spectrum reconstruction. The Gerstner
-## sea has one wave train, so it takes the direction and length of the bigger system, swell or wind sea,
-## on the default sea's scale. Heights add like energies; gentle swell sharpens the crests less.
+## sea has one wave train, so it takes the direction and length of the bigger system, swell or surface
+## waves, on the default sea's scale. Heights add like energies; gentle swell sharpens the crests less.
 func _apply_fallback_spectrum() -> void:
 	var sea := _effective
-	var wind_ratio: float = sea.wind_speed / DEFAULT_SPECTRUM.wind_speed
-	var wind_amplitude := FALLBACK_AMPLITUDE * wind_ratio * wind_ratio
-	var swell_amplitude := FALLBACK_AMPLITUDE * sea.swell_height / OceanSeaStats.wind_wave_height(DEFAULT_SPECTRUM)
-	var wavelength := FALLBACK_WAVELENGTH * maxf(wind_ratio, FALLBACK_MIN_WIND_RATIO) * sea.wavelength_scale
-	var heading := sea.wind_direction
+	var default_height := DEFAULT_SPECTRUM.surface_height
+	var surface_amplitude := FALLBACK_AMPLITUDE * sea.surface_height / default_height
+	var swell_amplitude := FALLBACK_AMPLITUDE * sea.swell_height / default_height
+	var length_ratio: float = sea.surface_length / DEFAULT_SPECTRUM.surface_length
+	var wavelength := FALLBACK_WAVELENGTH * maxf(length_ratio, FALLBACK_MIN_LENGTH_RATIO)
+	var heading := sea.surface_direction
 	var steepness := minf(sea.choppiness, FALLBACK_MAX_STEEPNESS)
-	if swell_amplitude > wind_amplitude:
+	if swell_amplitude > surface_amplitude:
 		wavelength = FALLBACK_WAVELENGTH * sea.swell_wavelength() / DEFAULT_SPECTRUM.peak_wavelength()
 		heading = sea.swell_direction
-		steepness *= wind_amplitude / swell_amplitude
-	var amplitude := sqrt(wind_amplitude * wind_amplitude + swell_amplitude * swell_amplitude) * sea.height_scale
+		steepness *= surface_amplitude / swell_amplitude
+	var amplitude := sqrt(surface_amplitude * surface_amplitude + swell_amplitude * swell_amplitude)
 	_fallback.material.set_shader_parameter("wave_amplitude", amplitude)
 	_fallback.material.set_shader_parameter("wave_length", wavelength)
 	_fallback.material.set_shader_parameter("wave_steepness", steepness)

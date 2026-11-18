@@ -1,6 +1,6 @@
 extends SceneTree
 ## Runs the real FFT ocean and checks that the simulated wave height is what the sea state promises:
-## the wind sea's own spectrum, and a swell of exactly the height asked for.
+## surface waves and a swell of exactly the heights asked for.
 ## Needs a RenderingDevice (not --headless); see tests/smoke/README.md.
 
 const SETTLE_FRAMES := 240
@@ -24,8 +24,8 @@ func _initialize() -> void:
 		print("OCEAN WAVE HEIGHT skipped: no RenderingDevice")
 		quit()
 		return
-	_sea.wind_speed = 9.0
-	_sea.fetch = 80.0
+	_sea.surface_height = 1.72
+	_sea.surface_length = 48.7
 	_sea.depth = 400.0
 	_ocean = Ocean.new()
 	_ocean.spectrum = _sea
@@ -48,7 +48,7 @@ func _process(_delta: float) -> bool:
 	var measured := _ocean.wave_height()
 	if _case < 0:
 		_wind_height = measured
-		_expect(measured, OceanSeaStats.wind_wave_height(_sea), "wind sea")
+		_expect(measured, OceanSeaStats.surface_wave_height(_sea), "surface waves")
 	else:
 		var swell := sqrt(maxf(measured * measured - _wind_height * _wind_height, 0.0))
 		_expect(swell, SWELLS[_case].x, "swell %.1f m, %.0f s" % [SWELLS[_case].x, SWELLS[_case].y])

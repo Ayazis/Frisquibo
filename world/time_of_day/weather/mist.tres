@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="SkyWeather" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://world/time_of_day/sky_weather.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Mist"
+cloud_coverage = 0.15
+cloud_density = 0.8
+cloud_bottom = 1500.0
+cloud_top = 3000.0
+cirrus_amount = 0.1
+turbidity = 3.5
+sun_occlusion = 0.05
+fog_density = 0.0005
+fog_height_density = 0.015
+fog_height = 8.0
+fog_sky_affect = 0.1
+volumetric_fog_density = 0.003
+volumetric_fog_anisotropy = 0.7
+wind = Vector2(3, 1)
+saturation = 0.95
+contrast = 0.98
+lightning_per_minute = 0.0

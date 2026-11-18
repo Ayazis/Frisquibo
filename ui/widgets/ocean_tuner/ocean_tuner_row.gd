@@ -1,20 +1,22 @@
 class_name OceanTunerRow
 extends HBoxContainer
-## One tunable: name, slider, value with unit, and a button back to the starting value. A tunable
-## that follows from the rest of the sea state also gets an Auto box, which hands it to that rule.
+## One tunable: name, slider, value with unit, and a button back to the starting value. A value that
+## differs from the starting one is tinted, so what was changed stands out. Wide ranges get a
+## logarithmic slider. A tunable that follows from the rest of the sea state also gets an Auto box.
 
 signal value_changed(parameter: StringName, value: float)
 signal auto_toggled(parameter: StringName, on: bool)
 
-const LABEL_WIDTH := 150.0
+const LABEL_WIDTH := 170.0
 const VALUE_WIDTH := 76.0
 ## Room for the Auto box; rows without one keep it empty so all sliders line up.
 const AUTO_WIDTH := 64.0
 const RESET_TEXT := "Reset"
 const AUTO_TEXT := "Auto"
-const AUTO_NOTE := "Auto: follows from the wind. Untick to set it by hand."
+const AUTO_NOTE := "Auto: follows the wind speed. Untick to set it by hand."
 const DRIVEN_NOTE := "Follows another control."
 const NOT_LIVE_NOTE := "No effect here: needs the FFT ocean (desktop)."
+const CHANGED_COLOR := Color(1.0, 0.82, 0.45)
 
 var parameter: OceanParameter
 var _slider := HSlider.new()
@@ -22,6 +24,8 @@ var _value := Label.new()
 var _reset := Button.new()
 var _auto: CheckBox
 var _default := 0.0
+## The value as the ocean has it; the slider rounds it to its step.
+var _shown := 0.0
 var _driven := false
 var _live := true
 
@@ -38,6 +42,7 @@ func _init(described: OceanParameter, can_be_auto: bool = false) -> void:
 	_slider.step = parameter.step
 	_slider.allow_lesser = parameter.allow_less
 	_slider.allow_greater = parameter.allow_greater
+	_slider.exp_edit = parameter.is_logarithmic()
 	_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_slider.focus_mode = Control.FOCUS_NONE
@@ -67,6 +72,7 @@ func _init(described: OceanParameter, can_be_auto: bool = false) -> void:
 
 ## Shows `value` without reporting it as a change.
 func show_value(value: float) -> void:
+	_shown = value
 	_slider.set_value_no_signal(value)
 	_value.text = ("%s %s" % [_format(value), parameter.unit]).strip_edges()
 	_update_state()
@@ -93,7 +99,12 @@ func set_live(live: bool) -> void:
 func _update_state() -> void:
 	var usable := _live and not _driven
 	_slider.editable = usable
-	_reset.disabled = not usable or is_equal_approx(_slider.value, _default)
+	var changed := not is_equal_approx(_shown, _default)
+	_reset.disabled = not usable or not changed
+	if changed:
+		_value.add_theme_color_override(&"font_color", CHANGED_COLOR)
+	else:
+		_value.remove_theme_color_override(&"font_color")
 	if _auto != null:
 		_auto.disabled = not _live
 	var note := ""

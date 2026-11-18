@@ -15,12 +15,12 @@ func _initialize() -> void:
 	_near(wind.maximum, 40.0, "Range maximum comes from the export hint")
 	_near(wind.step, 0.1, "Step comes from the export hint")
 	_check(wind.unit == "m/s", "Unit comes from the suffix")
-	_check(wind.group == "Wind and surface waves", "Group comes from @export_group")
+	_check(wind.group == "Wind", "Group comes from @export_group")
 	_check(wind.label == "Wind speed", "Label defaults to the property name in sentence case")
 	_check(wind.description != "", "Wind speed has a description")
 	_check(_find(listed, &"foam_gain").group == "Foam", "A later group replaces the earlier one")
 	_check(_find(listed, &"wind_direction").unit == "°", "The degrees hint becomes a unit")
-	_check(_find(listed, &"height_scale").label == "Vertical size", "A friendlier label overrides the name")
+	_check(_find(listed, &"choppiness").label == "Crest sharpness", "A friendlier label overrides the name")
 	_check(_find(listed, &"seed") == null, "Whole numbers are not tunable sliders")
 	var chop := _find(listed, &"choppiness")
 	_near(chop.step, 0.02, "Without a step the range is cut into 200")
@@ -32,10 +32,10 @@ func _initialize() -> void:
 	ocean.spectrum = sea
 	var all := ocean.parameters()
 	var level := _find(all, &"level")
-	_check(level != null and level.group == "Depth and shore", "Ocean values are listed under their group")
+	_check(level != null and level.group == "Water depth", "Ocean values are listed under their group")
 	_check(level.limits().y == INF, "or_greater leaves the limit open")
 	_near(level.clamp_value(50.0), 50.0, "An open range does not clamp")
-	_check(_find(all, &"breaker_ratio").group == "Depth and shore", "Ocean groups are read past the node's own")
+	_check(_find(all, &"breaker_ratio").group == "Shore waves", "Ocean groups are read past the node's own")
 	_check(_find(all, &"depth").group == level.group, "Sea state and ocean share the depth and shore section")
 	_check(_find(all, &"wind_speed") != null, "The ocean lists its sea state too")
 	for parameter: OceanParameter in all:
@@ -85,18 +85,21 @@ func _initialize() -> void:
 	_check(OceanSeaStats.beaufort(9.0) == 5, "9 m/s is a fresh breeze")
 	_check(OceanSeaStats.beaufort(40.0) == 12, "Beyond the table is a hurricane")
 	var breeze := OceanSpectrum.new()
-	breeze.wind_speed = 10.0
-	breeze.fetch = 100.0
+	_near(4.0 * sqrt(OceanSpectrum.JONSWAP_VARIANCE * breeze.jonswap_alpha() * 9.81 * 9.81
+			/ pow(breeze.peak_frequency(), 4.0)), breeze.surface_height, "The JONSWAP sea has the height asked for", 0.01)
+	_near(TAU * 9.81 / pow(breeze.peak_frequency(), 2.0), breeze.surface_length, "...and the length", 0.01)
+	var alpha := breeze.jonswap_alpha()
+	var peak := breeze.peak_frequency()
+	breeze.wind_speed = 30.0
+	breeze.wind_direction = -90.0
+	_check(is_equal_approx(breeze.jonswap_alpha(), alpha) and is_equal_approx(breeze.peak_frequency(), peak),
+			"Wind leaves the waves alone")
 	breeze.wind_speed = 9.0
-	breeze.fetch = 80.0
-	_check(absf(OceanSeaStats.wind_wave_height(breeze) - 1.72) < 0.01, "Wind sea height follows the JONSWAP spectrum")
-	breeze.wavelength_scale = 2.0
-	_check(absf(OceanSeaStats.wind_wave_height(breeze) - 1.72) < 0.01, "Horizontal size leaves the height alone")
-	breeze.wavelength_scale = 1.0
+	_near(OceanSeaStats.surface_wave_height(breeze), 1.72, "Surface waves are as high as set", 0.01)
 	breeze.swell_height = 2.0
 	_near(OceanSeaStats.expected_wave_height(breeze), sqrt(1.72 * 1.72 + 4.0), "Wind sea and swell energies add", 0.01)
 	_near(OceanSeaStats.steepness(breeze, OceanSeaStats.expected_wave_height(breeze)) * breeze.peak_wavelength(),
-			OceanSeaStats.wind_wave_height(breeze), "Steepness leaves the swell out", 0.01)
+			OceanSeaStats.surface_wave_height(breeze), "Steepness leaves the swell out", 0.01)
 	breeze.swell_height = 0.0
 	breeze.depth = 4000.0
 	breeze.swell_period = 10.0
@@ -110,18 +113,17 @@ func _initialize() -> void:
 	_near(breeze.swell_wavelength(), 10.0 * sqrt(9.81 * 5.0), "Shallow-water swell slows to sqrt(g depth)", 3.0)
 	breeze.swell_height = 0.0
 	breeze.depth = 40.0
-	breeze.fetch = 2000.0
-	_check(OceanSeaStats.warnings(breeze, 1.0).size() == 1, "A fetch beyond the full sea warns")
+	breeze.wind_speed = 3.0
+	_check(OceanSeaStats.warnings(breeze, 1.0).size() == 1, "Surface waves too high for the wind warn")
 	breeze.wind_speed = 10.0
-	breeze.fetch = 100.0
 	_near(OceanSeaStats.peak_period(breeze) * breeze.peak_frequency(), TAU, "Period matches the peak frequency")
 	_check(OceanSeaStats.warnings(breeze, 1.0).is_empty(), "A plain wind sea has no warnings")
 	_check(OceanSeaStats.warnings(breeze, breeze.peak_wavelength() / 5.0).size() == 1, "Too steep waves warn")
 	breeze.choppiness = 2.0
-	breeze.height_scale = 2.0
-	_check(OceanSeaStats.warnings(breeze, 1.0).size() == 2, "Folding and artistic size warn")
+	_check(OceanSeaStats.warnings(breeze, 1.0).size() == 1, "Folding warns")
 
-	_check(OceanAutoValues.has(&"choppiness") and not OceanAutoValues.has(&"wind_speed"), "Only derived values are auto")
+	_check(OceanAutoValues.has(&"foam_threshold") and not OceanAutoValues.has(&"wind_speed"), "Only derived values are auto")
+	_check(not OceanAutoValues.has(&"choppiness"), "Crest sharpness doesn't follow the wind")
 	_check(is_nan(OceanAutoValues.value(&"wind_speed", breeze)), "A value without a rule has no auto value")
 	var calm := OceanSpectrum.new()
 	calm.wind_speed = 4.0

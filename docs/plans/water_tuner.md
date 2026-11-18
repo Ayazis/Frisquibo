@@ -64,9 +64,10 @@ The user found the wind had too much effect and asked for clear sections: one fo
 for the surface waves, since big waves can run one way while the wind blows another. Done (decision
 `0007-two-wave-systems-in-the-tuner.md`):
 
-- Panel sections in a fixed order (`OceanTunerPanel.SECTION_ORDER`): sea state, Main waves (swell),
-  Wind and surface waves, Crest shape, Foam, Depth and shore, look sections, Artistic overrides
-  (folded), links, save and load.
+- Panel sections in a fixed order: sea state, Main waves (swell), Wind and surface waves, Crest
+  shape, Foam, Depth and shore, look sections, Artistic overrides (folded), links, save and load.
+  Since replaced by numbered steps and surface waves with their own sliders (decision
+  `0016-waves-independent-of-wind.md`).
 - `wind_spread` replaces `swell` ("Crest alignment") and `spread`; old resources convert on load.
 - Wind speed slider ends at 40 m/s. Readouts show main and surface waves separately; a warning
   when swell is steeper than real swell.

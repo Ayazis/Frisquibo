@@ -62,11 +62,11 @@ func _initialize() -> void:
 	var spectrum := OceanSpectrum.new()
 	var params := OceanRuleEngine.parameters(spectrum)
 	_check(params.has(&"wind_speed") and params.has(&"foam_gain"), "Spectrum parameters are rule inputs")
-	_check(OceanRuleEngine.limits(spectrum).has(&"wavelength_scale"), "Parameter ranges come from export hints")
+	_check(OceanRuleEngine.limits(spectrum).has(&"surface_length"), "Parameter ranges come from export hints")
 	var longer := spectrum.duplicate() as OceanSpectrum
-	longer.wavelength_scale = 2.0
-	_near(longer.peak_wavelength() / spectrum.peak_wavelength(), 2.0, "Horizontal size doubles the dominant wave length")
-	longer.wavelength_scale = 8.0
+	longer.surface_length = spectrum.surface_length * 2.0
+	_near(longer.peak_wavelength() / spectrum.peak_wavelength(), 2.0, "Surface wave length sets the dominant wave length")
+	longer.surface_length = 400.0
 	var tiles := OceanSimulation.tiles_for(longer, 4)
 	_check(tiles[0] >= OceanSimulation.PEAK_WAVES_PER_TILE * longer.peak_wavelength() - TOLERANCE,
 			"Longest cascade grows to fit long waves")

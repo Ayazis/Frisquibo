@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="AtmosphereQuality" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://world/time_of_day/atmosphere_quality.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+radiance_size = 64
+atmosphere_steps = 8
+radiance_atmosphere_steps = 6
+cloud_steps = 16
+radiance_cloud_steps = 8
+cloud_light_steps = 2
+cloud_detail = false
+volumetric_fog = false
+volumetric_fog_size = 64
+volumetric_fog_depth = 64
+volumetric_fog_length = 150.0
+shadow_distance = 150.0
+sun_angular_diameter = 0.0
+ssao = false
+ssil = false

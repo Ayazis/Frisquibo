@@ -30,6 +30,8 @@ extends Resource
 ## Roughness from ripples smaller than the simulation resolves.
 @export_range(0.0, 0.01, 0.0001, "or_greater") var base_slope_variance := 0.0006
 @export_range(0.0, 4.0, 0.05, "or_greater") var sun_specular_strength := 1.0
+
+@export_group("Wind")
 ## Metres covered by the close-up ripple pattern; its ripples are about a sixth of this.
 @export_range(0.2, 10.0, 0.05, "or_greater", "suffix:m") var capillary_tile := 1.2
 ## How fast the close-up ripples drift downwind.
@@ -46,8 +48,6 @@ extends Resource
 @export_range(0.0, 4.0, 0.05, "or_greater") var whitecap_strength := 1.0
 ## Smaller wave scales make thinner, shorter-lived foam.
 @export_range(0.0, 1.0, 0.01) var foam_cascade_falloff := 0.6
-@export_range(0.0, 5.0, 0.05, "or_greater", "suffix:m") var shore_foam_width := 0.9
-@export_range(0.0, 10.0, 0.05, "or_greater", "suffix:m") var surf_depth := 1.6
 @export_range(20.0, 2000.0, 10.0, "or_greater", "suffix:m") var foam_far_distance := 250.0
 ## Cover of wind-blown foam streaks in a full gale; they start at Beaufort 7 and grow with the wind.
 @export_range(0.0, 1.0, 0.01) var foam_streaks := 0.35
@@ -56,6 +56,10 @@ extends Resource
 @export_range(0.0, 2.0, 0.01, "or_greater") var bubble_strength := 0.5
 ## Lumpiness of thick foam.
 @export_range(0.0, 3.0, 0.05, "or_greater") var foam_relief := 1.0
+
+@export_group("Beach")
+@export_range(0.0, 5.0, 0.05, "or_greater", "suffix:m") var shore_foam_width := 0.9
+@export_range(0.0, 10.0, 0.05, "or_greater", "suffix:m") var surf_depth := 1.6
 
 @export_group("Caustics")
 ## 1: the light the simulated waves really focus onto the seabed.

@@ -22,7 +22,7 @@ script = ExtResource("2")
 name = "hurricane_side"
 camera_position = Vector3(0, 10, -1451)
 look_at_target = Vector3(57, 0, -1533)
-state = {"view": 0, "sea_state": 2, "ocean": {"transition_time": 0.0, "wind_speed": 40.0, "fetch": 2000.0}}
+state = {"view": 0, "sea_state": 2, "ocean": {"transition_time": 0.0, "wind_speed": 40.0, "surface_height": 15.0, "surface_length": 600.0}}
 
 [resource]
 script = ExtResource("1")

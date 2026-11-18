@@ -22,42 +22,42 @@ script = ExtResource("2")
 name = "hurricane_open_sea"
 camera_position = Vector3(0, 25, -1451)
 look_at_target = Vector3(-60, 0, -1651)
-state = {"view": 0, "sea_state": 2, "ocean": {"wind_speed": 40.0, "fetch": 2000.0}}
+state = {"view": 0, "sea_state": 2, "ocean": {"wind_speed": 40.0, "surface_height": 15.0, "surface_length": 600.0}}
 
 [sub_resource type="Resource" id="swell_against_wind"]
 script = ExtResource("2")
 name = "swell_against_wind"
 camera_position = Vector3(0, 12, -1451)
 look_at_target = Vector3(-60, 0, -1651)
-state = {"view": 0, "sea_state": 1, "ocean": {"swell_height": 4.0, "swell_period": 14.0, "swell_direction": -155.0, "wind_speed": 14.0}}
+state = {"view": 0, "sea_state": 1, "ocean": {"swell_height": 4.0, "swell_period": 14.0, "swell_direction": -155.0, "wind_speed": 14.0, "surface_height": 2.55, "surface_length": 65.4}}
 
 [sub_resource type="Resource" id="wind_min"]
 script = ExtResource("2")
 name = "wind_min"
 camera_position = Vector3(0, 3, -1451)
 look_at_target = Vector3(-30, 0, -1551)
-state = {"view": 0, "sea_state": 0, "ocean": {"wind_speed": 0.5}}
+state = {"view": 0, "sea_state": 0, "ocean": {"wind_speed": 0.5, "surface_height": 0.13, "surface_length": 7.1}}
 
 [sub_resource type="Resource" id="height_x6_chop_x4"]
 script = ExtResource("2")
 name = "height_x6_chop_x4"
 camera_position = Vector3(0, 25, -1451)
 look_at_target = Vector3(-60, 0, -1651)
-state = {"view": 0, "sea_state": 1, "ocean": {"height_scale": 6.0, "choppiness": 4.0}}
+state = {"view": 0, "sea_state": 1, "ocean": {"surface_height": 10.0, "choppiness": 4.0}}
 
 [sub_resource type="Resource" id="wavelength_min"]
 script = ExtResource("2")
 name = "wavelength_min"
 camera_position = Vector3(0, 4, -1451)
 look_at_target = Vector3(-30, 0, -1551)
-state = {"view": 0, "sea_state": 1, "ocean": {"wavelength_scale": 0.1}}
+state = {"view": 0, "sea_state": 1, "ocean": {"surface_length": 4.9}}
 
 [sub_resource type="Resource" id="wavelength_max"]
 script = ExtResource("2")
 name = "wavelength_max"
 camera_position = Vector3(0, 8, -1451)
 look_at_target = Vector3(-60, 0, -1651)
-state = {"view": 0, "sea_state": 1, "ocean": {"wavelength_scale": 8.0}}
+state = {"view": 0, "sea_state": 1, "ocean": {"surface_length": 390.0}}
 
 [sub_resource type="Resource" id="swell_max"]
 script = ExtResource("2")
