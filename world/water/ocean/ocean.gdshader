@@ -69,7 +69,9 @@ uniform float sun_specular_strength = 1.0;
 uniform float murk_blur = 3.0;                             // screen mip levels of blur through deep water
 
 group_uniforms foam;
-uniform vec3 foam_color : source_color = vec3(0.86, 0.9, 0.9);
+// Thick fresh foam reflects about half the light (Whitlock et al. 1982: ~55 % in the visible), not
+// nearly all of it; the hollows and ageing (FoamSurface.shade) take it lower still.
+uniform vec3 foam_color : source_color = vec3(0.76, 0.79, 0.79);
 uniform float foam_scale = 0.22;
 uniform float foam_softness = 0.18;
 uniform float whitecap_strength = 1.0;
@@ -106,7 +108,7 @@ const float FOAM_SUB_GRAZE = 0.25;
 // How bright the bubbles under the foam glow, relative to bubble_strength.
 const float FOAM_SUB_GLOW = 0.5;
 // Thin foam is this share white over the bubble colour; only thick foam is fully foam_color.
-const float FOAM_THIN_WHITE = 0.5;
+const float FOAM_THIN_WHITE = 0.35;
 // Strength of the foam scans' relief in the normal.
 const float FOAM_SCAN_RELIEF = 0.6;
 group_uniforms caustics;
@@ -552,11 +554,17 @@ void fragment() {
 	FoamSurface fs = foam_surface(surface - foam_offset, cover, detail, sub_shift);
 	float foam_near = fs.cover;
 	// Breakers: the roller on the breaking front and the lace it leaves behind (near, far).
-	vec2 white_water = ocean_shore_foam(shore, surface, water_wave_time, detail);
+	float shore_shade;
+	vec2 white_water = ocean_shore_foam(shore, surface, water_wave_time, detail, shore_shade);
 	// A plunging curl is clear water until it lands and foams over: the spilling roller's white water
 	// stays off it until then (ocean_breaker_foam whitens its tip and the foam-over).
 	white_water *= 1.0 - v_curl * (1.0 - smoothstep(BREAKER_FOAM_OVER.x, BREAKER_FOAM_OVER.y, v_curl_stage));
-	white_water = max(white_water, ocean_breaker_foam(surface, lip, v_curl, v_curl_part, v_curl_stage, shore.roller_wave));
+	float breaker_shade;
+	vec2 plunge_foam = ocean_breaker_foam(surface, lip, v_curl, v_curl_part, v_curl_stage, shore.roller_wave, breaker_shade);
+	float white_shade = water_foam_shade(vec2(white_water.x, shore_shade), vec2(plunge_foam.x, breaker_shade), vec2(0.0, 1.0));
+	white_water = max(white_water, plunge_foam);
+	// How bright the foam itself is: hollows between bubbles and ageing foam are darker.
+	float foam_shade = water_foam_shade(vec2(fs.cover, fs.shade), vec2(white_water.x, white_shade), vec2(0.0, 1.0));
 	foam_near = max(foam_near, white_water.x);
 	// Breaker white water is fresh and thick; the open-sea foam is as thick as its pattern says.
 	float foam_thick = max(fs.thick * fs.cover, white_water.x);
@@ -582,7 +590,8 @@ void fragment() {
 	float bubbles = max(smoothstep(0.15, 0.85, max(whitecap, shore.roller)), fs.sub * cover * FOAM_SUB_GLOW)
 			* bubble_strength * (1.0 - foam) * edge;
 	vec3 bubble_albedo = sss_color / max(max(sss_color.r, sss_color.g), max(sss_color.b, 1e-3)) * BUBBLE_ALBEDO;
-	vec3 foam_albedo = mix(mix(bubble_albedo, foam_color, FOAM_THIN_WHITE), foam_color, smoothstep(0.0, 1.0, foam_thick));
+	vec3 foam_albedo = mix(mix(bubble_albedo, foam_color, FOAM_THIN_WHITE), foam_color, smoothstep(0.0, 1.0, foam_thick))
+			* foam_shade;
 	// Foam is lumpy: tilt the normal by the relief of the foam scans.
 	vec3 n_foam = normalize(n_world + fs.normal * FOAM_SCAN_RELIEF * foam_relief);
 

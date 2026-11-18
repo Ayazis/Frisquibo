@@ -86,10 +86,18 @@ const vec2 FOAM_SUB_WIDTH = vec2(0.8, 1.7);
 const float FOAM_SUB_MARGIN = 0.1;
 // Below this fill there is no foam at all.
 const float FOAM_PRESENT = 0.08;
+// Foam is not evenly white: light is trapped in the hollows between the bubbles, which are this bright
+// relative to the tops, and fully lit this far (in eroded height) above the wear-through level.
+const float FOAM_CAVITY_SHADE = 0.55;
+const float FOAM_CAVITY_RANGE = 0.45;
+// Ageing foam drains, its bubbles grow and their films thin, so it reflects less: measured residual
+// foam is much darker than an active whitecap (e.g. Dierssen 2019). Brightness at the lowest fill.
+const float FOAM_AGED_SHADE = 0.7;
 
 struct FoamSurface {
 	float cover;   // 0..1 how much of the pixel is foam
 	float thick;   // 0..1 thin and see-through to thick and white
+	float shade;   // 0..1 brightness of the foam itself: hollows and aged foam are darker
 	float sub;     // 0..1 bubbles just under the surface (blurred, wider)
 	vec3 normal;   // world-space bend of the foam's relief (add to the surface normal)
 };
@@ -234,6 +242,7 @@ FoamSurface foam_surface(vec2 p, float fill, float detail, vec2 sub_shift) {
 	FoamSurface f;
 	f.cover = 0.0;
 	f.thick = 0.0;
+	f.shade = 1.0;
 	f.sub = 0.0;
 	f.normal = vec3(0.0);
 	if (fill <= 0.0) {
@@ -273,6 +282,8 @@ FoamSurface foam_surface(vec2 p, float fill, float detail, vec2 sub_shift) {
 	}
 	f.cover = max(f.cover, speck * FOAM_SPECK_COVER);
 	f.thick = smoothstep(threshold, threshold + FOAM_THICKENING, eroded);
+	f.shade = mix(FOAM_CAVITY_SHADE, 1.0, smoothstep(threshold, threshold + FOAM_CAVITY_RANGE, eroded))
+			* mix(FOAM_AGED_SHADE, 1.0, fill);
 	float sub_edge = foam_vein_edge(p + sub_shift, FOAM_SUB_BLUR, lift, fray);
 	f.sub = (1.0 - smoothstep(width * FOAM_SUB_WIDTH.x, width * FOAM_SUB_WIDTH.y + FOAM_SUB_MARGIN, sub_edge)) * present;
 	f.normal = (vec3(scan.y, 0.0, scan.z) * detail + vec3(large.y, 0.0, large.z) / FOAM_LARGE_SCALE) * f.cover;

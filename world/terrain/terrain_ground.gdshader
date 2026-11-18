@@ -13,7 +13,7 @@ uniform float sea_level = 0.0;
 uniform float beach_top = 0.9;
 uniform float blend_width = 0.35;
 uniform float wet_band = 0.35;
-uniform vec3 foam_color : source_color = vec3(0.86, 0.9, 0.9);
+uniform vec3 foam_color : source_color = vec3(0.76, 0.79, 0.79);
 // Glossy film of water the backwash leaves on the sand: roughness, and how much darker the sand gets.
 const float FILM_EDGE = 0.03;
 const float FILM_ROUGHNESS = 0.06;
@@ -69,19 +69,24 @@ void fragment() {
 
 	// Foam the backwash leaves behind, from the moment the wave turns until the next one arrives.
 	float residue = 0.0;
+	float residue_shade = 1.0;
 	if (runup > 0.0 && swash.z >= SWASH_UPRUSH_SHARE && h > swash.x) {
 		float age = (swash.z - SWASH_UPRUSH_SHARE) / (1.0 - SWASH_UPRUSH_SHARE);
 		float breakup = vnoise(v_world.xz / RESIDUE_BREAKUP_TILE);
 		float mark = 1.0 - smoothstep(0.0, RESIDUE_MARK_WIDTH, abs(h - swash.y + 0.5 * RESIDUE_MARK_WIDTH));
 		float sheet = 1.0 - smoothstep(swash.y - RESIDUE_MARK_WIDTH, swash.y, h);
 		float sheet_age = min(age * RESIDUE_SHEET_AGEING + RESIDUE_SHEET_START, 1.0);
-		residue = max(water_lace(v_world.xz, age, swash.w, breakup) * mark,
-				water_lace(v_world.xz, sheet_age, swash.w + 0.5, breakup) * sheet * RESIDUE_SHEET_COVER) * sand;
+		vec2 line = water_lace_shaded(v_world.xz, age, swash.w, breakup);
+		vec2 bubbles = water_lace_shaded(v_world.xz, sheet_age, swash.w + 0.5, breakup);
+		line.x *= mark;
+		bubbles.x *= sheet * RESIDUE_SHEET_COVER;
+		residue = max(line.x, bubbles.x) * sand;
+		residue_shade = water_foam_shade(line, bubbles, vec2(0.0, 1.0));
 	}
 
 	vec3 beach = mix(sand_color, wet_sand_color, wet) * (0.9 + grain);
 	vec3 ground = mix(soil_color, beach, sand) * mix(1.0, FILM_DARKENING, film);
-	ALBEDO = mix(ground, foam_color, residue * RESIDUE_OPACITY);
+	ALBEDO = mix(ground, foam_color * residue_shade, residue * RESIDUE_OPACITY);
 	ROUGHNESS = mix(mix(mix(1.0, mix(0.9, 0.35, wet), sand), FILM_ROUGHNESS, film), RESIDUE_ROUGHNESS, residue);
 	SPECULAR = mix(mix(0.3, 0.5, wet * sand), 0.5, film);
 }

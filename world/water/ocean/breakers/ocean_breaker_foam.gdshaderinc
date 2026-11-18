@@ -23,8 +23,10 @@ const float BREAKER_FRESH_FOAM = 0.12;
 
 // (foam pattern up close, average cover from far away). `lip`: the lip share at this pixel (ocean
 // shader); curl, part and stage: the breaker's (v_curl, v_curl_part, v_curl_stage); wave: the number of
-// its crest, so each breaker has its own pattern that stays put while it breaks.
-vec2 ocean_breaker_foam(vec2 rest, float lip, float curl, float part, float stage, float wave) {
+// its crest, so each breaker has its own pattern that stays put while it breaks. `shade`: the foam's
+// brightness (FoamSurface.shade).
+vec2 ocean_breaker_foam(vec2 rest, float lip, float curl, float part, float stage, float wave, out float shade) {
+	shade = 1.0;
 	if (curl <= 0.0) {
 		return vec2(0.0);
 	}
@@ -34,10 +36,14 @@ vec2 ocean_breaker_foam(vec2 rest, float lip, float curl, float part, float stag
 			* (1.0 - smoothstep(BREAKER_BURST_PARTS.z, BREAKER_BURST_PARTS.w, part));
 	float burst = curl * landing * breaker_splash(stage);
 	float over = curl * smoothstep(BREAKER_FOAM_OVER.x, BREAKER_FOAM_OVER.y, stage);
-	float fresh = water_lace(rest, BREAKER_FRESH_FOAM, wave, 0.5);
+	vec2 fresh = water_lace_shaded(rest, BREAKER_FRESH_FOAM, wave, 0.5);
 	float over_age = mix(BREAKER_FRESH_FOAM, BREAKER_OVER_TORN, smoothstep(BREAKER_FOAM_OVER.x, BREAKER_COLLAPSE_END, stage));
-	float over_lace = water_lace(rest, over_age, wave, 0.5);
-	float torn = water_lace(rest, BREAKER_BURST_FOAM, wave + 0.5, 0.5);
-	float near = max(max(aerated * fresh, over * over_lace), burst * torn);
+	vec2 over_lace = water_lace_shaded(rest, over_age, wave, 0.5);
+	vec2 torn = water_lace_shaded(rest, BREAKER_BURST_FOAM, wave + 0.5, 0.5);
+	fresh.x *= aerated;
+	over_lace.x *= over;
+	torn.x *= burst;
+	shade = water_foam_shade(fresh, over_lace, torn);
+	float near = max(max(fresh.x, over_lace.x), torn.x);
 	return vec2(clamp(near, 0.0, 1.0), clamp(max(max(aerated, burst), over), 0.0, 1.0));
 }
