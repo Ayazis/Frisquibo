@@ -233,7 +233,8 @@ build is uploaded as an artifact, and PRs get a web preview deployment.
 
 ## 10. Roadmap for the codebase
 1. Refactor the grass prototype into `world/foliage`, `world/time_of_day`, `actors/player`
-   and `core/settings` as the reference implementation of these rules.
+   and `core/settings` as the reference implementation of these rules. (`world/time_of_day` exists now,
+   ADR 0015: the grass scene can move onto it.)
 2. ~~Visual check tool~~ Done: `tools/visual_check/` (section 12).
 3. Core autoloads + quality tiers.
 4. Player controller + camera rig + one mount.

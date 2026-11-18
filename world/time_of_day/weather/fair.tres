@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="SkyWeather" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://world/time_of_day/sky_weather.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Fair"
+cloud_coverage = 0.35
+cloud_density = 1.0
+cloud_bottom = 1400.0
+cloud_top = 3400.0
+cirrus_amount = 0.25
+turbidity = 2.0
+sun_occlusion = 0.0
+fog_density = 0.00012
+fog_height_density = 0.0
+fog_height = 0.0
+fog_sky_affect = 0.0
+volumetric_fog_density = 0.0006
+volumetric_fog_anisotropy = 0.6
+wind = Vector2(9, 4)
+saturation = 1.05
+contrast = 1.0
+lightning_per_minute = 0.0

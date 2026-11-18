@@ -119,6 +119,11 @@ func cycle_sea_state() -> void:
 	set_sea_state(_state + 1)
 
 
+## Index into STATES of the sea state now.
+func sea_state() -> int:
+	return _state
+
+
 ## Curling breakers on or off (curl strength 1 or 0), to compare with spilling ones. Returns whether on.
 func toggle_curls() -> bool:
 	var on := ocean.parameter_value(&"curl_strength") <= 0.0

@@ -1,6 +1,6 @@
 extends Node3D
-## Water demo: the island in the FFT ocean (IslandScene) with one sky and sun, an orbit camera,
-## viewpoints (keys 1-5), the ocean tuner and objects to drop.
+## Water demo: the island in the FFT ocean (IslandScene) under the time of day and weather (Atmosphere),
+## an orbit camera, viewpoints (keys 1-5), the ocean tuner and objects to drop.
 
 const ORBIT_SENSITIVITY := 0.005
 const ZOOM_STEP := 1.15
@@ -19,7 +19,7 @@ const FAST_MULTIPLIER := 3.0
 const MIN_TARGET_HEIGHT := -20.0
 const MAX_TARGET_HEIGHT := 60.0
 const HUD_Y := 70.0
-const BUTTON_BAR_Y := 130.0
+const BUTTON_BAR_Y := 150.0
 ## The controls start this far below the top of the button bar, clear of the buttons.
 const CONTROLS_BELOW_BUTTONS := 44.0
 ## Gap between the controls panel and the right edge of the screen.
@@ -27,9 +27,25 @@ const CONTROLS_MARGIN := 16.0
 const BANNER_Y := 14.0
 const BANNER_FONT_SIZE := 34
 const BANNER_COLOR := Color(0.55, 0.95, 0.6)
-const SHADOW_DISTANCE := 150.0
-const FOG_DENSITY := 0.0006
-const FOG_AERIAL_PERSPECTIVE := 1.0
+## Times of day the T key steps through (solar hours on the TimeOfDay's late-summer day).
+const TIMES: Array[float] = [5.05, 7.0, 13.0, 16.0, 18.25, 18.75, 19.25, 22.0]
+const TIME_NAMES: Array[String] = ["Dawn", "Morning", "Noon", "Afternoon", "Golden hour", "Sunset", "Dusk", "Night"]
+const START_TIME := 1
+const GOLDEN_HOUR := 4
+## Y runs the clock: a whole day in about a minute and a half.
+const TIME_LAPSE_HOURS_PER_SECOND := 0.25
+## Turns the sky so the sun sets over the sea in front of the beach view (which looks towards -Z), and
+## rises behind it.
+const NORTH_HEADING_DEGREES := -90.0
+## Weathers the V key steps through; each sea state brings its own (SEA_STATE_WEATHER: index per state
+## in IslandScene.STATES).
+const WEATHERS: Array[SkyWeather] = [
+	preload("res://world/time_of_day/weather/clear.tres"),
+	preload("res://world/time_of_day/weather/fair.tres"),
+	preload("res://world/time_of_day/weather/mist.tres"),
+	preload("res://world/time_of_day/weather/overcast.tres"),
+	preload("res://world/time_of_day/weather/storm.tres")]
+const SEA_STATE_WEATHER: Array[int] = [0, 1, 4, 1]
 
 
 ## A place to look from: the orbit point, distance and angles.
@@ -52,8 +68,10 @@ var _island: IslandScene
 var _views: Array[View] = []
 var _view := 0
 var _cam: Camera3D
-var _sun: DirectionalLight3D
-var _env: Environment
+var _time: TimeOfDay
+var _atmosphere: Atmosphere
+var _time_index := START_TIME
+var _weather := 1
 var _hud: Label
 var _banner: Label
 var _view_buttons: Array[Button] = []
@@ -62,13 +80,12 @@ var _pitch := -0.3
 var _distance := 30.0
 ## Where WASD has moved the orbit point, relative to the viewpoint's target.
 var _target_offset := Vector3.ZERO
-var _golden_hour := false
 var _hud_layer: CanvasLayer
 var _dropper: ObjectDropper
 
 
 func _ready() -> void:
-	_make_env()
+	_make_atmosphere()
 	_cam = Camera3D.new()
 	_cam.fov = CAMERA_FOV
 	_cam.far = CAMERA_FAR
@@ -82,7 +99,7 @@ func _ready() -> void:
 	_dropper.water_velocity = _island.water_velocity_at
 	_island.add_child(_dropper)
 	_make_hud()
-	_apply_time()
+	_set_weather(SEA_STATE_WEATHER[_island.sea_state()], 0.0)
 	show_view(0)
 
 
@@ -114,32 +131,15 @@ func _make_views() -> Array[View]:
 	]
 
 
-func _make_env() -> void:
-	_env = Environment.new()
-	var sky := Sky.new()
-	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color(0.22, 0.42, 0.78)
-	sky_material.sky_horizon_color = Color(0.72, 0.8, 0.88)
-	sky.sky_material = sky_material
-	_env.background_mode = Environment.BG_SKY
-	_env.sky = sky
-	_env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	_env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	_env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	_env.tonemap_exposure = 1.1
-	_env.ssr_enabled = RenderingServer.get_current_rendering_method() == "forward_plus"
-	_env.glow_enabled = true
-	_env.fog_enabled = true
-	_env.fog_density = FOG_DENSITY
-	# The fog takes the sky's own colour, so it doesn't paint the sky (and the sea reflecting it) grey.
-	_env.fog_aerial_perspective = FOG_AERIAL_PERSPECTIVE
-	var world_environment := WorldEnvironment.new()
-	world_environment.environment = _env
-	add_child(world_environment)
-	_sun = DirectionalLight3D.new()
-	_sun.shadow_enabled = true
-	_sun.directional_shadow_max_distance = SHADOW_DISTANCE
-	add_child(_sun)
+func _make_atmosphere() -> void:
+	_time = TimeOfDay.new()
+	_time.north_heading_degrees = NORTH_HEADING_DEGREES
+	_time.hour = TIMES[_time_index]
+	add_child(_time)
+	_atmosphere = Atmosphere.new()
+	_atmosphere.time = _time
+	_atmosphere.weather = WEATHERS[_weather]
+	add_child(_atmosphere)
 
 
 func _make_hud() -> void:
@@ -173,9 +173,11 @@ func _make_hud() -> void:
 		b.pressed.connect(show_view.bind(i))
 		buttons.add_child(b)
 		_view_buttons.append(b)
-	_add_button(buttons, "Sea state (C)", _island.cycle_sea_state)
+	_add_button(buttons, "Sea state (C)", _cycle_sea_state)
 	_add_button(buttons, "Water type (L)", _cycle_water_type)
-	_add_button(buttons, "Time of day (T)", _toggle_time)
+	_add_button(buttons, "Time of day (T)", _next_time)
+	_add_button(buttons, "Time lapse (Y)", _toggle_time_lapse)
+	_add_button(buttons, "Weather (V)", _next_weather)
 	_add_button(buttons, "Drop objects (F)", _drop_objects)
 	_hud_layer.add_child(buttons)
 	var controls := _island.make_controls()
@@ -198,15 +200,35 @@ func _add_button(bar: HBoxContainer, text: String, action: Callable) -> void:
 	bar.add_child(b)
 
 
-func _apply_time() -> void:
-	if _golden_hour:
-		_sun.rotation_degrees = Vector3(-10, -60, 0)
-		_sun.light_color = Color(1.0, 0.68, 0.4)
-		_sun.light_energy = 1.7
-	else:
-		_sun.rotation_degrees = Vector3(-50, -40, 0)
-		_sun.light_color = Color(1.0, 0.95, 0.85)
-		_sun.light_energy = 1.4
+## Jumps the clock to TIMES[index] (and stops a time lapse).
+func set_time(index: int) -> void:
+	_time_index = posmod(index, TIMES.size())
+	_time.hours_per_second = 0.0
+	_time.hour = TIMES[_time_index]
+	_atmosphere.update_now()
+
+
+func _next_time() -> void:
+	set_time(_time_index + 1)
+
+
+func _toggle_time_lapse() -> void:
+	_time.hours_per_second = 0.0 if _time.hours_per_second != 0.0 else TIME_LAPSE_HOURS_PER_SECOND
+
+
+func _next_weather() -> void:
+	_set_weather(_weather + 1, Atmosphere.WEATHER_TRANSITION)
+
+
+func _set_weather(index: int, seconds: float) -> void:
+	_weather = posmod(index, WEATHERS.size())
+	_atmosphere.set_weather(WEATHERS[_weather], seconds)
+
+
+## Next sea state, with its own weather: calm under a clear sky, a storm under storm clouds.
+func _cycle_sea_state() -> void:
+	_island.cycle_sea_state()
+	_set_weather(SEA_STATE_WEATHER[_island.sea_state()], Atmosphere.WEATHER_TRANSITION)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -229,11 +251,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		if number >= 0 and number < _views.size():
 			show_view(number)
 		elif key.physical_keycode == KEY_C:
-			_island.cycle_sea_state()
+			_cycle_sea_state()
 		elif key.physical_keycode == KEY_L:
 			_cycle_water_type()
 		elif key.physical_keycode == KEY_T:
-			_toggle_time()
+			_next_time()
+		elif key.physical_keycode == KEY_Y:
+			_toggle_time_lapse()
+		elif key.physical_keycode == KEY_V:
+			_next_weather()
 		elif key.physical_keycode == KEY_F:
 			_drop_objects()
 		elif key.physical_keycode == KEY_K:
@@ -250,11 +276,6 @@ func _drop_objects() -> void:
 	_dropper.drop_burst()
 
 
-func _toggle_time() -> void:
-	_golden_hour = not _golden_hour
-	_apply_time()
-
-
 func _target() -> Vector3:
 	return _views[_view].target + _target_offset
 
@@ -264,8 +285,10 @@ func _process(delta: float) -> void:
 	var target := _target()
 	_cam.global_position = target + Basis.from_euler(Vector3(_pitch, _yaw, 0)) * Vector3(0, 0, _distance)
 	_cam.look_at(target)
-	_hud.text = "%s   (FPS %d)\nWASD move, Q/E down/up, Shift faster, drag to orbit, wheel to zoom, 1-5 views, F drop objects" % [
-			_island.notes, Engine.get_frames_per_second()]
+	var lapse := ", time lapse" if _time.hours_per_second != 0.0 else ""
+	_hud.text = "%s   (FPS %d)\n%s%s, %s | T: time of day | Y: time lapse | V: weather\nWASD move, Q/E down/up, Shift faster, drag to orbit, wheel to zoom, 1-5 views, F drop objects" % [
+			_island.notes, Engine.get_frames_per_second(), _time.clock_text(), lapse,
+			_atmosphere.current_weather().display_name]
 
 
 ## WASD moves the orbit point over the ground in the direction the camera faces; Q/E lower and raise it.
@@ -291,17 +314,26 @@ func _move_target(delta: float) -> void:
 	_target_offset.y = clampf(_target_offset.y, MIN_TARGET_HEIGHT, MAX_TARGET_HEIGHT)
 
 
-## Called by tools/visual_check before each shot. Keys: view (index, see _make_views), golden_hour
-## (bool), sea_state (index into IslandScene.STATES), ocean ({parameter name: value} set after the sea
-## state, e.g. {"wind_speed": 40.0}). The shot list places the camera itself.
+## Called by tools/visual_check before each shot. Keys: view (index, see _make_views), time (index into
+## TIMES; golden_hour true is TIMES[GOLDEN_HOUR]), hour (solar hour, overrides time), sea_state (index
+## into IslandScene.STATES), weather (index into WEATHERS; by default the sea state's), ocean
+## ({parameter name: value} set after the sea state, e.g. {"wind_speed": 40.0}). The shot list places
+## the camera itself.
 func apply_visual_check_state(state: Dictionary) -> void:
 	_hud_layer.visible = false
 	var view: int = state.get("view", 0)
 	show_view(view)
-	_golden_hour = state.get("golden_hour", false)
-	_apply_time()
+	var golden_hour: bool = state.get("golden_hour", false)
+	var time: int = state.get("time", GOLDEN_HOUR if golden_hour else START_TIME)
+	set_time(time)
+	if state.has("hour"):
+		var hour: float = state["hour"]
+		_time.hour = hour
 	var sea_state: int = state.get("sea_state", 1)
 	_island.set_sea_state(sea_state)
+	var weather: int = state.get("weather", SEA_STATE_WEATHER[_island.sea_state()])
+	_set_weather(weather, 0.0)
+	_atmosphere.update_now()
 	var values: Dictionary = state.get("ocean", {})
 	for parameter: String in values:
 		var value: float = values[parameter]

@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="SkyWeather" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://world/time_of_day/sky_weather.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Overcast"
+cloud_coverage = 0.85
+cloud_density = 1.4
+cloud_bottom = 900.0
+cloud_top = 2800.0
+cirrus_amount = 0.0
+turbidity = 3.0
+sun_occlusion = 0.8
+fog_density = 0.0003
+fog_height_density = 0.004
+fog_height = 10.0
+fog_sky_affect = 0.05
+volumetric_fog_density = 0.001
+volumetric_fog_anisotropy = 0.5
+wind = Vector2(12, 5)
+saturation = 0.92
+contrast = 0.97
+lightning_per_minute = 0.0
