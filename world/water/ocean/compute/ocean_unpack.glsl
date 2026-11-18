@@ -8,9 +8,9 @@
 // Foam is injected where the surface folds (jacobian below a threshold) and decays over time. White
 // water is the same injection with a short life: it marks crests that are breaking right now.
 //
-// Crest lean: wind-driven waves are not symmetric. Each point is pushed along the wind by crest_lean
+// Crest lean: surface waves are not symmetric. Each point is pushed along their travel by crest_lean
 // times its height: crests forward, troughs back. That squeezes the face in front of a crest and
-// stretches the one behind it by crest_lean times the wave's slope, so steep wind waves get a steep
+// stretches the one behind it by crest_lean times the wave's slope, so steep surface waves get a steep
 // front and a gentle back while gentle swell (slope ~0.03) barely changes, at every wave length.
 // The push's derivatives go into the jacobian terms; where it would compress the surface past
 // LEAN_MIN_JACOBIAN it is scaled back, so the lean never folds the surface.
@@ -30,15 +30,15 @@ layout(set = 0, binding = 2, rgba16f) uniform restrict writeonly image2D slope_m
 layout(set = 0, binding = 3, rgba16f) uniform restrict image2D moment_map;
 
 layout(push_constant, std430) uniform Params {
-	float height_scale;
+	float pad_scale;
 	float choppiness;
 	float foam_threshold;
 	float foam_gain;
 	float foam_decay;
 	float cascade;
-	float crest_lean;        // push along the wind per metre of height, already scaled by the wind
+	float crest_lean;        // push along the waves' travel per metre of height
 	float white_water_decay; // per frame, as foam_decay
-	vec2 lean_direction;     // unit vector along the wind
+	vec2 lean_direction;     // unit vector along the surface waves' travel
 	float pad0;
 	float pad1;
 } p;
@@ -51,10 +51,9 @@ void main() {
 	vec4 a = signals[texel * 2u] * sign_flip;
 	vec4 b = signals[texel * 2u + 1u] * sign_flip;
 
-	float s = p.height_scale;
-	float chop = p.choppiness * s;
-	vec3 displacement = vec3(a.x * chop, a.z * s, a.y * chop);
-	vec2 slope = vec2(a.w, b.x) * s;
+	float chop = p.choppiness;
+	vec3 displacement = vec3(a.x * chop, a.z, a.y * chop);
+	vec2 slope = vec2(a.w, b.x);
 	float jxx = b.y * chop;
 	float jzz = b.z * chop;
 	float jxz = b.w * chop;

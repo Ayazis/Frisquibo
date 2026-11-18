@@ -23,17 +23,17 @@ layout(std430, set = 0, binding = 0) restrict writeonly buffer Spectrum {
 
 layout(push_constant, std430) uniform Params {
 	float tile_length;
-	float wind_speed;
-	float wind_angle;
-	float fetch_m;
+	float alpha;          // OceanSpectrum.jonswap_alpha(): sets the surface waves' height
+	float surface_angle;
+	float peak_frequency; // OceanSpectrum.peak_frequency(): from the surface waves' length
 	float depth;
-	float wind_spread; // OceanSpectrum.wind_spread: width of the spreading relative to Donelan-Banner
+	float surface_spread; // OceanSpectrum.surface_spread: width of the spreading relative to Donelan-Banner
 	float short_wave_cutoff;
 	float k_min;
 	float k_max;
 	uint cascade;
 	uint seed;
-	float peak_scale; // OceanSpectrum.wavelength_scale: multiplies the peak wavelength
+	float pad_scale;
 	float swell_height;     // significant height in metres; 0 = no swell
 	float swell_wavenumber; // rad/m at the sea's depth
 	float swell_angle;
@@ -71,7 +71,7 @@ float dispersion_derivative(float k) {
 }
 
 float jonswap(float w, float wp) {
-	float alpha = 0.076 * pow(p.wind_speed * p.wind_speed / (p.fetch_m * G), 0.22);
+	float alpha = p.alpha;
 	float sigma = w <= wp ? 0.07 : 0.09;
 	float r = exp(-(w - wp) * (w - wp) / (2.0 * sigma * sigma * wp * wp));
 	return alpha * G * G / pow(w, 5.0) * exp(-1.25 * pow(wp / w, 4.0)) * pow(3.3, r);
@@ -101,26 +101,22 @@ float donelan_banner(float theta, float w, float wp) {
 	}
 	// A wider spread is a smaller beta; as beta goes to 0 the spreading becomes uniform by itself.
 	// The normalisation keeps the integral over all directions at 1, so the height doesn't change.
-	beta /= p.wind_spread;
+	beta /= p.surface_spread;
 	float s = 1.0 / cosh(beta * theta);
 	return beta / (2.0 * tanh(beta * PI)) * s * s;
 }
 
-// Energy density S(k) of the local wind sea.
+// Energy density S(k) of the surface waves: a JONSWAP sea of the height and length set directly.
 float wind_sea(vec2 k, float kl) {
 	if (kl < p.k_min || kl >= p.k_max) {
 		return 0.0;
 	}
-	// Peak frequency; a wave length scale s moves it to w / sqrt(s) (deep water: length ~ 1 / w^2).
-	float wp = 22.0 * pow(G * G / (p.wind_speed * p.fetch_m), 1.0 / 3.0) / sqrt(p.peak_scale);
+	float wp = p.peak_frequency;
 	float w = dispersion(kl);
-	float theta = atan(k.y, k.x) - p.wind_angle;
+	float theta = atan(k.y, k.x) - p.surface_angle;
 	theta = mod(theta + PI, 2.0 * PI) - PI;
 	float s_omega = jonswap(w, wp) * tma(w) * donelan_banner(theta, w, wp);
 	// S(omega, theta) to a wavenumber spectrum S(k): times d(omega)/dk, divided by k.
-	// JONSWAP energy grows with wp^-4, so a longer peak would also make the waves taller (by s).
-	// Divide that out: horizontal size changes only the length; height_scale owns the height.
-	s_omega /= p.peak_scale * p.peak_scale;
 	float s_k = s_omega * dispersion_derivative(kl) / kl;
 	return s_k * exp(-kl * kl * p.short_wave_cutoff * p.short_wave_cutoff);
 }

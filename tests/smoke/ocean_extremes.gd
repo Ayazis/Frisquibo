@@ -27,14 +27,14 @@ const SEABED_DEEP := -30.0
 const SEABED_LAND := 3.0
 const SEABED_RESOLUTION := 256
 const COMBOS: Dictionary[String, Dictionary] = {
-	"hurricane": {&"wind_speed": 40.0, &"fetch": 2000.0},
-	"swell_against_wind": {&"swell_height": 4.0, &"swell_period": 14.0, &"swell_direction": -155.0, &"wind_speed": 20.0},
-	"aligned_gale": {&"wind_spread": 0.1, &"wind_speed": 30.0, &"fetch": 1000.0},
-	"tall_and_choppy": {&"height_scale": 6.0, &"choppiness": 4.0},
-	"short_and_tall": {&"wavelength_scale": 0.1, &"height_scale": 6.0},
-	"storm_shallow": {&"wind_speed": 40.0, &"depth": 1.0},
-	"breakers_max": {&"wind_speed": 25.0, &"breaker_ratio": 2.0, &"wave_setup": 2.0, &"min_shore_wave": 1.0},
-	"swell_max_storm": {&"swell_height": 8.0, &"swell_period": 22.0, &"wind_speed": 40.0},
+	"hurricane": {&"wind_speed": 40.0, &"surface_height": 15.0, &"surface_length": 600.0},
+	"swell_against_wind": {&"swell_height": 4.0, &"swell_period": 14.0, &"swell_direction": -155.0, &"surface_height": 3.5, &"surface_length": 83.0},
+	"aligned_gale": {&"surface_spread": 0.1, &"wind_speed": 30.0, &"surface_height": 15.0, &"surface_length": 585.0},
+	"tall_and_choppy": {&"surface_height": 10.0, &"choppiness": 4.0},
+	"short_and_tall": {&"surface_length": 2.0, &"surface_height": 10.0},
+	"storm_shallow": {&"surface_height": 6.5, &"surface_length": 132.0, &"depth": 1.0},
+	"breakers_max": {&"surface_height": 4.3, &"surface_length": 96.0, &"breaker_ratio": 2.0, &"wave_setup": 2.0, &"min_shore_wave": 1.0},
+	"swell_max_storm": {&"swell_height": 8.0, &"swell_period": 22.0, &"surface_height": 6.5, &"surface_length": 132.0},
 	"foam_everything": {&"foam_gain": 20.0, &"foam_threshold": 3.0, &"foam_lifetime": 40.0},
 }
 

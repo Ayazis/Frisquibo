@@ -18,7 +18,7 @@ VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json xvfb-run -a \
 
 - `ocean_smoke.gd`: the water comparison scene with the custom ocean, preset changes and re-creation.
 - `ocean_wave_height.gd`: FFT path only. Checks that the simulated significant wave height matches
-  the sea state: the wind sea's spectrum, and swells of a given height. Skips without a RenderingDevice.
+  the sea state: surface waves and swells of a given height. Skips without a RenderingDevice.
 - `atmosphere_smoke.gd`: the water demo through every time of day, weather and sea state (as the demo
   keys and the visual check drive it) and a time lapse over a day; fails on non-finite light.
 - `ocean_extremes.gd`: FFT path only. Every tunable at both ends of its range (open ranges pushed 4x

@@ -9,6 +9,9 @@ const OR_LESS := "or_less"
 const OR_GREATER := "or_greater"
 ## Slider steps across the range when the export hint names no step.
 const DEFAULT_STEPS := 200.0
+## Ranges whose maximum is at least this many times their (positive) minimum get a logarithmic slider,
+## so the small values don't crowd into the first few pixels.
+const LOG_RANGE_RATIO := 50.0
 
 var name: StringName
 var label := ""
@@ -46,6 +49,11 @@ func read_range_hint(hint: String) -> void:
 			unit = DEGREES_UNIT
 		elif part.begins_with(SUFFIX_PREFIX):
 			unit = part.trim_prefix(SUFFIX_PREFIX)
+
+
+## True when the slider should move in ratios rather than steps (depth 1 to 1000 m, lengths, times).
+func is_logarithmic() -> bool:
+	return has_range and minimum > 0.0 and maximum >= LOG_RANGE_RATIO * minimum
 
 
 ## Allowed (min, max); infinite on a side the hint leaves open.

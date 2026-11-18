@@ -115,6 +115,12 @@ func water_velocity_at(xz: Vector2) -> Vector3:
 	return Vector3.ZERO
 
 
+## Opens step `index` of the ocean tuner (for screenshots).
+func open_tuner_step(index: int) -> void:
+	if _panel:
+		_panel.open_step(index)
+
+
 func cycle_sea_state() -> void:
 	set_sea_state(_state + 1)
 
@@ -158,7 +164,7 @@ func make_controls() -> Control:
 	tabs.focus_mode = Control.FOCUS_NONE
 	_panel = OceanTunerPanel.new(ocean)
 	_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# Big seas are long seas: start with horizontal size following vertical size.
+	# Big seas are long seas: surface wave length starts out following their height.
 	_panel.set_link(OceanTunerLinks.Link.STEEPNESS, true)
 	var sea := ScrollContainer.new()
 	sea.name = "Sea"

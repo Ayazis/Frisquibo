@@ -230,21 +230,21 @@ func _spectrum_push(cascade: int) -> PackedByteArray:
 	var k_max := PI * MAP_SIZE / tile
 	if cascade < cascade_count - 1:
 		k_max = TAU / _gpu_tile_lengths[cascade + 1] * BAND_SPLIT
-	var bytes := PackedFloat32Array([tile, _spectrum.wind_speed, deg_to_rad(_spectrum.wind_direction),
-			_spectrum.fetch * 1000.0, _spectrum.depth, _spectrum.wind_spread,
+	var bytes := PackedFloat32Array([tile, _spectrum.jonswap_alpha(), deg_to_rad(_spectrum.surface_direction),
+			_spectrum.peak_frequency(), _spectrum.depth, _spectrum.surface_spread,
 			_spectrum.short_wave_cutoff, k_min, k_max]).to_byte_array()
 	bytes.append_array(PackedInt32Array([cascade, _spectrum.seed]).to_byte_array())
-	bytes.append_array(PackedFloat32Array([_spectrum.wavelength_scale, _spectrum.swell_height,
+	bytes.append_array(PackedFloat32Array([0.0, _spectrum.swell_height,
 			_spectrum.swell_wavenumber(), deg_to_rad(_spectrum.swell_direction),
 			deg_to_rad(_spectrum.swell_spread), 0.0, 0.0, 0.0, 0.0]).to_byte_array())
 	return bytes
 
 
 func _unpack_push(cascade: int, delta: float) -> PackedByteArray:
-	var angle := deg_to_rad(_spectrum.wind_direction)
-	return PackedFloat32Array([_spectrum.height_scale, _spectrum.choppiness, _spectrum.foam_threshold,
+	var angle := deg_to_rad(_spectrum.surface_direction)
+	return PackedFloat32Array([0.0, _spectrum.choppiness, _spectrum.foam_threshold,
 			_spectrum.foam_gain, exp(-delta / _spectrum.foam_lifetime), float(cascade),
-			_spectrum.crest_lean_wind(), exp(-delta / WHITE_WATER_LIFETIME), cos(angle), sin(angle),
+			_spectrum.crest_lean, exp(-delta / WHITE_WATER_LIFETIME), cos(angle), sin(angle),
 			0.0, 0.0]).to_byte_array()
 
 

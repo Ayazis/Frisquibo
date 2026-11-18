@@ -317,10 +317,11 @@ func _move_target(delta: float) -> void:
 ## Called by tools/visual_check before each shot. Keys: view (index, see _make_views), time (index into
 ## TIMES; golden_hour true is TIMES[GOLDEN_HOUR]), hour (solar hour, overrides time), sea_state (index
 ## into IslandScene.STATES), weather (index into WEATHERS; by default the sea state's), ocean
-## ({parameter name: value} set after the sea state, e.g. {"wind_speed": 40.0}). The shot list places
+## ({parameter name: value} set after the sea state, e.g. {"wind_speed": 40.0}), hud (bool: show the
+## buttons and tuner, default off), tuner_step (index of the tuner step to open). The shot list places
 ## the camera itself.
 func apply_visual_check_state(state: Dictionary) -> void:
-	_hud_layer.visible = false
+	_hud_layer.visible = state.get("hud", false)
 	var view: int = state.get("view", 0)
 	show_view(view)
 	var golden_hour: bool = state.get("golden_hour", false)
@@ -339,3 +340,6 @@ func apply_visual_check_state(state: Dictionary) -> void:
 		var value: float = values[parameter]
 		if not _island.ocean.set_parameter(StringName(parameter), value):
 			push_error("Visual check: the ocean has no parameter '%s'" % parameter)
+	if state.has("tuner_step"):
+		var step: int = state["tuner_step"]
+		_island.open_tuner_step(step)
