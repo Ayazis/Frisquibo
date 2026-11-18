@@ -35,12 +35,24 @@ FoamSurface water_lace_surface(vec2 p, float age, float seed, float breakup, flo
 	return f;
 }
 
+// Lace cover (x) and the foam's brightness (y, FoamSurface.shade), up close.
+vec2 water_lace_shaded(vec2 p, float age, float seed, float breakup) {
+	if (age >= 1.0) {
+		return vec2(0.0, 1.0);
+	}
+	FoamSurface f = water_lace_surface(p, age, seed, breakup, 1.0);
+	return vec2(f.cover, f.shade);
+}
+
 // Lace cover only, up close.
 float water_lace(vec2 p, float age, float seed, float breakup) {
-	if (age >= 1.0) {
-		return 0.0;
-	}
-	return water_lace_surface(p, age, seed, breakup, 1.0).cover;
+	return water_lace_shaded(p, age, seed, breakup).x;
+}
+
+// Brightness of foam made of up to three layers (cover x, shade y), weighted by how much each covers.
+float water_foam_shade(vec2 a, vec2 b, vec2 c) {
+	float total = a.x + b.x + c.x;
+	return total > 0.0 ? (a.x * a.y + b.x * b.y + c.x * c.y) / total : 1.0;
 }
 
 // What the lace averages to from far away.

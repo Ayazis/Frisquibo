@@ -13,21 +13,26 @@ const float SHORE_ROLLER_FAR_COVER = 0.8;
 const float SHORE_LACE_BREAKUP_TILE = 23.0;
 
 // (foam pattern up close, average cover from far away), both 0..1. `detail`: foam_detail() of the distance.
-vec2 ocean_shore_foam(ShoreWave w, vec2 rest, float time, float detail) {
-	float near = 0.0;
+// `shade`: the foam's brightness (FoamSurface.shade).
+vec2 ocean_shore_foam(ShoreWave w, vec2 rest, float time, float detail, out float shade) {
+	vec2 roller = vec2(0.0, 1.0);
+	vec2 lace = vec2(0.0, 1.0);
 	float far = 0.0;
 	if (w.roller > 0.0) {
 		// The pattern rides the crest (it travels with the wave) and slides down its face. The foam surface
 		// stretches its x, so x runs along the crest, as foam is drawn out along a breaker.
 		vec2 q = vec2(w.crest_frame.y, w.crest_frame.x - time * SHORE_ROLLER_TUMBLE)
 				+ water_lace_offset(w.roller_wave) * LACE_WAVE_SHIFT;
-		near = foam_surface(q, w.roller, detail, vec2(0.0)).cover;
+		FoamSurface fs = foam_surface(q, w.roller, detail, vec2(0.0));
+		roller = vec2(fs.cover, fs.shade);
 		far = w.roller * SHORE_ROLLER_FAR_COVER;
 	}
 	if (w.lace > 0.0) {
 		float breakup = texture(foam_texture, rest / SHORE_LACE_BREAKUP_TILE + water_lace_offset(w.lace_wave)).r;
-		near = max(near, water_lace(rest, w.lace_age, w.lace_wave, breakup) * w.lace);
+		lace = water_lace_shaded(rest, w.lace_age, w.lace_wave, breakup);
+		lace.x *= w.lace;
 		far = max(far, water_lace_far(w.lace_age) * w.lace);
 	}
-	return vec2(near, far);
+	shade = water_foam_shade(roller, lace, vec2(0.0, 1.0));
+	return vec2(max(roller.x, lace.x), far);
 }

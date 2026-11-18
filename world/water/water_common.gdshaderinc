@@ -14,7 +14,8 @@
 
 uniform vec3 absorption = vec3(0.45, 0.075, 0.05);      // per metre, per channel: red dies first
 uniform vec3 scatter_color : source_color = vec3(0.02, 0.16, 0.18);
-uniform vec3 foam_color : source_color = vec3(0.92, 0.94, 0.94);
+// Real foam reflects about half the light, well short of white (see ocean.gdshader).
+uniform vec3 foam_color : source_color = vec3(0.76, 0.79, 0.79);
 uniform vec3 sss_color : source_color = vec3(0.1, 0.55, 0.45);
 uniform vec3 deep_color : source_color = vec3(0.006, 0.035, 0.04); // seen from below, beyond Snell's window
 uniform float refraction_strength = 0.04;

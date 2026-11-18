@@ -39,7 +39,8 @@ extends Resource
 @export_range(5.0, 500.0, 1.0, "or_greater", "suffix:m") var gust_size := 60.0
 
 @export_group("Foam")
-@export var foam_color := Color(0.86, 0.9, 0.9)
+## Thick fresh foam; real foam reflects about half the light, so this is well short of white.
+@export var foam_color := Color(0.76, 0.79, 0.79)
 @export_range(0.02, 2.0, 0.01, "or_greater") var foam_scale := 0.22
 @export_range(0.01, 1.0, 0.01) var foam_softness := 0.18
 @export_range(0.0, 4.0, 0.05, "or_greater") var whitecap_strength := 1.0
