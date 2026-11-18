@@ -1,0 +1,52 @@
+[gd_resource type="Resource" script_class="VisualShotList" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot_list.gd" id="1"]
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot.gd" id="2"]
+
+[sub_resource type="Resource" id="engstrom_aerial"]
+script = ExtResource("2")
+name = "engstrom_aerial"
+camera_position = Vector3(0, 3, 6)
+look_at_target = Vector3(0, 0, -2)
+state = {"variant": 6, "overcast": false, "fill": 0.65, "only_texture": "res://world/water/foam_scans/tex_foam_photo_engstrom_aerial.png"}
+
+[sub_resource type="Resource" id="morning_seafoam"]
+script = ExtResource("2")
+name = "morning_seafoam"
+camera_position = Vector3(0, 3, 6)
+look_at_target = Vector3(0, 0, -2)
+state = {"variant": 6, "overcast": false, "fill": 0.65, "only_texture": "res://world/water/foam_scans/tex_foam_photo_morning_seafoam.png"}
+
+[sub_resource type="Resource" id="gischt_stiller"]
+script = ExtResource("2")
+name = "gischt_stiller"
+camera_position = Vector3(0, 3, 6)
+look_at_target = Vector3(0, 0, -2)
+state = {"variant": 6, "overcast": false, "fill": 0.65, "only_texture": "res://world/water/foam_scans/tex_foam_photo_gischt_stiller.png"}
+
+[sub_resource type="Resource" id="foamy_ocean"]
+script = ExtResource("2")
+name = "foamy_ocean"
+camera_position = Vector3(0, 3, 6)
+look_at_target = Vector3(0, 0, -2)
+state = {"variant": 6, "overcast": false, "fill": 0.65, "only_texture": "res://world/water/foam_scans/tex_foam_photo_foamy_ocean.png"}
+
+[sub_resource type="Resource" id="anna_popovic"]
+script = ExtResource("2")
+name = "anna_popovic"
+camera_position = Vector3(0, 3, 6)
+look_at_target = Vector3(0, 0, -2)
+state = {"variant": 6, "overcast": false, "fill": 0.65, "only_texture": "res://world/water/foam_scans/tex_foam_photo_anna_popovic.png"}
+
+[sub_resource type="Resource" id="all"]
+script = ExtResource("2")
+name = "all"
+camera_position = Vector3(0, 3, 6)
+look_at_target = Vector3(0, 0, -2)
+state = {"variant": 6, "overcast": false, "fill": 0.65, "only_texture": ""}
+
+[resource]
+script = ExtResource("1")
+scene_path = "res://prototypes/foam/foam_compare.tscn"
+settle_frames = 30
+shots = Array[ExtResource("2")]([SubResource("engstrom_aerial"), SubResource("morning_seafoam"), SubResource("gischt_stiller"), SubResource("foamy_ocean"), SubResource("anna_popovic"), SubResource("all")])

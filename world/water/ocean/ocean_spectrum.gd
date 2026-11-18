@@ -30,6 +30,17 @@ extends Resource
 @export_range(0.0, 4.0) var choppiness := 0.9
 ## Suppresses waves shorter than about this length; keeps the smallest cascade from looking noisy.
 @export_range(0.0, 3.0, 0.005, "suffix:m") var short_wave_cutoff := 0.02
+## Forward lean of wind-driven waves: crests are pushed downwind by this many times their height
+## (troughs back), so a wave's front face is steeper than its back by about this times its slope.
+## Steep wind waves turn lopsided; gentle swell barely changes. Grows with the wind
+## (crest_lean_wind()); never folds the surface further.
+@export_range(0.0, 3.0, 0.05) var crest_lean := 1.2
+## Height of the tumbling white water on crests that are breaking now, as a share of the breaking
+## wave's height. Makes the crest's outline lumpy and torn instead of a smooth line.
+@export_range(0.0, 0.6, 0.01) var white_water_height := 0.45
+## Spray the wind tears off breaking crests (droplets and veils of spindrift), relative to the natural
+## amount. Only in strong wind (from about Beaufort 6); 0 turns it off.
+@export_range(0.0, 4.0, 0.05) var spray_amount := 1.0
 @export_group("Foam")
 ## Foam appears where the surface compresses: jacobian below this value.
 @export_range(0.0, 3.0) var foam_threshold := 0.55
@@ -57,6 +68,10 @@ const GRAVITY := 9.81
 const DISPERSION_STEPS := 40
 ## Before wind_spread, `swell` (0..2) narrowed the wind sea's spreading by a factor 1 + this * swell.
 const LEGACY_ALIGNMENT_FACTOR := 4.0
+## Wind speeds over which the crest lean grows from none to full: a fresh breeze (Beaufort 5) leans
+## a little, a gale (Beaufort 8) fully.
+const LEAN_WIND_START := 7.0
+const LEAN_WIND_FULL := 18.0
 
 
 ## Angular frequency of the dominant waves (rad/s): JONSWAP peak, shifted by wavelength_scale.
@@ -64,6 +79,11 @@ const LEGACY_ALIGNMENT_FACTOR := 4.0
 func peak_frequency() -> float:
 	var natural := 22.0 * pow(GRAVITY * GRAVITY / (wind_speed * fetch * 1000.0), 1.0 / 3.0)
 	return natural / sqrt(wavelength_scale)
+
+
+## Crest lean for this wind: crest_lean, faded in between LEAN_WIND_START and LEAN_WIND_FULL.
+func crest_lean_wind() -> float:
+	return crest_lean * smoothstep(LEAN_WIND_START, LEAN_WIND_FULL, wind_speed)
 
 
 ## Length of the dominant waves in metres (deep-water dispersion).

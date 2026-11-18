@@ -1,0 +1,45 @@
+[gd_resource type="Resource" script_class="VisualShotList" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot_list.gd" id="1"]
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot.gd" id="2"]
+
+[sub_resource type="Resource" id="scan003_close_overcast"]
+script = ExtResource("2")
+name = "scan003_close_overcast"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 3, "overcast": true, "scan": "003"}
+
+[sub_resource type="Resource" id="multi_close"]
+script = ExtResource("2")
+name = "multi_close"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 4, "overcast": false, "scan": "003"}
+
+[sub_resource type="Resource" id="multi_wide"]
+script = ExtResource("2")
+name = "multi_wide"
+camera_position = Vector3(0, 9, 32)
+look_at_target = Vector3(0, 0, -5)
+state = {"variant": 4, "overcast": false, "scan": "003"}
+
+[sub_resource type="Resource" id="multi_close_overcast"]
+script = ExtResource("2")
+name = "multi_close_overcast"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 4, "overcast": true, "scan": "003"}
+
+[sub_resource type="Resource" id="multi_wide_overcast"]
+script = ExtResource("2")
+name = "multi_wide_overcast"
+camera_position = Vector3(0, 9, 32)
+look_at_target = Vector3(0, 0, -5)
+state = {"variant": 4, "overcast": true, "scan": "003"}
+
+[resource]
+script = ExtResource("1")
+scene_path = "res://prototypes/foam/foam_compare.tscn"
+settle_frames = 30
+shots = Array[ExtResource("2")]([SubResource("scan003_close_overcast"), SubResource("multi_close"), SubResource("multi_wide"), SubResource("multi_close_overcast"), SubResource("multi_wide_overcast")])

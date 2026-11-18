@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="VisualShotList" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot_list.gd" id="1"]
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot.gd" id="2"]
+
+[sub_resource type="Resource" id="top"]
+script = ExtResource("2")
+name = "top"
+camera_position = Vector3(2, 45, -150)
+look_at_target = Vector3(-4, 0, -185)
+state = {"view": 0, "sea_state": 1, "ocean": {"transition_time": 0.0}}
+
+[resource]
+script = ExtResource("1")
+scene_path = "res://prototypes/water_demo/water_demo.tscn"
+settle_frames = 240
+shots = Array[ExtResource("2")]([SubResource("top")])

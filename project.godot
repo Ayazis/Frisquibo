@@ -84,6 +84,62 @@ water_swash_period={
 "type": "float",
 "value": 8.0
 }
+water_foam_lace={
+"type": "sampler2D",
+"value": ""
+}
+water_foam_noise={
+"type": "sampler2D",
+"value": ""
+}
+water_foam_dense_a={
+"type": "sampler2D",
+"value": ""
+}
+water_foam_dense_b={
+"type": "sampler2D",
+"value": ""
+}
+water_foam_dense_c={
+"type": "sampler2D",
+"value": ""
+}
+water_foam_middle_a={
+"type": "sampler2D",
+"value": ""
+}
+water_foam_middle_b={
+"type": "sampler2D",
+"value": ""
+}
+water_foam_middle_c={
+"type": "sampler2D",
+"value": ""
+}
+water_foam_sparse_a={
+"type": "sampler2D",
+"value": ""
+}
+water_foam_sparse_b={
+"type": "sampler2D",
+"value": ""
+}
+water_foam_sparse_c={
+"type": "sampler2D",
+"value": ""
+}
+water_foam_specks={
+"type": "sampler2D",
+"value": ""
+}
+water_wave_time={
+"type": "float",
+"value": 0.0
+}
+water_ssr_steps={
+"type": "int",
+"value": 24
+}
 water_reflection_2={
 "type": "sampler2D",
 "value": ""

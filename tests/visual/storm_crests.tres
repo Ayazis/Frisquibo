@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="VisualShotList" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot_list.gd" id="1"]
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot.gd" id="2"]
+
+[sub_resource type="Resource" id="storm_side_low"]
+script = ExtResource("2")
+name = "storm_side_low"
+camera_position = Vector3(0, 6, -1451)
+look_at_target = Vector3(46, 0, -1517)
+state = {"view": 0, "sea_state": 2, "ocean": {"transition_time": 0.0}}
+
+[sub_resource type="Resource" id="storm_side_low_upwind"]
+script = ExtResource("2")
+name = "storm_side_low_upwind"
+camera_position = Vector3(0, 6, -1451)
+look_at_target = Vector3(-66, 0, -1497)
+state = {"view": 0, "sea_state": 2, "ocean": {"transition_time": 0.0}}
+
+[sub_resource type="Resource" id="hurricane_side"]
+script = ExtResource("2")
+name = "hurricane_side"
+camera_position = Vector3(0, 10, -1451)
+look_at_target = Vector3(57, 0, -1533)
+state = {"view": 0, "sea_state": 2, "ocean": {"transition_time": 0.0, "wind_speed": 40.0, "fetch": 2000.0}}
+
+[resource]
+script = ExtResource("1")
+scene_path = "res://prototypes/water_demo/water_demo.tscn"
+settle_frames = 240
+shots = Array[ExtResource("2")]([SubResource("storm_side_low"), SubResource("storm_side_low_upwind"), SubResource("hurricane_side")])

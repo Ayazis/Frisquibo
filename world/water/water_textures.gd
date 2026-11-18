@@ -1,16 +1,32 @@
 class_name WaterTextures
 extends RefCounted
-## Shared, seamless noise textures for water shaders: two detail normal maps, foam, caustics and the
-## smooth field that wind gusts follow.
+## Shared, seamless noise textures for water shaders: two detail normal maps, foam, foam lace, caustics
+## and the smooth field that wind gusts follow.
 ## Generated once (in Godot's noise thread) and reused by every water material.
 
 const SIZE := 512
 const NORMAL_BUMP := 6.0
+const LACE_SEED := 606
+## Foam textures (world/water/foam_scans/SOURCE.txt), packed: R, G = normal x, y (OpenGL), B = height.
+## Three per foam density; foam_surface.gdshaderinc picks between them across the sea.
+const FOAM_TEXTURES: Dictionary[StringName, Texture2D] = {
+	&"water_foam_dense_a": preload("res://world/water/foam_scans/tex_foam_photo_engstrom_aerial.png"),
+	&"water_foam_dense_b": preload("res://world/water/foam_scans/tex_foam_photo_morning_seafoam.png"),
+	&"water_foam_dense_c": preload("res://world/water/foam_scans/tex_foam_photo_gischt_stiller.png"),
+	&"water_foam_middle_a": preload("res://world/water/foam_scans/tex_foam_photo_foamy_ocean.png"),
+	&"water_foam_middle_b": preload("res://world/water/foam_scans/tex_foam_photo_anna_popovic.png"),
+	&"water_foam_middle_c": preload("res://world/water/foam_scans/tex_foam_scan_003.png"),
+	&"water_foam_sparse_a": preload("res://world/water/foam_scans/tex_foam_photo_croatia_pasman.png"),
+	&"water_foam_sparse_b": preload("res://world/water/foam_scans/tex_foam_photo_dench_dark_whitecap.png"),
+	&"water_foam_sparse_c": preload("res://world/water/foam_scans/tex_foam_scan_002.png"),
+	&"water_foam_specks": preload("res://world/water/foam_scans/tex_foam_synth_spatter.png"),
+}
 
 static var _normal_a: NoiseTexture2D
 static var _normal_b: NoiseTexture2D
 static var _foam: NoiseTexture2D
 static var _caustics: NoiseTexture2D
+static var _lace: NoiseTexture2D
 static var _gusts: NoiseTexture2D
 
 
@@ -36,6 +52,24 @@ static func foam() -> NoiseTexture2D:
 	if _foam == null:
 		_build()
 	return _foam
+
+
+## Distance to the nearest cell edge (cellular F2 - F1, 0 on the edges): the network foam ages into
+## (foam_lace.gdshaderinc).
+static func lace() -> NoiseTexture2D:
+	if _lace == null:
+		_build()
+	return _lace
+
+
+## Sets the global shader parameters every foam shader reads (foam_surface.gdshaderinc).
+static func apply_foam_globals() -> void:
+	if _lace == null:
+		_build()
+	RenderingServer.global_shader_parameter_set(&"water_foam_lace", _lace)
+	RenderingServer.global_shader_parameter_set(&"water_foam_noise", _foam)
+	for param: StringName in FOAM_TEXTURES:
+		RenderingServer.global_shader_parameter_set(param, FOAM_TEXTURES[param])
 
 
 static func caustics() -> NoiseTexture2D:
@@ -65,6 +99,9 @@ static func _build() -> void:
 	cells.fractal_type = FastNoiseLite.FRACTAL_NONE
 	_caustics = _noise_texture(cells, false)
 	_caustics.invert = true
+	var lace_cells := cells.duplicate() as FastNoiseLite
+	lace_cells.seed = LACE_SEED
+	_lace = _noise_texture(lace_cells, false)
 	# Few octaves: gusts are broad patches, not detail.
 	_gusts = _noise_texture(_simplex(505, 0.006, 2), false)
 

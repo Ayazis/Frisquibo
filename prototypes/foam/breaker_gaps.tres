@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="VisualShotList" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot_list.gd" id="1"]
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot.gd" id="2"]
+
+[sub_resource type="Resource" id="close_a"]
+script = ExtResource("2")
+name = "close_a"
+camera_position = Vector3(6, 2.2, -168)
+look_at_target = Vector3(17, 0.3, -183)
+state = {"view": 0, "sea_state": 1, "ocean": {"transition_time": 0.0}}
+
+[sub_resource type="Resource" id="close_b"]
+script = ExtResource("2")
+name = "close_b"
+camera_position = Vector3(10, 4, -165)
+look_at_target = Vector3(17, 0.3, -183)
+state = {"view": 0, "sea_state": 1, "ocean": {"transition_time": 0.0}}
+
+[sub_resource type="Resource" id="close_c"]
+script = ExtResource("2")
+name = "close_c"
+camera_position = Vector3(-6, 2.2, -175)
+look_at_target = Vector3(-10, 0.3, -192)
+state = {"view": 0, "sea_state": 1, "ocean": {"transition_time": 0.0}}
+
+[resource]
+script = ExtResource("1")
+scene_path = "res://prototypes/water_demo/water_demo.tscn"
+settle_frames = 240
+shots = Array[ExtResource("2")]([SubResource("close_a"), SubResource("close_b"), SubResource("close_c")])

@@ -111,8 +111,9 @@ void fragment() {
 	vec2 variance = vec2(base_slope_variance * gust + 0.5 * lost) + water_footprint_variance(dFdx(slope), dFdy(slope));
 
 	WaterSurface surface = WaterSurface(n_world, n_view, v_world, VERTEX, variance, max(v_crest_foam, ripple.w), wind * 0.15, from_below);
-	WaterResult r = water_shade(surface, SCREEN_UV, FRAGCOORD.xy, vec2(PROJECTION_MATRIX[0][0], PROJECTION_MATRIX[1][1]),
-			INV_PROJECTION_MATRIX, INV_VIEW_MATRIX, CAMERA_POSITION_WORLD, TIME);
+	WaterView view = WaterView(SCREEN_UV, FRAGCOORD.xy, VIEWPORT_SIZE, VIEW_MATRIX, INV_VIEW_MATRIX, PROJECTION_MATRIX,
+			INV_PROJECTION_MATRIX, CAMERA_POSITION_WORLD, TIME);
+	WaterResult r = water_shade(surface, view);
 	NORMAL = from_below ? -n_view : n_view;
 	ALBEDO = r.albedo;
 	EMISSION = r.emission;

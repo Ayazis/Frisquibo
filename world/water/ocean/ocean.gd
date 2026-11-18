@@ -6,6 +6,9 @@ extends Node3D
 ## `spectrum` and the exported values are the authored sea state; `rules` (OceanRuleSet) change them
 ## at runtime ("if local_depth < 1 and wind_speed > 12 then local_foam += 5").
 
+## A plunging breaker's lip came down at `position`; the breaker was `height` metres high. For sound.
+signal breaker_plunged(position: Vector3, height: float)
+
 const SURFACE_SHADER := preload("res://world/water/ocean/ocean.gdshader")
 const DEFAULT_QUALITY := preload("res://data/quality/ocean_high.tres")
 const DEFAULT_SPECTRUM := preload("res://world/water/ocean/presets/fresh_breeze.tres")
@@ -43,6 +46,14 @@ const TRANSITION_SETTLE := 0.3
 ## Global shader values the ground reads for the swash on the beach (terrain_ground.gdshader).
 const SWASH_RUNUP_PARAM := &"water_swash_runup"
 const SWASH_PERIOD_PARAM := &"water_swash_period"
+## The wave clock the swash and the shore waves run on, so the CPU heights match what is drawn.
+const WAVE_TIME_PARAM := &"water_wave_time"
+## Cell texture foam ages into, on the sea and on the sand (foam_lace.gdshaderinc).
+## Ray-march steps of the screen-space reflections on all water, from the quality tier.
+const SSR_STEPS_PARAM := &"water_ssr_steps"
+## Metres over which the slope of the shore waves and swash at the camera is measured, for the waterline
+## across the lens.
+const LENS_SLOPE_STEP := 0.25
 ## Metres above the local wave height where the camera lens can still dip into a crest.
 const UNDERWATER_REACH_MARGIN := 0.5
 
@@ -66,6 +77,18 @@ const UNDERWATER_REACH_MARGIN := 0.5
 ## Slope of the beach face at the waterline (rise over run): with the waves it sets how far the swash
 ## runs up the sand (ShoreRunup). 0.08 is a medium-sand beach, as BeachProfile builds by default.
 @export_range(0.01, 0.3, 0.005) var foreshore_slope := 0.08
+## Water shallower than this (m) turns the waves towards the beach, where they steepen and break
+## (ShoreWaves). Real waves feel the bottom deeper still; the shore waves take over where it shows.
+@export_range(1.0, 12.0, 0.5, "suffix:m") var shore_wave_depth := 8.0
+## Share of the open sea's wave energy that the shore waves carry inside that depth; the rest stays
+## as the simulated, many-directional sea on top of them.
+@export_range(0.0, 1.0, 0.01) var shore_wave_share := 0.7
+## Shore waves left on a coast facing away from the open sea's main waves (refraction still bends
+## some round to it).
+@export_range(0.0, 1.0, 0.01) var shore_lee_share := 0.3
+## How hard breakers plunge where the beach makes them (BreakerProfile): 1 is physical, 0 makes every
+## breaker spill. Curls are drawn near the camera only, as far as the quality tier's breaker_reach.
+@export_range(0.0, 2.0, 0.01) var curl_strength := 1.0
 @export_group("Sea state changes")
 ## Seconds a new sea state takes to fade in when it changes the longest waves' tile (a preset, a big
 ## wind change). 0 switches at once and rearranges every long wave in one frame.
@@ -81,6 +104,10 @@ var _fallback: Sea
 var _seabed: Image
 var _seabed_area: Rect2
 var _seabed_resolution := DEFAULT_SEABED_RESOLUTION
+var _shore := ShoreWaves.new()
+## The swash's run-up (m) as last published, for the CPU twin of the swash (SwashEdge).
+var _runup := 0.0
+var _breakers: BreakerSystem
 var _time := 0.0
 var _frames_since_readback := 0
 var _reflection: PlanarReflection
@@ -109,6 +136,9 @@ func _ready() -> void:
 		spectrum = DEFAULT_SPECTRUM
 	if quality == null:
 		quality = DEFAULT_QUALITY
+	RenderingServer.global_shader_parameter_set(SSR_STEPS_PARAM, quality.reflection_march_steps)
+	# Both renderers: the beach draws the swash's foam from them too (terrain_ground).
+	WaterTextures.apply_foam_globals()
 	for tunable: Object in _tunables():
 		_limits.merge(OceanRuleEngine.limits(tunable))
 	_effective = spectrum.duplicate() as OceanSpectrum
@@ -299,6 +329,14 @@ func rule_problems() -> PackedStringArray:
 
 
 ## Measured significant wave height of the open sea (twice the typical crest height), in metres.
+## The plunging breaker at world `xz`: its stage, its lip, and whether `xz` is inside its tube. An empty
+## state (stage < 0) where nothing is breaking or the ocean has no seabed or no curls.
+func breaker_at(xz: Vector2) -> BreakerState:
+	if _breakers == null:
+		return BreakerState.new()
+	return _breakers.query.at(xz)
+
+
 func wave_height() -> float:
 	return 2.0 * _amplitude
 
@@ -321,13 +359,20 @@ func set_seabed(height: Callable, area: Rect2, resolution: int = DEFAULT_SEABED_
 	_height_field.damping_at = _damping_at
 	material.set_shader_parameter("seabed_height", ImageTexture.create_from_image(img))
 	material.set_shader_parameter("seabed_rect", Vector4(area.position.x, area.position.y, area.size.x, area.size.y))
+	# The coast at the current level: a tide moves the waterline, but the crests still follow the depths.
+	# Crests near the beach run faster the higher the sea's waves are.
+	var sea_height := OceanSeaStats.expected_wave_height(_effective) if _effective != null else 0.0
+	_shore.field = ShoreField.bake(_depth_at, area, ShoreField.DEFAULT_CELL, sea_height)
+	material.set_shader_parameter("shore_field", ImageTexture.create_from_image(_shore.field.image))
+	material.set_shader_parameter("shore_origin", ImageTexture.create_from_image(_shore.field.origins))
+	_make_breakers(area)
 
 
 ## World height of the water surface at `xz` (the rest level until the first GPU readback arrives).
 func height_at(xz: Vector2) -> float:
 	if _fallback != null:
 		return _fallback.height_at(xz, _time)
-	var rest_level := _level() + _local_lift(xz)
+	var rest_level := _level() + _local_lift(xz) + _near_shore_lift(xz)
 	var current := _height_field != null and _height_field.is_ready()
 	var outgoing := _outgoing_field != null and _outgoing_field.is_ready()
 	if outgoing and not current:
@@ -343,6 +388,8 @@ func height_at(xz: Vector2) -> float:
 
 func _process(delta: float) -> void:
 	_time += delta
+	_shore.time = _time
+	RenderingServer.global_shader_parameter_set(WAVE_TIME_PARAM, _time)
 	_publish_swash()
 	if _fallback != null:
 		_fallback.material.set_shader_parameter("wave_time", _time)
@@ -352,6 +399,7 @@ func _process(delta: float) -> void:
 	if _height_field.is_ready():
 		_amplitude = lerpf(_amplitude, _height_field.crest_amplitude(), 1.0 - exp(-AMPLITUDE_RESPONSE * delta))
 		material.set_shader_parameter("wave_amplitude", _amplitude)
+		_shore.amplitude = _amplitude
 	_update_rules(false)
 	_advance_transition(delta)
 	_simulation.update(_time, delta)
@@ -365,9 +413,15 @@ func _process(delta: float) -> void:
 		# Back faces of the surface mean "seen from below" only when the camera really is under water;
 		# otherwise they are the far side of a steep crest and get drawn like the top.
 		material.set_shader_parameter("camera_underwater", p.y < surface)
-		_underwater.follow(cam, surface, _level() + _local_lift(xz), _damping_at(xz), wave_height() + UNDERWATER_REACH_MARGIN)
+		var near_shore := _near_shore_lift(xz)
+		var slope := Vector2(_near_shore_lift(xz + Vector2(LENS_SLOPE_STEP, 0.0)) - near_shore,
+				_near_shore_lift(xz + Vector2(0.0, LENS_SLOPE_STEP)) - near_shore) / LENS_SLOPE_STEP
+		_underwater.follow(cam, surface, _level() + _local_lift(xz) + near_shore, _damping_at(xz),
+				wave_height() + UNDERWATER_REACH_MARGIN, slope)
 		if _spray != null:
 			_spray.follow(p)
+		if _breakers != null:
+			_breakers.update(xz, _time, _shore.period, _wind())
 	else:
 		_underwater.follow(null, 0.0, 0.0, 0.0, 0.0)
 	if quality.readback_interval > 0:
@@ -455,9 +509,10 @@ func _publish_swash() -> void:
 	var height := wave_height() if _height_field != null and _height_field.is_ready() \
 			else OceanSeaStats.expected_wave_height(_effective)
 	var period := OceanSeaStats.dominant_period(_effective)
-	RenderingServer.global_shader_parameter_set(SWASH_RUNUP_PARAM,
-			ShoreRunup.stockdon(height, period, _value(&"foreshore_slope")))
+	_runup = ShoreRunup.stockdon(height, period, _value(&"foreshore_slope"))
+	RenderingServer.global_shader_parameter_set(SWASH_RUNUP_PARAM, _runup)
 	RenderingServer.global_shader_parameter_set(SWASH_PERIOD_PARAM, period)
+	_shore.period = period
 
 
 func _drift_foam(delta: float) -> void:
@@ -523,14 +578,15 @@ func _apply_state(spectrum_changed: bool) -> void:
 	if _height_field.damping_at.is_null():
 		_height_field.damping_at = _damping_at
 	material.set_shader_parameter("sea_level", sea_level)
-	var wind_angle := deg_to_rad(_effective.wind_direction)
-	var wind := Vector2(cos(wind_angle), sin(wind_angle)) * _effective.wind_speed
+	var wind := _wind()
 	material.set_shader_parameter("wind", wind)
+	material.set_shader_parameter("white_water_height", _effective.white_water_height)
 	if _spray != null:
-		_spray.set_sea(wind, sea_level, _look_value(&"foam_cascade_falloff"))
+		_spray.set_sea(wind, sea_level, _look_value(&"foam_cascade_falloff"), _effective.spray_amount)
 	material.set_shader_parameter("breaker_ratio", _value(&"breaker_ratio"))
 	material.set_shader_parameter("min_shore_wave", _value(&"min_shore_wave"))
 	material.set_shader_parameter("wave_setup", _value(&"wave_setup"))
+	_apply_shore_waves()
 	OceanLookBinding.apply(_authored_look(), material, _values)
 	var look_now := _authored_look()
 	_underwater.set_optics(OceanLookBinding.absorption(look_now, _values), look_now.deep_color)
@@ -607,16 +663,85 @@ func _setup_lift(depth: float) -> float:
 	return _value(&"wave_setup") * _amplitude * (1.0 - smoothstep(0.0, zone, depth))
 
 
-## Same rule as shore_damping() in ocean.gdshader, with local rules and set-up.
+## Same rule as shore_damping() in ocean.gdshader, with local rules and set-up, times the share the
+## shore waves leave to the open sea's.
 func _damping_at(rest: Vector2) -> float:
 	var raw := _depth_at(rest)
 	if raw >= OPEN_SEA_DEPTH and _local.count() == 0:
 		return 1.0
 	var rule := _local.evaluate(raw)
-	var depth := maxf(raw + _setup_lift(raw) + rule.z, 0.0)
+	var still := raw + _setup_lift(raw) + rule.z
+	var depth := maxf(still, 0.0)
 	var limited := _value(&"breaker_ratio") * depth / maxf(_amplitude, 0.01)
 	var shore := clampf(maxf(limited, _value(&"min_shore_wave") * smoothstep(0.0, 0.5, depth)), 0.0, 1.0)
-	return shore * rule.y
+	return shore * rule.y * _shore.open_sea_share(still)
+
+
+## Height the shore waves and the swash add at world `xz` (m).
+func _near_shore_lift(xz: Vector2) -> float:
+	return _shore.height_at(xz, _still_depth) + _swash_lift(xz)
+
+
+## Same as swash_lift() in ocean.gdshader: near the waterline the sea rises to the swash edge.
+func _swash_lift(p: Vector2) -> float:
+	var depth := _depth_at(p)
+	if depth >= OPEN_SEA_DEPTH:
+		return 0.0
+	var zone := _amplitude / maxf(_value(&"breaker_ratio"), 0.01)
+	var near_shore := 1.0 - smoothstep(0.0, zone, depth)
+	var edge := SwashEdge.state(p, _time, _runup, _shore.period).x
+	return maxf(edge * near_shore - _setup_lift(depth), 0.0)
+
+
+## Still water depth at rest point `p` with set-up and rule water: what the shore waves see
+## (v_still_depth in ocean.gdshader).
+func _still_depth(p: Vector2) -> float:
+	var raw := _depth_at(p)
+	return raw + _setup_lift(raw) + _local.evaluate(raw).z
+
+
+## The shore waves' settings after the rules, on the CPU twin and the surface.
+func _apply_shore_waves() -> void:
+	_shore.breaker_ratio = _value(&"breaker_ratio")
+	_shore.zone_depth = _value(&"shore_wave_depth")
+	_shore.share = _value(&"shore_wave_share")
+	_shore.lee_share = _value(&"shore_lee_share")
+	_shore.direction = _main_wave_direction()
+	material.set_shader_parameter("shore_wave_depth", _shore.zone_depth)
+	material.set_shader_parameter("shore_wave_share", _shore.share)
+	material.set_shader_parameter("shore_lee_share", _shore.lee_share)
+	material.set_shader_parameter("shore_wave_direction", _shore.direction)
+	material.set_shader_parameter("curl_strength", _value(&"curl_strength"))
+	if _breakers != null:
+		_breakers.set_sea(_level(), _value(&"curl_strength"))
+
+
+## The wind over the sea after the rules (direction * m/s).
+func _wind() -> Vector2:
+	var angle := deg_to_rad(_effective.wind_direction)
+	return Vector2(cos(angle), sin(angle)) * _effective.wind_speed
+
+
+## Plunging breakers along the baked seabed, when the quality tier asks for curls.
+func _make_breakers(area: Rect2) -> void:
+	if _breakers != null:
+		_breakers.queue_free()
+		_breakers = null
+	if quality.breaker_reach <= 0.0 or _shore.field.waterlines.is_empty():
+		return
+	_breakers = BreakerSystem.new(_shore, material, quality, area, _level(), _depth_at, _still_depth)
+	_breakers.plunged.connect(func(at: Vector3, height: float) -> void: breaker_plunged.emit(at, height))
+	_breakers.set_sea(_level(), _value(&"curl_strength"))
+	add_child(_breakers)
+
+
+## Direction the bigger wave system travels in: the swell when it is higher than the wind sea.
+func _main_wave_direction() -> Vector2:
+	var heading := _effective.wind_direction
+	if OceanSeaStats.swell_wave_height(_effective) > OceanSeaStats.surface_wave_height(_effective):
+		heading = _effective.swell_direction
+	var angle := deg_to_rad(heading)
+	return Vector2(cos(angle), sin(angle))
 
 
 ## Approximate sea states on Compatibility; this is not an FFT spectrum reconstruction. The Gerstner

@@ -34,10 +34,13 @@ const SAIL_ROUGHNESS := 0.95
 
 func _init(water_height: Callable) -> void:
 	mass = BOAT_MASS
+	var rings := _hull_rings()
 	var hull := MeshInstance3D.new()
-	hull.mesh = _hull_mesh()
+	hull.mesh = _hull_mesh(rings)
 	hull.material_override = WaterProp.material(HULL_COLOR, WOOD_ROUGHNESS)
 	add_child(hull)
+	# No sea inside the open hull when waves rise above its floor.
+	add_child(WaterMask.new(_opening(rings)))
 	var mast := MeshInstance3D.new()
 	var mast_mesh := CylinderMesh.new()
 	mast_mesh.top_radius = MAST_RADIUS * 0.6
@@ -79,11 +82,9 @@ func _init(water_height: Callable) -> void:
 	add_child(wake)
 
 
-## The hull lofted through cross-sections along x: U-shaped, pointed at both ends, open on top,
-## drawn from both sides so its inside shows too.
-static func _hull_mesh() -> ArrayMesh:
-	var surface := SurfaceTool.new()
-	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+## Cross-sections of the hull along x, bow to stern: U-shaped, pointed at both ends, each from the
+## gunwale on one side, under the keel, to the gunwale on the other.
+static func _hull_rings() -> Array[PackedVector3Array]:
 	var rings: Array[PackedVector3Array] = []
 	for s: int in range(STATIONS + 1):
 		var t := float(s) / STATIONS
@@ -97,6 +98,23 @@ static func _hull_mesh() -> ArrayMesh:
 			var a := PI * float(p) / SECTION_POINTS
 			ring.append(Vector3(x, top - (top - bottom) * pow(sin(a), 0.7), half_width * cos(a)))
 		rings.append(ring)
+	return rings
+
+
+## The opening of the hull: a lid from gunwale to gunwale (WaterMask).
+static func _opening(rings: Array[PackedVector3Array]) -> ArrayMesh:
+	var port := PackedVector3Array()
+	var starboard := PackedVector3Array()
+	for ring: PackedVector3Array in rings:
+		port.append(ring[0])
+		starboard.append(ring[ring.size() - 1])
+	return WaterMask.lid(port, starboard)
+
+
+## The hull lofted through its cross-sections, open on top, drawn from both sides so its inside shows too.
+static func _hull_mesh(rings: Array[PackedVector3Array]) -> ArrayMesh:
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for s: int in range(STATIONS):
 		for p: int in range(SECTION_POINTS):
 			var a := rings[s][p]

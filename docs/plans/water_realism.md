@@ -8,7 +8,8 @@ headless import, the headless tests and the headless smoke test only (nothing is
 godot --headless --import
 for t in water_shaders underwater_view water_ripples water_textures water_types shore_runup water_quality \
     island_terrain ocean_tuning ocean_parameters ocean_sea_systems ocean_rules ocean_height_field \
-    beach_profile river_flow_field; do
+    beach_profile river_flow_field shore_waves water_mask planar_reflection breaker_profile breakers \
+    swash_edge; do
   timeout 120 godot --headless --path . --script res://tests/headless/${t}_test.gd; done
 timeout 200 godot --headless --path . --script res://tests/smoke/ocean_smoke.gd
 ```
@@ -43,8 +44,26 @@ they only show errors on a desktop run.
 11. [x] **Spray** blown off breaking crests in strong wind.
 12. [x] **Sea-state transitions.** Cross-fade the longest cascade when its tile length changes.
 
-Wave refraction towards the shore and curling breakers are out of scope for this pass: both need a
-separate near-shore wave model (see the notes at the end once written).
+Wave refraction towards the shore and curling breakers were out of scope for this pass: both need a
+separate near-shore wave model. The second pass below adds one (decision 0010).
+
+## Second pass (decision 0010)
+
+13. [x] **Shore waves.** A travel-time field over the seabed (eikonal equation, fast marching): crests
+    turn to meet the beach, shorten and grow as the water shallows, lean forward and break at the depth
+    limit, with white water on the front face and a fading foam band behind. Wave for wave the swash's
+    timing and size, so each crest runs up the sand as far as the swash says. CPU twin for buoyancy.
+14. [x] **Dry hulls.** `WaterMask`: an invisible lid over a boat's opening keeps the sea out of the hull.
+15. [x] **Screen-space reflections** on all water, over the mirror or the sky: the river reflects its
+    banks, and a boat on a crest reflects from the real surface, not the flat mirror plane.
+16. [x] **Rough-water Fresnel and the horizon.** Fresnel averaged over the unresolved slopes (Bruneton
+    et al. 2010); mirror samples and reflected rays never cross below the horizon.
+17. [x] **Linear mirror.** The planar reflection renders linear HDR light without the main pass's tone
+    mapping and glow (which it applied a second time before).
+
+Out of scope still: plunging breakers that curl over (a mesh can't fold over itself here), foam left
+lying on the sand after the backwash, and the shore waves in the underwater view's waterline and in
+the caustics (both still read the FFT waves only).
 
 ## Desktop checks
 
@@ -81,3 +100,71 @@ script errors, then check:
 12. **Sea-state changes** (C to cycle presets): the sea fades from one state to the next over about six
     seconds without a jump; floating barrels stay on the surface.
 13. **Cost**: compare frame times with the previous main on High; each feature has a quality value.
+
+Second pass:
+
+14. **Shore waves** (1, 4, 5; C for the storm and calm presets): crests near the island run parallel
+    to the beach all round it, also on the lee side (smaller there), and bend round the headlands; they
+    get shorter and steeper towards the sand, lean forward, and break with white water on the front
+    face and a fading band of foam behind. Each breaker should arrive just as the swash starts its
+    run-up; a big one runs further. No seams or flicker where the shore waves fade in (around 4-8 m deep)
+    or at the texels of the shore field (3 m). Barrels in the surf ride the breakers (CPU twin).
+    If the breakers look too regular, raise `SWASH_PHASE_SPREAD` (now 0.5; the old swash used 1.5).
+15. **Dry hulls** (5, then close to a boat; storm preset): no sea inside the open boats as they roll,
+    and a crest between the camera and a boat still hides the boat. Set the mask's `debug_tint` to see
+    the lid.
+16. **Screen-space reflections**: the river (3) mirrors its banks and trees, with the sky where the rays
+    find nothing; boats and the island reflect in the sea (1, 5) without seams where the march hands
+    over to the mirror (screen edges, about 40-60 m away). Low: none.
+17. **Fresnel and horizon** (5, looking out to sea; storm preset): the rough sea darkens towards the
+    horizon instead of turning into a bright mirror; no bright line along the horizon.
+18. **Linear mirror**: reflections are as bright as the things they reflect, times the Fresnel (they
+    were washed out before), and the glow doesn't bloom twice in them.
+
+Breaking waves, phase A (`docs/plans/breaking_waves.md`, decision 0011):
+
+19. **Roller** (1, 4; calm and breeze presets): the upper front of each breaking wave carries dense,
+    lumpy white water with a ragged lower edge. It travels with the crest, tumbles slowly down the
+    face, looks different on each wave, and glows turquoise just under it. The face is slightly rounded
+    at the top, with no crease where the bulge starts or at the crest.
+20. **Lace** (1, 4): behind each breaker the foam opens into a lace of cells whose holes grow until
+    thin threads are left, then fades before the next breaker. It never reads as scattered spots or
+    cotton balls, at 10 m or at 60 m. From far away it fades smoothly into an even cover.
+21. **Foam on the sand** (1): as each wave turns back, a lacy line stays where it stopped and a sheet
+    of bubbles drains behind it, both gone before the next wave arrives. It lines up with the water's
+    edge, with no gap and no overlap, and is brighter for bigger seas (they run further).
+22. **Refraction** (5 and around the island): breakers are bigger on the points of the island and
+    smaller in its bays. No stripes or blotches in wave height that follow the 3 m texels or small
+    wiggles of the coast. If points look too violent, lower `ShoreField.REFRACTION_MAX` (2.0).
+
+Breaking waves, phases B and C: curling breakers (decision 0012). Run
+`prototypes/breakers/breaker_bench.tscn` first: a straight beach, keys 1-5 for the views, T for slow
+motion, P to pause, K for curls on/off, L for the sun behind or in front, C for the sea state. Then
+check the island demo too (K toggles curls there as well).
+
+23. **The curl** (bench 1 and 2, "breeze over swell", T): the crest pitches forward, a lip flies out and
+    down into the trough ahead with a tube of air under it, the water splashes up where it lands, and
+    the wave runs on as a foaming bore. Breaking runs along the crest rather than the whole crest
+    flipping at once. Compare with real surf footage at the same distance. Fails if it reads as a
+    rubbery tube, a rolling pipe or a flip.
+24. **Seams** (bench 3, slow motion): no line, gap or flicker where a ribbon meets the ocean surface:
+    across the crest at the ends of the curl, along the crest where curls start and stop, and at the
+    edge of the curls' reach (80 m on High). No holes in the sea where a crest curls without a ribbon.
+25. **Lip and tube light** (bench, L for the sun behind the waves): the thin lip glows green against the
+    sun; the inside of the tube is darker than the open face; the face under the lip shows the water's
+    own colour, not the seabed behind it.
+26. **White water, no cotton balls** (bench, all views, sun and shade): the lip whitens from its tip as
+    it flies, a burst of foam where it lands, then foam over the face. Spray: thin, fast streaks that
+    are mostly clear, with no round soft dots. Mist: one faint sheet rising over the plunge line,
+    gone soon after. Fails if anything reads as puffs or blobs from any distance.
+27. **Breaker types** (C through the sea states): the calm and moderate seas plunge on the bench's
+    beach, the storm spills (surf similarity). On the island the curls appear where its shallows are
+    steep enough.
+28. **Cost** (High, island demo, on the beach): frame time with curls on against off (K). The ribbons
+    add about 30-80k vertices. The CPU sampling for spray and mist costs about 0.6 ms a frame, up to
+    1.5 ms when new crests come within reach.
+29. **Beach caustics** (1, shallow water off the beach): bright bands on the sand under each shore
+    wave's steep front, moving shorewards with it, on top of the finer FFT caustics.
+30. **Swash for floating things and the lens** (1, drop barrels on the beach with F; Q to lower the
+    camera into the swash): barrels at the waterline ride up the sand and back with the water, and
+    the waterline across the lens follows the shore waves and the swash.

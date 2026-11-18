@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="VisualShotList" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot_list.gd" id="1"]
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot.gd" id="2"]
+
+[sub_resource type="Resource" id="now"]
+script = ExtResource("2")
+name = "now"
+camera_position = Vector3(2, 2.5, -160)
+look_at_target = Vector3(-4, 0.3, -195)
+state = {"view": 0, "sea_state": 1, "ocean": {"transition_time": 0.0}}
+
+[sub_resource type="Resource" id="no_white_water"]
+script = ExtResource("2")
+name = "no_white_water"
+camera_position = Vector3(2, 2.5, -160)
+look_at_target = Vector3(-4, 0.3, -195)
+state = {"view": 0, "sea_state": 1, "ocean": {"transition_time": 0.0, "white_water_height": 0.0}}
+
+[sub_resource type="Resource" id="no_lean"]
+script = ExtResource("2")
+name = "no_lean"
+camera_position = Vector3(2, 2.5, -160)
+look_at_target = Vector3(-4, 0.3, -195)
+state = {"view": 0, "sea_state": 1, "ocean": {"transition_time": 0.0, "crest_lean": 0.0}}
+
+[sub_resource type="Resource" id="neither"]
+script = ExtResource("2")
+name = "neither"
+camera_position = Vector3(2, 2.5, -160)
+look_at_target = Vector3(-4, 0.3, -195)
+state = {"view": 0, "sea_state": 1, "ocean": {"transition_time": 0.0, "white_water_height": 0.0, "crest_lean": 0.0}}
+
+[resource]
+script = ExtResource("1")
+scene_path = "res://prototypes/water_demo/water_demo.tscn"
+settle_frames = 240
+shots = Array[ExtResource("2")]([SubResource("now"), SubResource("no_white_water"), SubResource("no_lean"), SubResource("neither")])

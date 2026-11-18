@@ -1,0 +1,66 @@
+[gd_resource type="Resource" script_class="VisualShotList" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot_list.gd" id="1"]
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot.gd" id="2"]
+
+[sub_resource type="Resource" id="photo_anna_popovic"]
+script = ExtResource("2")
+name = "photo_anna_popovic"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://prototypes/foam/photo/tex_foam_photo_anna_popovic.png"}
+
+[sub_resource type="Resource" id="photo_neonbrand_whitewater"]
+script = ExtResource("2")
+name = "photo_neonbrand_whitewater"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://prototypes/foam/photo/tex_foam_photo_neonbrand_whitewater.png"}
+
+[sub_resource type="Resource" id="photo_dench_dark_whitecap"]
+script = ExtResource("2")
+name = "photo_dench_dark_whitecap"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://prototypes/foam/photo/tex_foam_photo_dench_dark_whitecap.png"}
+
+[sub_resource type="Resource" id="photo_morning_seafoam"]
+script = ExtResource("2")
+name = "photo_morning_seafoam"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://prototypes/foam/photo/tex_foam_photo_morning_seafoam.png"}
+
+[sub_resource type="Resource" id="photo_foamy_ocean"]
+script = ExtResource("2")
+name = "photo_foamy_ocean"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://prototypes/foam/photo/tex_foam_photo_foamy_ocean.png"}
+
+[sub_resource type="Resource" id="photo_engstrom_aerial"]
+script = ExtResource("2")
+name = "photo_engstrom_aerial"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://prototypes/foam/photo/tex_foam_photo_engstrom_aerial.png"}
+
+[sub_resource type="Resource" id="photo_croatia_pasman"]
+script = ExtResource("2")
+name = "photo_croatia_pasman"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://prototypes/foam/photo/tex_foam_photo_croatia_pasman.png"}
+
+[sub_resource type="Resource" id="photo_gischt_stiller"]
+script = ExtResource("2")
+name = "photo_gischt_stiller"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://prototypes/foam/photo/tex_foam_photo_gischt_stiller.png"}
+
+[resource]
+script = ExtResource("1")
+scene_path = "res://prototypes/foam/foam_compare.tscn"
+settle_frames = 30
+shots = Array[ExtResource("2")]([SubResource("photo_anna_popovic"), SubResource("photo_neonbrand_whitewater"), SubResource("photo_dench_dark_whitecap"), SubResource("photo_morning_seafoam"), SubResource("photo_foamy_ocean"), SubResource("photo_engstrom_aerial"), SubResource("photo_croatia_pasman"), SubResource("photo_gischt_stiller")])

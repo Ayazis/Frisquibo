@@ -22,7 +22,7 @@ uniform float refraction_full_distance = 8.0;           // metres; the screen of
 uniform float reflection_distortion = 0.03;
 uniform float reflection_blur = 1.0;                    // 1 = blur by the real unresolved slopes
 // Mirror plane this water reflects (PlanarReflection.slot): 0 the sea's level, 1 the second plane (a pond
-// above the sea), -1 none: the engine's sky reflection only (sloping water such as a river).
+// above the sea), -1 none: screen-space reflections over the engine's sky (sloping water such as a river).
 uniform int reflection_slot = 0;
 uniform float murk_blur = 2.0;                          // screen mip levels of blur through deep water
 uniform float caustic_strength = 2.2;
@@ -49,6 +49,8 @@ uniform sampler2D foam_texture : hint_default_white, filter_linear_mipmap_anisot
 uniform sampler2D caustic_texture : hint_default_black, filter_linear_mipmap, repeat_enable;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
+
+#include "res://world/water/water_ssr.gdshaderinc"
 
 struct WaterResult {
 	vec3 albedo;
@@ -82,9 +84,27 @@ struct WaterSurface {
 	bool from_below;   // !FRONT_FACING: the camera is under the surface
 };
 
-// screen: (SCREEN_UV, FRAGCOORD.xy); proj: (PROJECTION_MATRIX[0][0], [1][1]).
-WaterResult water_shade(WaterSurface s, vec2 screen_uv, vec2 frag_coord, vec2 proj, mat4 inv_proj, mat4 inv_view,
-		vec3 cam_pos, float t) {
+// The camera and the pixel, from the built-ins of fragment().
+struct WaterView {
+	vec2 screen_uv;     // SCREEN_UV
+	vec2 frag_coord;    // FRAGCOORD.xy
+	vec2 viewport_size; // VIEWPORT_SIZE
+	mat4 view;          // VIEW_MATRIX
+	mat4 inv_view;      // INV_VIEW_MATRIX
+	mat4 projection;    // PROJECTION_MATRIX
+	mat4 inv_projection; // INV_PROJECTION_MATRIX
+	vec3 camera;        // CAMERA_POSITION_WORLD
+	float time;         // TIME
+};
+
+WaterResult water_shade(WaterSurface s, WaterView view) {
+	vec2 screen_uv = view.screen_uv;
+	vec2 frag_coord = view.frag_coord;
+	vec2 proj = vec2(view.projection[0][0], view.projection[1][1]);
+	mat4 inv_proj = view.inv_projection;
+	mat4 inv_view = view.inv_view;
+	vec3 cam_pos = view.camera;
+	float t = view.time;
 	WaterResult r;
 	vec3 v = normalize(cam_pos - s.world);
 	float dist = length(cam_pos - s.world);
@@ -103,8 +123,8 @@ WaterResult water_shade(WaterSurface s, vec2 screen_uv, vec2 frag_coord, vec2 pr
 	}
 	r.front = 1.0;
 	float ndv = clamp(dot(s.n_world, v), 0.0, 1.0);
-	// Rough water reflects less sharply at grazing angles (masking of wave backs), as on the ocean.
-	float fresnel = water_schlick(ndv) * mix(1.0, 0.75, roughness);
+	// Rough water reflects less at grazing angles: Fresnel averaged over the unresolved slopes, as on the ocean.
+	float fresnel = water_mean_fresnel(ndv, water_view_slope_sigma(v, s.slope_variance));
 
 	// Ground straight behind this pixel (for shore foam) and behind the refracted ray (for colour).
 	vec3 g_view = water_view_from_depth(screen_uv, texture(depth_tex, screen_uv).r, inv_proj);
@@ -151,16 +171,24 @@ WaterResult water_shade(WaterSurface s, vec2 screen_uv, vec2 frag_coord, vec2 pr
 	float edge = smoothstep(0.0, 0.12, path);
 	vec3 reflection = vec3(0.0);
 	bool planar = water_reflection_available(reflection_slot);
+	float slope_sigma = sqrt(0.5 * (s.slope_variance.x + s.slope_variance.y)) * reflection_blur;
+	vec2 spread = water_reflection_spread(slope_sigma, ndv, proj);
 	if (planar) {
-		float slope_sigma = sqrt(0.5 * (s.slope_variance.x + s.slope_variance.y)) * reflection_blur;
-		vec2 spread = water_reflection_spread(slope_sigma, ndv, proj);
-		reflection = water_reflection_sample(reflection_slot, screen_uv, s.n_view.xy * reflection_distortion, spread, frag_coord);
+		vec2 horizon = water_reflection_horizon(s.vertex_view, screen_uv, view.view, inv_view, view.projection);
+		reflection = water_reflection_sample(reflection_slot, screen_uv, s.n_view.xy * reflection_distortion, spread,
+				frag_coord, horizon);
 	}
+	// The banks, trees and bridges a river has no mirror for, and on a mirror what the flat plane gets
+	// wrong; the mirror or the sky wherever the march finds nothing.
+	vec3 ray = water_ssr_direction(reflect(-v, s.n_world), view.view);
+	vec4 traced = water_ssr(s.vertex_view, ray, view.projection, inv_proj, frag_coord,
+			water_ssr_blur_lod(spread, view.viewport_size));
+	reflection = mix(reflection, traced.rgb, traced.a);
 	float f = fresnel * edge;
 	r.emission = (bottom * transmittance * (1.0 - f) + reflection * f) * (1.0 - foam);
 	r.albedo = mix(scatter_color * murk * (1.0 - f), foam_color, foam);
 	r.roughness = mix(roughness, 0.85, foam);
-	r.specular = planar ? 0.0 : sky_reflection * edge * (1.0 - foam);
+	r.specular = planar ? 0.0 : sky_reflection * edge * (1.0 - foam) * (1.0 - traced.a);
 	r.foam = foam;
 	r.transmitted = 1.0 - f;
 	return r;

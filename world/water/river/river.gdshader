@@ -112,8 +112,9 @@ void fragment() {
 	float foam = max(smoothstep(1.0 - coverage, 1.0 - coverage + foam_softness, foam_tex), disturbance.w);
 
 	WaterSurface surface = WaterSurface(n_world, n_view, v_world, VERTEX, variance, foam, vec2(0.0), from_below);
-	WaterResult r = water_shade(surface, SCREEN_UV, FRAGCOORD.xy, vec2(PROJECTION_MATRIX[0][0], PROJECTION_MATRIX[1][1]),
-			INV_PROJECTION_MATRIX, INV_VIEW_MATRIX, CAMERA_POSITION_WORLD, TIME);
+	WaterView view = WaterView(SCREEN_UV, FRAGCOORD.xy, VIEWPORT_SIZE, VIEW_MATRIX, INV_VIEW_MATRIX, PROJECTION_MATRIX,
+			INV_PROJECTION_MATRIX, CAMERA_POSITION_WORLD, TIME);
+	WaterResult r = water_shade(surface, view);
 	NORMAL = from_below ? -n_view : n_view;
 	ALBEDO = r.albedo;
 	EMISSION = r.emission;

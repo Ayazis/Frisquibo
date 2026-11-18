@@ -1,0 +1,52 @@
+[gd_resource type="Resource" script_class="VisualShotList" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot_list.gd" id="1"]
+[ext_resource type="Script" path="res://tools/visual_check/visual_shot.gd" id="2"]
+
+[sub_resource type="Resource" id="synth_surf_sheet"]
+script = ExtResource("2")
+name = "synth_surf_sheet"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://prototypes/foam/synth/tex_foam_synth_surf_sheet.png"}
+
+[sub_resource type="Resource" id="synth_streaks"]
+script = ExtResource("2")
+name = "synth_streaks"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://prototypes/foam/synth/tex_foam_synth_streaks.png"}
+
+[sub_resource type="Resource" id="synth_spatter"]
+script = ExtResource("2")
+name = "synth_spatter"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://prototypes/foam/synth/tex_foam_synth_spatter.png"}
+
+[sub_resource type="Resource" id="synth_old_lace"]
+script = ExtResource("2")
+name = "synth_old_lace"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://prototypes/foam/synth/tex_foam_synth_old_lace.png"}
+
+[sub_resource type="Resource" id="synth_churn"]
+script = ExtResource("2")
+name = "synth_churn"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://prototypes/foam/synth/tex_foam_synth_churn.png"}
+
+[sub_resource type="Resource" id="scan_001"]
+script = ExtResource("2")
+name = "scan_001"
+camera_position = Vector3(0, 2.5, 9)
+look_at_target = Vector3(0, 0, -3)
+state = {"variant": 5, "overcast": true, "packed": "res://world/water/foam_scans/tex_foam_scan_001.png"}
+
+[resource]
+script = ExtResource("1")
+scene_path = "res://prototypes/foam/foam_compare.tscn"
+settle_frames = 30
+shots = Array[ExtResource("2")]([SubResource("synth_surf_sheet"), SubResource("synth_streaks"), SubResource("synth_spatter"), SubResource("synth_old_lace"), SubResource("synth_churn"), SubResource("scan_001")])

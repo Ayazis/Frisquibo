@@ -119,6 +119,14 @@ func cycle_sea_state() -> void:
 	set_sea_state(_state + 1)
 
 
+## Curling breakers on or off (curl strength 1 or 0), to compare with spilling ones. Returns whether on.
+func toggle_curls() -> bool:
+	var on := ocean.parameter_value(&"curl_strength") <= 0.0
+	ocean.set_parameter(&"curl_strength", 1.0 if on else 0.0)
+	_update_notes()
+	return on
+
+
 func set_sea_state(index: int) -> void:
 	_state = posmod(index, STATES.size())
 	_live = STATES[_state].duplicate() as OceanSpectrum
@@ -265,4 +273,5 @@ func _add_barrel(at: Vector3) -> void:
 func _update_notes() -> void:
 	var mode: String = "FFT" if OceanSimulation.is_supported() else "Gerstner fallback"
 	var look := WATER_TYPE_NAMES[_water_type] if _water_type >= 0 else "default water"
-	notes = "%s | %s, %s | C: next sea state | L: water type" % [mode, STATE_NAMES[_state], look]
+	var curls := "curls on" if ocean == null or ocean.parameter_value(&"curl_strength") > 0.0 else "curls off"
+	notes = "%s | %s, %s, %s | C: next sea state | L: water type | K: curls" % [mode, STATE_NAMES[_state], look, curls]

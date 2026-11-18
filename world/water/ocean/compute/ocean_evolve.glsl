@@ -42,7 +42,9 @@ void main() {
 	float w = sqrt(G * kl * tanh(min(kl * p.depth, 20.0)));
 	float w0 = 2.0 * PI / p.repeat_period;
 	w = floor(w / w0) * w0;
-	vec2 e = vec2(cos(w * p.time), sin(w * p.time));
+	// h0(k) e^(-iwt): with the inverse transform's e^(+ik.x) a wave travels towards +k, so the wind sea
+	// moves along the wind direction and the swell along its own (e^(+iwt) sent them upwind).
+	vec2 e = vec2(cos(w * p.time), -sin(w * p.time));
 	vec4 s = h0[texel];
 	vec2 h = cmul(s.xy, e) + cmul(s.zw, vec2(e.x, -e.y));
 	vec2 ih = vec2(-h.y, h.x);
