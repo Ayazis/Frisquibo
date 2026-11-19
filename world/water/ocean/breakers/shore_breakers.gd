@@ -69,8 +69,9 @@ func at_crest(crest_rest: Vector2, wave: float) -> BreakerState:
 func _free_crest(p: Vector2, towards: Vector2, still: float, wave: float) -> float:
 	var field := waves.field
 	var lee := lerpf(waves.lee_share, 1.0, smoothstep(ShoreWaves.LEE_FROM, ShoreWaves.LEE_TO, towards.dot(waves.direction)))
-	var gain := waves.amplitude * sqrt(waves.share) * lee * field.refraction(p)
-	return gain * ShoreWaves.wave_size(field.origin(p), wave) \
+	var landing := field.origin_and_refraction(p)
+	var gain := waves.amplitude * sqrt(waves.share) * lee * landing.z
+	return gain * ShoreWaves.wave_size(Vector2(landing.x, landing.y), wave) \
 			* pow(minf(waves.zone_depth, ShoreField.MAX_DEPTH) / maxf(still, ShoreField.MIN_DEPTH), 0.25)
 
 

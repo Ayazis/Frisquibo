@@ -130,6 +130,24 @@ const DESCRIPTIONS: Dictionary[StringName, String] = {
 }
 
 
+## Names of the exported numbers per script, for names_of(): the declarations don't change while the
+## game runs, and the Ocean reads its parameters every frame.
+static var _names_by_script: Dictionary[Script, PackedStringArray] = {}
+
+
+## Names of the exported numbers of `object`, as of() lists them; cached per script.
+static func names_of(object: Object) -> PackedStringArray:
+	var script: Script = object.get_script()
+	if script != null and _names_by_script.has(script):
+		return _names_by_script[script]
+	var names := PackedStringArray()
+	for parameter: OceanParameter in of(object, ""):
+		names.append(parameter.name)
+	if script != null:
+		_names_by_script[script] = names
+	return names
+
+
 ## Exported numbers of `object`, in declaration order. `default_group` names the ones declared
 ## outside an `@export_group`.
 static func of(object: Object, default_group: String) -> Array[OceanParameter]:

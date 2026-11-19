@@ -104,6 +104,8 @@ var _surface: MeshInstance3D
 var _height_field: OceanHeightField
 var _fallback: Sea
 var _seabed: Image
+## The seabed heights as plain floats, row by row: the CPU depth lookups read these.
+var _seabed_heights := PackedFloat32Array()
 var _seabed_area: Rect2
 var _seabed_resolution := DEFAULT_SEABED_RESOLUTION
 var _shore := ShoreWaves.new()
@@ -357,6 +359,7 @@ func set_seabed(height: Callable, area: Rect2, resolution: int = DEFAULT_SEABED_
 			var ground: float = height.call(p.x, p.y)
 			img.set_pixel(x, y, Color(ground, 0.0, 0.0))
 	_seabed = img
+	_seabed_heights = img.get_data().to_float32_array()
 	_seabed_area = area
 	_height_field.damping_at = _damping_at
 	material.set_shader_parameter("seabed_height", ImageTexture.create_from_image(img))
@@ -617,8 +620,11 @@ func _change_spectrum() -> void:
 
 
 func _value(parameter: StringName) -> float:
-	if _values.has(parameter):
-		return _values[parameter]
+	# One lookup: the CPU water height reads several values per query. No rule value is NaN (they are
+	# clamped numbers), so NaN means "not in the rules' results".
+	var value: float = _values.get(parameter, NAN)
+	if not is_nan(value):
+		return value
 	var authored: float = get(parameter)
 	return authored
 
@@ -645,10 +651,10 @@ func _depth_at(p: Vector2) -> float:
 	var y: int = floori(uv.y)
 	var x0: int = clampi(x, 0, last)
 	var x1: int = clampi(x + 1, 0, last)
-	var y0: int = clampi(y, 0, last)
-	var y1: int = clampi(y + 1, 0, last)
-	var a: float = lerpf(_seabed.get_pixel(x0, y0).r, _seabed.get_pixel(x1, y0).r, uv.x - x)
-	var b: float = lerpf(_seabed.get_pixel(x0, y1).r, _seabed.get_pixel(x1, y1).r, uv.x - x)
+	var row0: int = clampi(y, 0, last) * _seabed_resolution
+	var row1: int = clampi(y + 1, 0, last) * _seabed_resolution
+	var a: float = lerpf(_seabed_heights[row0 + x0], _seabed_heights[row0 + x1], uv.x - x)
+	var b: float = lerpf(_seabed_heights[row1 + x0], _seabed_heights[row1 + x1], uv.x - x)
 	return _level() - lerpf(a, b, uv.y - y)
 
 

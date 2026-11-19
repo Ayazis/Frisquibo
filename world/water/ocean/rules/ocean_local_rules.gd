@@ -50,11 +50,9 @@ func evaluate(depth: float) -> Vector3:
 		var r := depth_ranges[i]
 		var e := effects[i]
 		var w: float = e.w * _inside(depth, r)
-		var effect := OceanRuleEffect.new()
-		effect.operation = int(e.y) as OceanRuleEffect.Operation
-		effect.amount = e.z
 		var axis := int(e.x)
-		result[axis] = effect.apply(result[axis], w)
+		var operation := int(e.y) as OceanRuleEffect.Operation
+		result[axis] = OceanRuleEffect.apply_operation(operation, e.z, result[axis], w)
 	result.y = maxf(result.y, 0.0)
 	return result
 

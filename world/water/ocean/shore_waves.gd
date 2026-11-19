@@ -22,6 +22,12 @@ const UINT_MASK := 0xFFFFFFFF
 const LOW_MASK := 0xFFFF
 const HALF_BITS := 16
 const UINT_MAX := 4294967295.0
+## The hash multipliers split in 16-bit halves: lattice_hash() multiplies 32-bit unsigned numbers with
+## wrap-around, as on the GPU, without overflowing a 64-bit int (a * b = a * low + (a * high << 16)).
+const HASH_A_LOW := HASH_A & LOW_MASK
+const HASH_A_HIGH := HASH_A >> HALF_BITS
+const HASH_B_LOW := HASH_B & LOW_MASK
+const HASH_B_HIGH := HASH_B >> HALF_BITS
 ## Same as SHORE_* in ocean_shore_waves.gdshaderinc.
 ## Share of a wavelength the front of a fully steepened wave takes (0.5: symmetric).
 const FRONT_SHARE_MIN := 0.18
@@ -65,15 +71,13 @@ var lee_share := 0.3
 static func lattice_hash(lattice: Vector2) -> float:
 	var qx := (int(lattice.x) + SWASH_HASH_OFFSET) & UINT_MASK
 	var qy := (int(lattice.y) + SWASH_HASH_OFFSET) & UINT_MASK
-	var n := _mul32(_mul32(qx, HASH_A) ^ _mul32(qy, HASH_B), HASH_A)
+	# (qx * HASH_A ^ qy * HASH_B) * HASH_A, each product wrapped to 32 bits. Written out without helper
+	# calls: the shore waves hash 12 lattice points per sample, and a call costs more than the arithmetic.
+	var ax := (qx * HASH_A_LOW + (((qx * HASH_A_HIGH) & LOW_MASK) << HALF_BITS)) & UINT_MASK
+	var by := (qy * HASH_B_LOW + (((qy * HASH_B_HIGH) & LOW_MASK) << HALF_BITS)) & UINT_MASK
+	var m := ax ^ by
+	var n := (m * HASH_A_LOW + (((m * HASH_A_HIGH) & LOW_MASK) << HALF_BITS)) & UINT_MASK
 	return float(n) / UINT_MAX
-
-
-## 32-bit unsigned multiplication with wrap-around, as on the GPU, without overflowing a 64-bit int.
-static func _mul32(a: int, b: int) -> int:
-	var low := a * (b & LOW_MASK)
-	var high := ((a * (b >> HALF_BITS)) & LOW_MASK) << HALF_BITS
-	return (low + high) & UINT_MASK
 
 
 ## Smooth value noise, as swash_noise().
@@ -116,7 +120,8 @@ func displacement(rest: Vector2, depth: float) -> Vector3:
 	var towards_shore := -gradient / slowness
 	# What varies along the coast is drawn at the waterline point this wave is heading for: the same
 	# draw the swash makes there, and unchanged along the wave's way in.
-	var end := field.origin(rest)
+	var landing := field.origin_and_refraction(rest)
+	var end := Vector2(landing.x, landing.y)
 	var cycle := maxf(period, 0.1)
 	var phase := (time + f.r) / cycle + noise(end / SWASH_ALONGSHORE) * SWASH_PHASE_SPREAD
 	var wave := floorf(phase)
@@ -125,7 +130,7 @@ func displacement(rest: Vector2, depth: float) -> Vector3:
 	var lee := lerpf(lee_share, 1.0, smoothstep(LEE_FROM, LEE_TO, towards_shore.dot(direction)))
 	# Refraction gathers the energy on headlands and spreads it in bays (Kr); shoaling grows it as the
 	# water shallows (Green's law).
-	var gathered := field.refraction(rest)
+	var gathered := landing.z
 	var free_crest := amplitude * sqrt(share) * lee * size * gathered \
 			* pow(_zone() / maxf(depth, ShoreField.MIN_DEPTH), 0.25)
 	var limit := breaker_ratio * depth

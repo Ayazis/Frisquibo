@@ -27,6 +27,8 @@ const CONTROLS_MARGIN := 16.0
 const BANNER_Y := 14.0
 const BANNER_FONT_SIZE := 34
 const BANNER_COLOR := Color(0.55, 0.95, 0.6)
+## The frame timings (F3) sit this far from the bottom-left corner.
+const PERF_MARGIN := 16.0
 ## Times of day the T key steps through (solar hours on the TimeOfDay's late-summer day).
 const TIMES: Array[float] = [5.05, 7.0, 13.0, 16.0, 18.25, 18.75, 19.25, 22.0]
 const TIME_NAMES: Array[String] = ["Dawn", "Morning", "Noon", "Afternoon", "Golden hour", "Sunset", "Dusk", "Night"]
@@ -81,6 +83,7 @@ var _distance := 30.0
 ## Where WASD has moved the orbit point, relative to the viewpoint's target.
 var _target_offset := Vector3.ZERO
 var _hud_layer: CanvasLayer
+var _perf: PerfOverlay
 var _dropper: ObjectDropper
 
 
@@ -189,6 +192,14 @@ func _make_hud() -> void:
 	controls.offset_top = BUTTON_BAR_Y + CONTROLS_BELOW_BUTTONS
 	controls.offset_bottom = -CONTROLS_MARGIN
 	_hud_layer.add_child(controls)
+	_perf = PerfOverlay.new()
+	_perf.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	_perf.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_perf.offset_left = PERF_MARGIN
+	_perf.offset_right = PERF_MARGIN
+	_perf.offset_top = -PERF_MARGIN
+	_perf.offset_bottom = -PERF_MARGIN
+	_hud_layer.add_child(_perf)
 	add_child(_hud_layer)
 
 
@@ -264,6 +275,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_drop_objects()
 		elif key.physical_keycode == KEY_K:
 			print("Curling breakers: ", "on" if _island.toggle_curls() else "off")
+		elif key.physical_keycode == KEY_F3:
+			_perf.visible = not _perf.visible
 
 
 func _cycle_water_type() -> void:
@@ -286,7 +299,7 @@ func _process(delta: float) -> void:
 	_cam.global_position = target + Basis.from_euler(Vector3(_pitch, _yaw, 0)) * Vector3(0, 0, _distance)
 	_cam.look_at(target)
 	var lapse := ", time lapse" if _time.hours_per_second != 0.0 else ""
-	_hud.text = "%s   (FPS %d)\n%s%s, %s | T: time of day | Y: time lapse | V: weather\nWASD move, Q/E down/up, Shift faster, drag to orbit, wheel to zoom, 1-5 views, F drop objects" % [
+	_hud.text = "%s   (FPS %d)\n%s%s, %s | T: time of day | Y: time lapse | V: weather\nWASD move, Q/E down/up, Shift faster, drag to orbit, wheel to zoom, 1-5 views, F drop objects, F3 timings" % [
 			_island.notes, Engine.get_frames_per_second(), _time.clock_text(), lapse,
 			_atmosphere.current_weather().display_name]
 

@@ -45,6 +45,9 @@ const ORIGIN_SMOOTHING := 4
 ## the beach is real.
 const REFRACTION_SMOOTHING := 4
 
+## Floats per texel of the CPU copies of `image` and `origins` (both stored as RGBA).
+const _CHANNELS := 4
+
 ## Steps to a cell's 8 neighbours.
 const _NEIGHBOUR_STEPS: Array[Vector2i] = [Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1), Vector2i(-1, 0),
 		Vector2i(1, 0), Vector2i(-1, 1), Vector2i(0, 1), Vector2i(1, 1)]
@@ -58,6 +61,11 @@ var image: Image
 ## drawn from the waterline point, so it stays the same along a wave's path and matches the swash where
 ## it lands.
 var origins: Image
+## `image` and `origins` as RGBA floats, row by row: the CPU reads these (a texel lookup in a
+## PackedFloat32Array is far cheaper than Image.get_pixel). Filled with the images in the bake; the
+## images are read-only after it.
+var _field_data := PackedFloat32Array()
+var _origin_data := PackedFloat32Array()
 ## The waterlines in the area (depth 0), as polylines in world (x, z); closed ones end where they start.
 var waterlines: Array[PackedVector2Array] = []
 var area: Rect2
@@ -126,39 +134,53 @@ func crest_speed(depth: float) -> float:
 ## The field at world `p`, filtered like the GPU texture (bilinear, texel centres at +0.5, clamped at
 ## the border): (travel time, gradient x, gradient z, validity). Zero outside the area.
 func sample(p: Vector2) -> Color:
-	return _filtered(image, p)
+	if _field_data.is_empty() or not area.has_point(p):
+		return Color(0.0, 0.0, 0.0, 0.0)
+	var f := _filtered(_field_data, p)
+	return Color(f.x, f.y, f.z, f.w)
 
 
 ## The waterline point the wave at `p` is heading for, filtered like the GPU texture; `p` outside the area.
 func origin(p: Vector2) -> Vector2:
-	if origins == null or not area.has_point(p):
-		return p
-	var c := _filtered(origins, p)
-	return Vector2(c.r, c.g)
+	var o := origin_and_refraction(p)
+	return Vector2(o.x, o.y)
 
 
 ## Refraction coefficient at `p`, filtered like the GPU texture: 1 outside the area.
 func refraction(p: Vector2) -> float:
-	if origins == null or not area.has_point(p):
-		return 1.0
-	return _filtered(origins, p).b
+	return origin_and_refraction(p).z
 
 
-func _filtered(img: Image, p: Vector2) -> Color:
-	if img == null or not area.has_point(p):
-		return Color(0.0, 0.0, 0.0, 0.0)
+## origin() and refraction() from one texture lookup: (waterline x, waterline z, Kr); (p.x, p.y, 1)
+## outside the area.
+func origin_and_refraction(p: Vector2) -> Vector3:
+	if _origin_data.is_empty() or not area.has_point(p):
+		return Vector3(p.x, p.y, 1.0)
+	var o := _filtered(_origin_data, p)
+	return Vector3(o.x, o.y, o.z)
+
+
+## Bilinear sample of the RGBA floats `data` at world `p`, as the GPU filters the texture: texel centres
+## at +0.5, clamped at the border.
+func _filtered(data: PackedFloat32Array, p: Vector2) -> Vector4:
 	var texel := (p - area.position) / area.size * Vector2(width, height) - Vector2(0.5, 0.5)
 	var x0 := floori(texel.x)
 	var y0 := floori(texel.y)
 	var fx := texel.x - x0
 	var fy := texel.y - y0
-	var a := _texel(img, x0, y0).lerp(_texel(img, x0 + 1, y0), fx)
-	var b := _texel(img, x0, y0 + 1).lerp(_texel(img, x0 + 1, y0 + 1), fx)
-	return a.lerp(b, fy)
-
-
-func _texel(img: Image, x: int, y: int) -> Color:
-	return img.get_pixel(clampi(x, 0, width - 1), clampi(y, 0, height - 1))
+	var xa := clampi(x0, 0, width - 1)
+	var xb := clampi(x0 + 1, 0, width - 1)
+	var row_a := clampi(y0, 0, height - 1) * width
+	var row_b := clampi(y0 + 1, 0, height - 1) * width
+	var i := (row_a + xa) * _CHANNELS
+	var t00 := Vector4(data[i], data[i + 1], data[i + 2], data[i + 3])
+	i = (row_a + xb) * _CHANNELS
+	var t10 := Vector4(data[i], data[i + 1], data[i + 2], data[i + 3])
+	i = (row_b + xa) * _CHANNELS
+	var t01 := Vector4(data[i], data[i + 1], data[i + 2], data[i + 3])
+	i = (row_b + xb) * _CHANNELS
+	var t11 := Vector4(data[i], data[i + 1], data[i + 2], data[i + 3])
+	return t00.lerp(t10, fx).lerp(t01.lerp(t11, fx), fy)
 
 
 func _cell_size() -> Vector2:
@@ -343,6 +365,10 @@ func _encode() -> void:
 				wet += 1
 		if wet > 0:
 			image.set_pixel(x, y, Color(0.0, shore.x / wet, shore.y / wet, 1.0))
+	_field_data = image.get_data().to_float32_array()
+	var origin_floats := origins.duplicate() as Image
+	origin_floats.convert(Image.FORMAT_RGBAF)
+	_origin_data = origin_floats.get_data().to_float32_array()
 
 
 ## Refraction coefficient per cell. Rays spread at the rate the wave direction diverges:

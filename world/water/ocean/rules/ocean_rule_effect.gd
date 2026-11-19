@@ -15,10 +15,15 @@ enum Operation { ADD, MULTIPLY, SET }
 
 ## `current` after this effect at rule weight `w` (0..1): partial weights blend towards the result.
 func apply(current: float, w: float) -> float:
-	match operation:
+	return apply_operation(operation, amount, current, w)
+
+
+## apply() for an effect given by its parts, without making one (OceanLocalRules runs this per point).
+static func apply_operation(op: Operation, by: float, current: float, w: float) -> float:
+	match op:
 		Operation.ADD:
-			return current + amount * w
+			return current + by * w
 		Operation.MULTIPLY:
-			return current * lerpf(1.0, amount, w)
+			return current * lerpf(1.0, by, w)
 		_:
-			return lerpf(current, amount, w)
+			return lerpf(current, by, w)

@@ -18,9 +18,9 @@ class Result:
 ## Number parameters of `object` exported in the inspector, by name.
 static func parameters(object: Object) -> Dictionary[StringName, float]:
 	var result: Dictionary[StringName, float] = {}
-	for parameter: OceanParameter in OceanParameterCatalog.of(object, ""):
-		var value: float = object.get(parameter.name)
-		result[parameter.name] = value
+	for parameter_name: String in OceanParameterCatalog.names_of(object):
+		var value: float = object.get(parameter_name)
+		result[StringName(parameter_name)] = value
 	return result
 
 

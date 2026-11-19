@@ -4,16 +4,20 @@ extends RefCounted
 ## readback of each cascade and answers "how high is the water at this exact spot". Because the waves
 ## also move water sideways, the point that ends up above a spot started somewhere else; height_at()
 ## finds that start point by fixed-point iteration, as the surface shader does implicitly.
+## Each readback is unpacked to 32-bit floats once (in C++), so the many lookups per query are plain
+## array reads instead of half-float decodes.
 
 const BYTES_PER_TEXEL := 8
 const BYTES_PER_CHANNEL := 2
+const CHANNELS := 4
 const INVERSE_ITERATIONS := 4
 ## Texel stride for estimating each cascade's height variance (32 x 32 samples of a 256 map).
 const VARIANCE_STRIDE := 8
 
 var _map_size: int
 var _tile_lengths: PackedFloat32Array
-var _data: Array[PackedByteArray] = []
+## Per cascade: RGBA floats, row by row (empty until its first readback).
+var _data: Array[PackedFloat32Array] = []
 var damping_at: Callable
 var _variances := PackedFloat32Array()
 
@@ -26,15 +30,19 @@ func _init(map_size: int, tile_lengths: PackedFloat32Array) -> void:
 
 
 func set_cascade(cascade: int, bytes: PackedByteArray) -> void:
-	if cascade < 0 or cascade >= _data.size() or bytes.size() < _map_size * _map_size * BYTES_PER_TEXEL:
+	var size := _map_size * _map_size * BYTES_PER_TEXEL
+	if cascade < 0 or cascade >= _data.size() or bytes.size() < size:
 		return
-	_data[cascade] = bytes
+	var image := Image.create_from_data(_map_size, _map_size, false, Image.FORMAT_RGBAH,
+			bytes if bytes.size() == size else bytes.slice(0, size))
+	image.convert(Image.FORMAT_RGBAF)
+	_data[cascade] = image.get_data().to_float32_array()
 	_variances[cascade] = _height_variance(bytes)
 
 
 func is_ready() -> bool:
-	for bytes in _data:
-		if bytes.size() < _map_size * _map_size * BYTES_PER_TEXEL:
+	for floats in _data:
+		if floats.size() < _map_size * _map_size * CHANNELS:
 			return false
 	return true
 
@@ -52,9 +60,10 @@ func crest_amplitude() -> float:
 func displacement_at(rest: Vector2) -> Vector3:
 	var total := Vector3.ZERO
 	for c in range(_data.size()):
-		if _data[c].is_empty():
+		var data := _data[c]
+		if data.is_empty():
 			continue
-		total += _sample(c, rest / _tile_lengths[c] * _map_size)
+		total += _sample(data, rest / _tile_lengths[c] * _map_size)
 	if damping_at.is_valid():
 		var damping: float = damping_at.call(rest)
 		total *= damping
@@ -70,23 +79,27 @@ func height_at(xz: Vector2) -> float:
 	return displacement_at(rest).y
 
 
-## Bilinear sample in texel units, matching the GPU (texel centres at +0.5, wrapping tiles).
-func _sample(cascade: int, texel: Vector2) -> Vector3:
+## Bilinear sample in texel units, matching the GPU (texel centres at +0.5, wrapping tiles). Written
+## out in full: this runs several times per probe of every floating object, each physics frame.
+func _sample(data: PackedFloat32Array, texel: Vector2) -> Vector3:
 	var p := texel - Vector2(0.5, 0.5)
 	var x0 := floori(p.x)
 	var y0 := floori(p.y)
 	var fx := p.x - x0
 	var fy := p.y - y0
-	var a := _texel(cascade, x0, y0).lerp(_texel(cascade, x0 + 1, y0), fx)
-	var b := _texel(cascade, x0, y0 + 1).lerp(_texel(cascade, x0 + 1, y0 + 1), fx)
-	return a.lerp(b, fy)
-
-
-func _texel(cascade: int, x: int, y: int) -> Vector3:
-	var bytes := _data[cascade]
-	var offset := (posmod(y, _map_size) * _map_size + posmod(x, _map_size)) * BYTES_PER_TEXEL
-	return Vector3(bytes.decode_half(offset), bytes.decode_half(offset + BYTES_PER_CHANNEL),
-			bytes.decode_half(offset + 2 * BYTES_PER_CHANNEL))
+	var xa := posmod(x0, _map_size)
+	var xb := posmod(x0 + 1, _map_size)
+	var row_a := posmod(y0, _map_size) * _map_size
+	var row_b := posmod(y0 + 1, _map_size) * _map_size
+	var i := (row_a + xa) * CHANNELS
+	var t00 := Vector3(data[i], data[i + 1], data[i + 2])
+	i = (row_a + xb) * CHANNELS
+	var t10 := Vector3(data[i], data[i + 1], data[i + 2])
+	i = (row_b + xa) * CHANNELS
+	var t01 := Vector3(data[i], data[i + 1], data[i + 2])
+	i = (row_b + xb) * CHANNELS
+	var t11 := Vector3(data[i], data[i + 1], data[i + 2])
+	return t00.lerp(t10, fx).lerp(t01.lerp(t11, fx), fy)
 
 
 func _height_variance(bytes: PackedByteArray) -> float:
